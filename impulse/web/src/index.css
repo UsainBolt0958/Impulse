@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 0%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 89%;
+    --input: 0 0% 89%;
+    --ring: 0 0% 0%;
+    --radius: 0rem; /* Sharp edges for Tesla-like aesthetic */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 0 0% 0%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 89%;
+    --sidebar-ring: 0 0% 0%;
+    
+    /* Layout Variables */
+    --sidebar-width: 100px;
+    --sidebar-width-mobile: 72px;
+    --sidebar-transition-duration: 300ms;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --card: 0 0% 5%;
+    --card-foreground: 0 0% 100%;
+    --popover: 0 0% 5%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 100%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 100%;
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: "DM Sans", sans-serif;
+    overflow-x: clip;
+    font-feature-settings: "kern" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Barlow Condensed", sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  input, textarea, select {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .app-layout {
+    @apply flex h-[100dvh] w-full overflow-hidden bg-background;
+  }
+
+  .main-content {
+    @apply flex-1 min-w-0 overflow-y-auto flex flex-col bg-background relative;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .theme-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.45) hsl(var(--background));
+  }
+
+  .theme-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .theme-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border-radius: 9999px;
+  }
+
+  .theme-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground) / 0.45);
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--background));
+  }
+
+  .theme-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground) / 0.65);
+  }
+
+  /* Apply thin, theme-matched scrollbars to main scroll containers */
+  .main-content,
+  .overflow-y-auto:not(.hide-scrollbar),
+  .overflow-auto:not(.hide-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.45) hsl(var(--background));
+  }
+
+  .main-content::-webkit-scrollbar,
+  .overflow-y-auto:not(.hide-scrollbar)::-webkit-scrollbar,
+  .overflow-auto:not(.hide-scrollbar)::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .main-content::-webkit-scrollbar-track,
+  .overflow-y-auto:not(.hide-scrollbar)::-webkit-scrollbar-track,
+  .overflow-auto:not(.hide-scrollbar)::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border-radius: 9999px;
+  }
+
+  .main-content::-webkit-scrollbar-thumb,
+  .overflow-y-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb,
+  .overflow-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground) / 0.45);
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--background));
+  }
+
+  .main-content::-webkit-scrollbar-thumb:hover,
+  .overflow-y-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb:hover,
+  .overflow-auto:not(.hide-scrollbar)::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--foreground) / 0.65);
+  }
+
+  /* Custom App UI Tokens */
+  .icon-card {
+    @apply relative flex flex-col items-center justify-center p-8 bg-card border-2 border-border cursor-pointer transition-all duration-200;
+  }
+  
+  .icon-card:hover {
+    @apply border-foreground -translate-y-1 shadow-[8px_8px_0px_0px_rgba(0,0,0,0.1)];
+  }
+
+  .dark .icon-card:hover {
+    @apply shadow-[8px_8px_0px_0px_rgba(255,255,255,0.1)];
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200;
+  }
+
+  .modal-content {
+    @apply w-full max-w-md bg-background border-2 border-foreground p-6 shadow-2xl animate-in zoom-in-95 duration-200;
+  }
+}

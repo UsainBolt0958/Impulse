@@ -1,0 +1,1735 @@
+[
+  {
+    "id": "q-1780830265529-85408k",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "12 B 17 C 22 D 24",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 7
+    },
+    "created_at": "2026-06-07T11:04:25.529Z",
+    "updated_at": "2026-06-07T11:04:25.529Z"
+  },
+  {
+    "id": "q-1780830260006-96xbr8",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "9 B 4 C 5 D 1",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "9",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "9",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 6
+    },
+    "created_at": "2026-06-07T11:04:20.006Z",
+    "updated_at": "2026-06-07T11:04:20.006Z"
+  },
+  {
+    "id": "q-1780830254478-jbralj",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "42 B 23 C 27 D 38",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "42",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "42",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 5
+    },
+    "created_at": "2026-06-07T11:04:14.478Z",
+    "updated_at": "2026-06-07T11:04:14.479Z"
+  },
+  {
+    "id": "q-1780830248901-vuagv6",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "18 B 22 C 29 D 34",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "18",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "18",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 4
+    },
+    "created_at": "2026-06-07T11:04:08.901Z",
+    "updated_at": "2026-06-07T11:04:08.901Z"
+  },
+  {
+    "id": "q-1780830243434-lrcjd7",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "− 10 − 10 B − 8 − 8 C 10 √ 13 10 13 D 8 √ 13 8 13",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "− 10 − 10",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "− 10 − 10",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 3
+    },
+    "created_at": "2026-06-07T11:04:03.434Z",
+    "updated_at": "2026-06-07T11:04:03.434Z"
+  },
+  {
+    "id": "q-1780830237971-z08anb",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "162 B 184 C 262 D 324",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 2
+    },
+    "created_at": "2026-06-07T11:03:57.971Z",
+    "updated_at": "2026-06-07T11:03:57.971Z"
+  },
+  {
+    "id": "q-1780830232422-zmwmvy",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "0 B 2 C 1 D 4",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 1
+    },
+    "created_at": "2026-06-07T11:03:52.422Z",
+    "updated_at": "2026-06-07T11:03:52.423Z"
+  },
+  {
+    "id": "q-1780762139613-oqhh6j",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "30 √ 3 30 3 B 75 C 15 √ 15 D 25 √ 3 25 3",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "30 √ 3 30 3",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "30 √ 3 30 3",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 49
+    },
+    "created_at": "2026-06-06T16:08:59.613Z",
+    "updated_at": "2026-06-06T16:08:59.613Z"
+  },
+  {
+    "id": "q-1780762133898-ftt2rt",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 48
+    },
+    "created_at": "2026-06-06T16:08:53.898Z",
+    "updated_at": "2026-06-06T16:08:53.898Z"
+  },
+  {
+    "id": "q-1780762128224-gfydrd",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "1 B 4 C 3 D 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "1",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "1",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 47
+    },
+    "created_at": "2026-06-06T16:08:48.225Z",
+    "updated_at": "2026-06-06T16:08:48.225Z"
+  },
+  {
+    "id": "q-1780762122240-bor8gs",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "2 B 5 2 5 2 C 3 2 3 2 D 3",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 46
+    },
+    "created_at": "2026-06-06T16:08:42.240Z",
+    "updated_at": "2026-06-06T16:08:42.240Z"
+  },
+  {
+    "id": "q-1780762116552-azwmad",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "6 B 8 C 2 D 4",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "6",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "6",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 45
+    },
+    "created_at": "2026-06-06T16:08:36.552Z",
+    "updated_at": "2026-06-06T16:08:36.552Z"
+  },
+  {
+    "id": "q-1780762109613-6yr1qp",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "7 π 3 7 𝜋 3 B 7 π 4 7 𝜋 4 C 17 π 8 17 𝜋 8 D 3 π 2 3 𝜋 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "7 π 3 7 𝜋 3",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "7 π 3 7 𝜋 3",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 44
+    },
+    "created_at": "2026-06-06T16:08:29.613Z",
+    "updated_at": "2026-06-06T16:08:29.613Z"
+  },
+  {
+    "id": "q-1780762102218-lhsn2n",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "Statement I is correct but Statement II is incorrect. B both Statement I and Statement II are correct. C both Statement I and Statement II are incorrect. D Statement I is incorrect but Statement II is correct.",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "Statement I is correct but Statement II is incorrect.",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "Statement I is correct but Statement II is incorrect.",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 43
+    },
+    "created_at": "2026-06-06T16:08:22.218Z",
+    "updated_at": "2026-06-06T16:08:22.218Z"
+  },
+  {
+    "id": "q-1780762095375-nelfpe",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "125 π 12 125 𝜋 12 B 125 π 4 125 𝜋 4 C 125 π 24 125 𝜋 24 D 125 π 6 125 𝜋 6",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "125 π 12 125 𝜋 12",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "125 π 12 125 𝜋 12",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 42
+    },
+    "created_at": "2026-06-06T16:08:15.375Z",
+    "updated_at": "2026-06-06T16:08:15.375Z"
+  },
+  {
+    "id": "q-1780762088650-rvzvys",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "z 1 𝑧 1 lies on a circle of radius 1 2 1 2 and z 2 𝑧 2 lies on a circle of radius 1 . B both z 1 𝑧 1 and z 2 𝑧 2 lie on the same circle. both z 1 𝑧 1 and z 2 𝑧 2 lie on the same circle. C either z 1 𝑧 1 lies on a circle of radius 1 2 1 2 or z 2 𝑧 2 lies on a circle of radius 1 . D either z 1 𝑧 1 lies on a circle of radius 1 or z 2 𝑧 2 lies on a circle of radius 1 2 1 2 .",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "z 1 𝑧 1 lies on a circle of radius 1 2 1 2 and z 2 𝑧 2 lies on a circle of radius 1 .",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "z 1 𝑧 1 lies on a circle of radius 1 2 1 2 and z 2 𝑧 2 lies on a circle of radius 1 .",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 41
+    },
+    "created_at": "2026-06-06T16:08:08.650Z",
+    "updated_at": "2026-06-06T16:08:08.650Z"
+  },
+  {
+    "id": "q-1780762082862-689o3y",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "2 √ 6 5 2 6 5 B 24 5 24 5 C 1 + √ 6 5 1 + 6 5 D √ 6 5 6 5",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "2 √ 6 5 2 6 5",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "2 √ 6 5 2 6 5",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 40
+    },
+    "created_at": "2026-06-06T16:08:02.862Z",
+    "updated_at": "2026-06-06T16:08:02.862Z"
+  },
+  {
+    "id": "q-1780762076677-29c8tc",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "3 π 3 𝜋 B 2 π 2 𝜋 C 5 π 5 𝜋 D 4 π 4 𝜋",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "3 π 3 𝜋",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "3 π 3 𝜋",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 39
+    },
+    "created_at": "2026-06-06T16:07:56.677Z",
+    "updated_at": "2026-06-06T16:07:56.677Z"
+  },
+  {
+    "id": "q-1780762070039-b83gu1",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 38
+    },
+    "created_at": "2026-06-06T16:07:50.039Z",
+    "updated_at": "2026-06-06T16:07:50.039Z"
+  },
+  {
+    "id": "q-1780762063301-s9t8ni",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "12 B 10 C 8 D ∞",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 37
+    },
+    "created_at": "2026-06-06T16:07:43.301Z",
+    "updated_at": "2026-06-06T16:07:43.301Z"
+  },
+  {
+    "id": "q-1780762055542-927z9t",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "24 B 29 C 41 D 31",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "24",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "24",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 36
+    },
+    "created_at": "2026-06-06T16:07:35.542Z",
+    "updated_at": "2026-06-06T16:07:35.542Z"
+  },
+  {
+    "id": "q-1780762048181-z3su9u",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "1 + π 2 1 + 𝜋 2 B 1 + π 3 1 + 𝜋 3 C 1 + π 6 1 + 𝜋 6 D 1 + π 4 1 + 𝜋 4",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "1 + π 2 1 + 𝜋 2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "1 + π 2 1 + 𝜋 2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 35
+    },
+    "created_at": "2026-06-06T16:07:28.181Z",
+    "updated_at": "2026-06-06T16:07:28.181Z"
+  },
+  {
+    "id": "q-1780762041300-lkk2lf",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "50 B 100 C 81 25 81 25 D 121 25 121 25",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "50",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "50",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 34
+    },
+    "created_at": "2026-06-06T16:07:21.300Z",
+    "updated_at": "2026-06-06T16:07:21.300Z"
+  },
+  {
+    "id": "q-1780762035452-tmovb5",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "4 B 8 C 10 D 6",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "4",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "4",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 33
+    },
+    "created_at": "2026-06-06T16:07:15.452Z",
+    "updated_at": "2026-06-06T16:07:15.452Z"
+  },
+  {
+    "id": "q-1780762028392-6jebtz",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 32
+    },
+    "created_at": "2026-06-06T16:07:08.392Z",
+    "updated_at": "2026-06-06T16:07:08.392Z"
+  },
+  {
+    "id": "q-1780762020956-i9swyq",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "441 B 398 C 312 D 409",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "441",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "441",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 31
+    },
+    "created_at": "2026-06-06T16:07:00.956Z",
+    "updated_at": "2026-06-06T16:07:00.956Z"
+  },
+  {
+    "id": "q-1780762013959-37wtmd",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "area of triangle ABO is 11 √ 3 11 3 B ABO is an obtuse angled isosceles triangle C area of triangle ABO is 11 4 11 4 D ABO is a scalene triangle",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "area of triangle ABO is 11 √ 3 11 3",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "rea of triangle ABO is 11 √ 3 11 3",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 30
+    },
+    "created_at": "2026-06-06T16:06:53.959Z",
+    "updated_at": "2026-06-06T16:06:53.959Z"
+  },
+  {
+    "id": "q-1780762006916-q5vc1c",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "− 2 − 2 B 6 C − 6 − 6 D 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "− 2 − 2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "− 2 − 2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 29
+    },
+    "created_at": "2026-06-06T16:06:46.916Z",
+    "updated_at": "2026-06-06T16:06:46.916Z"
+  },
+  {
+    "id": "q-1780761999784-d8w9cp",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "13 B 10 C 3 D 7",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "13",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "13",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 28
+    },
+    "created_at": "2026-06-06T16:06:39.784Z",
+    "updated_at": "2026-06-06T16:06:39.784Z"
+  },
+  {
+    "id": "q-1780761992132-i2fb4m",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 27
+    },
+    "created_at": "2026-06-06T16:06:32.132Z",
+    "updated_at": "2026-06-06T16:06:32.132Z"
+  },
+  {
+    "id": "q-1780761984857-kocnge",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "√ 5 + 1 5 + 1 B 2 C 3 D √ 3 + 1 3 + 1",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "√ 5 + 1 5 + 1",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "√ 5 + 1 5 + 1",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 26
+    },
+    "created_at": "2026-06-06T16:06:24.857Z",
+    "updated_at": "2026-06-06T16:06:24.857Z"
+  },
+  {
+    "id": "q-1780761977591-yxwzvz",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "19 − 2 i 19 − 2 i B − 19 − 2 i − 19 − 2 i C 19 + 2 i 19 + 2 𝑖 D − 19 + 2 i − 19 + 2 𝑖",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "19 − 2 i 19 − 2 i",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "19 − 2 i 19 − 2 i",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 25
+    },
+    "created_at": "2026-06-06T16:06:17.592Z",
+    "updated_at": "2026-06-06T16:06:17.592Z"
+  },
+  {
+    "id": "q-1780761970523-hv9e50",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "0 B 1 C i D − i − i",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 24
+    },
+    "created_at": "2026-06-06T16:06:10.523Z",
+    "updated_at": "2026-06-06T16:06:10.523Z"
+  },
+  {
+    "id": "q-1780761963677-b5c43e",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 23
+    },
+    "created_at": "2026-06-06T16:06:03.677Z",
+    "updated_at": "2026-06-06T16:06:03.677Z"
+  },
+  {
+    "id": "q-1780761956751-e5ifki",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "140 B 130 C 160 D 150",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "140",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "140",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 22
+    },
+    "created_at": "2026-06-06T16:05:56.751Z",
+    "updated_at": "2026-06-06T16:05:56.751Z"
+  },
+  {
+    "id": "q-1780761949279-2uqfbi",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 21
+    },
+    "created_at": "2026-06-06T16:05:49.279Z",
+    "updated_at": "2026-06-06T16:05:49.279Z"
+  },
+  {
+    "id": "q-1780761943525-fwhqm1",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "both are incorrect B only (S1) is correct C only (S2) is correct D both are correct",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "both are incorrect",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "oth are incorrect",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 20
+    },
+    "created_at": "2026-06-06T16:05:43.525Z",
+    "updated_at": "2026-06-06T16:05:43.525Z"
+  },
+  {
+    "id": "q-1780761937861-na75aq",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "24 B 12 C 18 D 16",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "24",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "24",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 19
+    },
+    "created_at": "2026-06-06T16:05:37.861Z",
+    "updated_at": "2026-06-06T16:05:37.861Z"
+  },
+  {
+    "id": "q-1780761931919-8r8slu",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "21 4 π 2 21 4 𝜋 2 B 8 π 2 8 𝜋 2 C 27 4 π 2 27 4 𝜋 2 D 6 π 2 6 𝜋 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "21 4 π 2 21 4 𝜋 2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "21 4 π 2 21 4 𝜋 2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 18
+    },
+    "created_at": "2026-06-06T16:05:31.919Z",
+    "updated_at": "2026-06-06T16:05:31.919Z"
+  },
+  {
+    "id": "q-1780761924567-zpcvbt",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "162 B 175 C 145 D 128",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 17
+    },
+    "created_at": "2026-06-06T16:05:24.567Z",
+    "updated_at": "2026-06-06T16:05:24.567Z"
+  },
+  {
+    "id": "q-1780761918408-rqlaz5",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "26 B 12 C 20 D 16",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "26",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "26",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 16
+    },
+    "created_at": "2026-06-06T16:05:18.408Z",
+    "updated_at": "2026-06-06T16:05:18.408Z"
+  },
+  {
+    "id": "q-1780761912477-bq07oc",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 15
+    },
+    "created_at": "2026-06-06T16:05:12.477Z",
+    "updated_at": "2026-06-06T16:05:12.477Z"
+  },
+  {
+    "id": "q-1780761906382-4auruj",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "5 64 5 64 B 1 16 1 16 C 3 16 3 16 D 7 64 7 64",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "5 64 5 64",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "5 64 5 64",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 14
+    },
+    "created_at": "2026-06-06T16:05:06.382Z",
+    "updated_at": "2026-06-06T16:05:06.382Z"
+  },
+  {
+    "id": "q-1780761900793-cq7x68",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "2 B 5 2 5 2 C 3 2 3 2 D 1 2 1 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 13
+    },
+    "created_at": "2026-06-06T16:05:00.793Z",
+    "updated_at": "2026-06-06T16:05:00.793Z"
+  },
+  {
+    "id": "q-1780761894969-7553nt",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "1 B 256 C -1 D 0",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "1",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "1",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 12
+    },
+    "created_at": "2026-06-06T16:04:54.969Z",
+    "updated_at": "2026-06-06T16:04:54.969Z"
+  },
+  {
+    "id": "q-1780761889323-jz6m00",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 11
+    },
+    "created_at": "2026-06-06T16:04:49.323Z",
+    "updated_at": "2026-06-06T16:04:49.323Z"
+  },
+  {
+    "id": "q-1780761883484-b6iq1d",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "50 B 61 C 37 D 42",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "50",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "50",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 10
+    },
+    "created_at": "2026-06-06T16:04:43.484Z",
+    "updated_at": "2026-06-06T16:04:43.484Z"
+  },
+  {
+    "id": "q-1780761877648-hx2crg",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "17 2 17 2 B 8 C 9 D 15 2 15 2",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "17 2 17 2",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "17 2 17 2",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 9
+    },
+    "created_at": "2026-06-06T16:04:37.648Z",
+    "updated_at": "2026-06-06T16:04:37.648Z"
+  },
+  {
+    "id": "q-1780761871730-djzl8i",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "20 B 31 C 35 D 75",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "20",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "20",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 8
+    },
+    "created_at": "2026-06-06T16:04:31.730Z",
+    "updated_at": "2026-06-06T16:04:31.730Z"
+  },
+  {
+    "id": "q-1780761866184-czxip8",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "12 B 17 C 22 D 24",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "12",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 7
+    },
+    "created_at": "2026-06-06T16:04:26.184Z",
+    "updated_at": "2026-06-06T16:04:26.184Z"
+  },
+  {
+    "id": "q-1780761860265-llj1m0",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "9 B 4 C 5 D 1",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "9",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "9",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 6
+    },
+    "created_at": "2026-06-06T16:04:20.265Z",
+    "updated_at": "2026-06-06T16:04:20.265Z"
+  },
+  {
+    "id": "q-1780761854519-c2ad4u",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "42 B 23 C 27 D 38",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "42",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "42",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 5
+    },
+    "created_at": "2026-06-06T16:04:14.519Z",
+    "updated_at": "2026-06-06T16:04:14.519Z"
+  },
+  {
+    "id": "q-1780761848708-krr2gg",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "18 B 22 C 29 D 34",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "18",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "18",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 4
+    },
+    "created_at": "2026-06-06T16:04:08.708Z",
+    "updated_at": "2026-06-06T16:04:08.708Z"
+  },
+  {
+    "id": "q-1780761842635-cw1gip",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "− 10 − 10 B − 8 − 8 C 10 √ 13 10 13 D 8 √ 13 8 13",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "− 10 − 10",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "− 10 − 10",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 3
+    },
+    "created_at": "2026-06-06T16:04:02.635Z",
+    "updated_at": "2026-06-06T16:04:02.635Z"
+  },
+  {
+    "id": "q-1780761836910-y9tg7f",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "162 B 184 C 262 D 324",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "162",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 2
+    },
+    "created_at": "2026-06-06T16:03:56.910Z",
+    "updated_at": "2026-06-06T16:03:56.910Z"
+  },
+  {
+    "id": "q-1780761830801-qx1kwu",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "0 B 2 C 1 D 4",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "0",
+        "isCorrect": false,
+        "label": "C"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Q 1",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 1
+    },
+    "created_at": "2026-06-06T16:03:50.801Z",
+    "updated_at": "2026-06-06T16:03:50.801Z"
+  },
+  {
+    "id": "q-1780757969008-78au0f",
+    "type": "mcq",
+    "text": "Complex Number",
+    "media": [],
+    "options": [
+      {
+        "text": "A\n\n0\n0\n\nB\n\n2\n2\n\nC\n\n1\n1\n\nD\n\n4\n4",
+        "isCorrect": false,
+        "label": "A"
+      },
+      {
+        "text": "A\n\n0\n0",
+        "isCorrect": false,
+        "label": "B"
+      },
+      {
+        "text": "A",
+        "isCorrect": false,
+        "label": "C"
+      },
+      {
+        "text": "0\n0",
+        "isCorrect": false,
+        "label": "D"
+      }
+    ],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Unknown",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 1
+    },
+    "created_at": "2026-06-06T14:59:29.008Z",
+    "updated_at": "2026-06-06T14:59:29.008Z"
+  },
+  {
+    "id": "q-1780757821195-ne9lzb",
+    "type": "mcq",
+    "text": "Welcome to the new way to practice & learn",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Unknown",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 1
+    },
+    "created_at": "2026-06-06T14:57:01.195Z",
+    "updated_at": "2026-06-06T14:57:01.195Z"
+  },
+  {
+    "id": "q-1780757583735-188lqg",
+    "type": "mcq",
+    "text": "Welcome to the new way to practice & learn",
+    "media": [],
+    "options": [],
+    "correct": null,
+    "sectionMetadata": {
+      "subject": "Unknown",
+      "chapter": "Unknown",
+      "source": "getmarks.app",
+      "questionNumber": 1
+    },
+    "created_at": "2026-06-06T14:53:03.736Z",
+    "updated_at": "2026-06-06T14:53:03.736Z"
+  }
+]

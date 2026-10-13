@@ -1,0 +1,718 @@
+[
+  {
+    "id": "test-1788598933151-smoupr",
+    "title": "flt222",
+    "seriesId": "series-1788598922643-scv0jx",
+    "sections": [
+      {
+        "id": "test-1788598933151-smoupr-maths-a",
+        "subject": "maths",
+        "sectionName": "A",
+        "type": "MCQ",
+        "questionCount": 2,
+        "posMarks": 4,
+        "negMarks": 2,
+        "questions": [
+          {
+            "id": "question-1788598992310-17miqf",
+            "text": "QUESTION? ANS 2",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "1",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "2",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "3",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "4",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "B",
+            "section": "test-1788598933151-smoupr-maths-a",
+            "subject": "maths"
+          }
+        ]
+      }
+    ],
+    "durationSec": 0,
+    "published": true,
+    "publish_at": "2026-09-05T09:03:23.748Z",
+    "created_at": "2026-09-05T09:02:13.151Z",
+    "updated_at": "2026-09-05T09:03:23.758Z",
+    "meta": {},
+    "subjects": [
+      "maths"
+    ]
+  },
+  {
+    "id": "test-1788522206971-2j0ald",
+    "title": "TEST 2",
+    "seriesId": "series-1786939080729-xgqyrx",
+    "sections": [
+      {
+        "id": "test-1788522206971-2j0ald-physics-sec-a",
+        "subject": "Physics",
+        "sectionName": "SEC A",
+        "type": "MULTI",
+        "questionCount": 5,
+        "posMarks": 4,
+        "negMarks": 20,
+        "questions": [
+          {
+            "id": "question-1788522333730-bhueo6",
+            "text": "What is 1+1",
+            "imageUrl": "/uploads/1788522325521-raw9sm-signature-Yash.jpeg",
+            "type": "MULTI",
+            "options": [
+              {
+                "text": "2",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "1+1",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "3-1",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "21",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "ABC",
+            "section": "test-1788522206971-2j0ald-physics-sec-a",
+            "subject": "Physics"
+          }
+        ]
+      },
+      {
+        "id": "test-1788522206971-2j0ald-chem-a",
+        "subject": "Chem",
+        "sectionName": "a",
+        "type": "MCQ",
+        "questionCount": 1,
+        "posMarks": 4,
+        "negMarks": 6,
+        "questions": [
+          {
+            "id": "question-1788522393325-7gb7nf",
+            "text": "Q1 A4",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "1",
+                "imageUrl": "/uploads/1788522391136-mx6saf-signature-Yash.jpeg",
+                "key": "A"
+              },
+              {
+                "text": "2",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "3",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "4",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "D",
+            "section": "test-1788522206971-2j0ald-chem-a",
+            "subject": "Chem"
+          }
+        ]
+      }
+    ],
+    "durationSec": 0,
+    "published": true,
+    "publish_at": "2026-09-04T11:47:05.172Z",
+    "created_at": "2026-09-04T11:43:26.972Z",
+    "updated_at": "2026-09-04T11:47:05.183Z",
+    "meta": {},
+    "subjects": [
+      "Physics",
+      "Chem"
+    ]
+  },
+  {
+    "id": "test-1786939088228-58dhgu",
+    "title": "TEST-1",
+    "seriesId": "series-1786939080729-xgqyrx",
+    "sections": [
+      {
+        "id": "test-1786939088228-58dhgu-w-abcd",
+        "subject": "w",
+        "sectionName": "abcd",
+        "type": "MCQ",
+        "questionCount": 5,
+        "posMarks": 3,
+        "negMarks": 3,
+        "questions": [
+          {
+            "id": "question-1786942275049-9y0jv9",
+            "text": "q1a",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "a",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "b",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "c",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1786939088228-58dhgu-w-abcd",
+            "subject": "w"
+          },
+          {
+            "id": "question-1786942286904-x5hgdq",
+            "text": "q2a",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "a",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "b",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "c",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1786939088228-58dhgu-w-abcd",
+            "subject": "w"
+          },
+          {
+            "id": "question-1786942302884-vmqib7",
+            "text": "q3a",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "a",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "b",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "c",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1786939088228-58dhgu-w-abcd",
+            "subject": "w"
+          }
+        ]
+      },
+      {
+        "id": "test-1786939088228-58dhgu-w-qq",
+        "subject": "w",
+        "sectionName": "qq",
+        "type": "MCQ",
+        "questionCount": 5,
+        "posMarks": 4,
+        "negMarks": 1,
+        "questions": [
+          {
+            "id": "question-1786942321567-jmneht",
+            "text": "q1b",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "a",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "b",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "c",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1786939088228-58dhgu-w-qq",
+            "subject": "w"
+          }
+        ]
+      }
+    ],
+    "durationSec": 0,
+    "published": true,
+    "publish_at": "2026-08-17T04:52:11.044Z",
+    "created_at": "2026-08-17T03:58:08.228Z",
+    "updated_at": "2026-08-17T04:52:11.051Z",
+    "meta": {},
+    "subjects": [
+      "w"
+    ]
+  },
+  {
+    "id": "test-1781735984288-4ioc5u",
+    "title": "FOOTBALL GP2",
+    "seriesId": "series-1780569051690-clz7at",
+    "sections": [
+      {
+        "id": "test-1781735984288-4ioc5u-mcq-a",
+        "subject": "MCQ",
+        "sectionName": "A",
+        "type": "MCQ",
+        "questionCount": 10,
+        "posMarks": 4,
+        "negMarks": 1,
+        "questions": [
+          {
+            "text": "Best shooter",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "YASHekdin MD",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "OMar marmush",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "ADITHallauddin",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "JAYmullah MD",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "B",
+            "section": "test-1781735984288-4ioc5u-mcq-a",
+            "subject": "MCQ",
+            "id": "question-1781736091721-n2pjdl"
+          },
+          {
+            "text": "Best Pace",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "YASH",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "VIRAJ",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "JAY",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "OM",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "B",
+            "section": "test-1781735984288-4ioc5u-mcq-a",
+            "subject": "MCQ",
+            "id": "question-1781736128948-yyq62t"
+          },
+          {
+            "text": "Worst  facecard",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "Adith",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "Jay",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "OM",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "Rehan",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1781735984288-4ioc5u-mcq-a",
+            "subject": "MCQ",
+            "id": "question-1781736158734-e51saz"
+          },
+          {
+            "text": "Best dives",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "OM",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "YASH",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "KRISTOS",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "AAKASH",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1781735984288-4ioc5u-mcq-a",
+            "subject": "MCQ",
+            "id": "question-1781736195046-w9dbbq"
+          }
+        ]
+      }
+    ],
+    "durationSec": 0,
+    "published": true,
+    "publish_at": "2026-06-17T22:43:30.582Z",
+    "created_at": "2026-06-17T22:39:44.303Z",
+    "updated_at": "2026-06-17T22:43:30.592Z",
+    "meta": {},
+    "subjects": [
+      "MCQ"
+    ]
+  },
+  {
+    "id": "test-1780570207552-dzu1zv",
+    "title": ",,",
+    "seriesId": "series-1780569549118-eigob7",
+    "sections": [
+      {
+        "id": "test-1780570207552-dzu1zv-ds-ss",
+        "subject": "ds",
+        "sectionName": "ss",
+        "type": "MCQ",
+        "questionCount": 120,
+        "posMarks": 4,
+        "negMarks": 1,
+        "questions": []
+      }
+    ],
+    "durationSec": 0,
+    "published": false,
+    "publish_at": null,
+    "created_at": "2026-06-04T10:50:07.552Z",
+    "updated_at": "2026-06-04T11:47:58.941Z",
+    "meta": {},
+    "subjects": [
+      "ds"
+    ]
+  },
+  {
+    "id": "test-1780569588746-dlyb37",
+    "title": "hi",
+    "seriesId": "series-1780569549118-eigob7",
+    "sections": [],
+    "durationSec": 0,
+    "published": false,
+    "publish_at": null,
+    "created_at": "2026-06-04T10:39:48.746Z",
+    "updated_at": "2026-06-04T10:39:48.746Z",
+    "meta": {}
+  },
+  {
+    "id": "test-1780569580271-mqw2wk",
+    "title": "hi",
+    "seriesId": "series-1780569549118-eigob7",
+    "sections": [],
+    "durationSec": 0,
+    "published": false,
+    "publish_at": null,
+    "created_at": "2026-06-04T10:39:40.271Z",
+    "updated_at": "2026-06-04T10:39:40.271Z",
+    "meta": {}
+  },
+  {
+    "id": "test-1780569556094-ardhhp",
+    "title": "tt",
+    "seriesId": "series-1780569549118-eigob7",
+    "sections": [],
+    "durationSec": 0,
+    "published": false,
+    "publish_at": null,
+    "created_at": "2026-06-04T10:39:16.094Z",
+    "updated_at": "2026-06-04T10:39:16.094Z",
+    "meta": {}
+  },
+  {
+    "id": "test-1780569082255-0ojkoz",
+    "title": "ft",
+    "seriesId": "series-1780569051690-clz7at",
+    "sections": [
+      {
+        "id": "test-1780569082255-0ojkoz-hi-seca",
+        "subject": "hi",
+        "sectionName": "seca",
+        "type": "MCQ",
+        "questionCount": 1,
+        "posMarks": 4,
+        "negMarks": 1,
+        "questions": [
+          {
+            "text": "we",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "f",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "g",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "D",
+            "section": "test-1780569082255-0ojkoz-hi-seca",
+            "subject": "hi",
+            "id": "question-1780574887821-mmbx3s"
+          },
+          {
+            "text": "hiji",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "hh",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "jj",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "kk",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "mm",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1780569082255-0ojkoz-hi-seca",
+            "subject": "hi",
+            "id": "question-1781276040427-l4ujee"
+          },
+          {
+            "text": "\\text{Let } f(x) = \\lim_{n\\to\\infty} \\left( \\frac{n^n(x+n)\\left(x+\\frac{n}{2}\\right)\\dots\\left(x+\\frac{n}{n}\\right)}{n!\\left(x^2+n^2\\right)\\left(x^2+\\frac{n^2}{4}\\right)\\dots\\left(x^2+\\frac{n^2}{n^2}\\right)} \\right)^{\\frac{x}{n}}",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "ans",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "b",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "c",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "d",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "A",
+            "section": "test-1780569082255-0ojkoz-hi-seca",
+            "subject": "hi",
+            "id": "question-1781276307672-5x77u9"
+          },
+          {
+            "text": "Who is the goat",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "Jay",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "Om",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "Aadith",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "Kristos",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "C",
+            "section": "test-1780569082255-0ojkoz-hi-seca",
+            "subject": "hi",
+            "id": "question-1781735911692-94k2kt"
+          },
+          {
+            "text": "Who is goat",
+            "imageUrl": "",
+            "type": "MCQ",
+            "options": [
+              {
+                "text": "Jay",
+                "imageUrl": "",
+                "key": "A"
+              },
+              {
+                "text": "om",
+                "imageUrl": "",
+                "key": "B"
+              },
+              {
+                "text": "Adith",
+                "imageUrl": "",
+                "key": "C"
+              },
+              {
+                "text": "Kristos",
+                "imageUrl": "",
+                "key": "D"
+              }
+            ],
+            "answer": "C",
+            "section": "test-1780569082255-0ojkoz-hi-seca",
+            "subject": "hi",
+            "id": "question-1781735965602-d1med2"
+          }
+        ]
+      }
+    ],
+    "durationSec": 0,
+    "published": true,
+    "publish_at": "2026-06-12T14:58:36.600Z",
+    "created_at": "2026-06-04T10:31:22.255Z",
+    "updated_at": "2026-06-17T22:39:25.622Z",
+    "meta": {},
+    "subjects": [
+      "hi"
+    ]
+  }
+]

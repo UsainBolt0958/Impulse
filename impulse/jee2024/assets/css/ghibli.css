@@ -1,0 +1,3145 @@
+/* FocusHub — Aesthetic Ghibli Theme */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root.ghibli-theme {
+  --bg-deep: #fff4cf; 
+  --bg-mid: #fce4ec; 
+  --glass: rgba(255, 255, 255, 0.4); /* Highly transparent glass */
+  --glass-border: rgba(255, 255, 255, 0.8); /* Crisp white edges */
+  --neon: #ff69b4; /* Hot pink */
+  --neon-dim: rgba(255, 105, 180, 0.2);
+  --neon-glow: 0 0 20px rgba(255, 105, 180, 0.3);
+  --scrollbar-thumb: rgba(255, 105, 180, 0.5);
+  --scrollbar-thumb-hover: rgba(255, 105, 180, 0.7);
+  --scrollbar-track: rgba(255, 255, 255, 0.3);
+  --text: #4b0082; /* Indigo */
+  --text-muted: rgba(75, 0, 130, 0.6);
+  --orange: #ffa500; /* Orange */
+  --danger: #ff6347; /* Tomato */
+  --sidebar-w: 300px;
+  --radius: 24px; /* Rounder for cartoonish */
+  --radius-sm: 16px;
+  --transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ghibli-theme *,
+.ghibli-theme *::before,
+.ghibli-theme *::after {
+  box-sizing: border-box;
+}
+
+.ghibli-theme .hidden {
+  display: none !important;
+}
+
+.ghibli-theme html, .ghibli-theme body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-size: 18px;
+  background: var(--bg-deep);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ghibli-theme body {
+  display: flex;
+  overflow-x: hidden;
+}
+
+/* Ambient gradient orbs - lighter */
+.ghibli-theme .app-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: 
+    radial-gradient(circle at top left, rgba(255, 228, 181, 0.8), transparent 60%),
+    radial-gradient(circle at top right, rgba(230, 230, 250, 0.9), transparent 60%),
+    radial-gradient(circle at bottom right, rgba(255, 182, 193, 0.7), transparent 60%),
+    radial-gradient(circle at bottom left, rgba(255, 239, 213, 0.8), transparent 60%);
+  background-color: #fffaf0;
+}
+
+/* Sidebar - light and cartoonish */
+.ghibli-theme .sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 22px 18px;
+  background: rgba(255, 240, 220, 0.85);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  border-right: none;
+  box-shadow: none;
+}
+
+.ghibli-theme .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 20px;
+  border-bottom: 2px solid var(--glass-border);
+  margin-bottom: 16px;
+}
+
+.ghibli-theme .brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 20px; /* Rounder */
+  background: linear-gradient(145deg, rgba(255, 255, 0, 0.4), rgba(255, 182, 193, 0.3));
+  border: 2px solid rgba(255, 69, 0, 0.5); /* Orange border */
+  box-shadow: var(--neon-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--neon);
+}
+
+.ghibli-theme .brand-text {
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.ghibli-theme .brand-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.ghibli-theme .nav-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ghibli-theme .nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--glass);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .nav-btn i {
+  width: 20px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--neon);
+}
+
+.ghibli-theme .nav-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .nav-btn.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.7); /* Soft frosted pill instead of orange */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transform: scale(1.02);
+}
+
+.ghibli-theme .nav-btn.active i {
+  color: var(--neon);
+}
+
+/* Todo list - light */
+.ghibli-theme .sidebar-hint {
+  flex: 1;
+  margin: 12px 0 0;
+  padding: 20px 22px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--text);
+  border: 2px dashed var(--glass-border);
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.ghibli-theme .sidebar-todo ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  max-height: 150px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+}
+
+.ghibli-theme .sidebar-todo ul::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ghibli-theme .sidebar-todo ul::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 2px;
+}
+
+.ghibli-theme .sidebar-todo ul::-webkit-scrollbar-thumb {
+  background: rgba(255, 105, 180, 0.4);
+  border-radius: 2px;
+}
+
+.ghibli-theme .sidebar-todo ul::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 105, 180, 0.6);
+}
+
+.ghibli-theme .sidebar-todo li {
+  margin-bottom: 0.35rem;
+  padding: 0.25rem 0.45rem;
+  border-radius: 12px;
+  font-weight: 600;
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: break-word;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  list-style: disc inside;
+  color: #4b0082;
+}
+
+.ghibli-theme .sidebar-todo li::marker {
+  color: #ff69b4;
+}
+
+.ghibli-theme .sidebar-todo li[data-color="green"] {
+  background: rgba(144, 238, 144, 0.4);
+  color: #228b22;
+}
+
+.ghibli-theme .sidebar-todo li[data-color="blue"] {
+  background: rgba(173, 216, 230, 0.4);
+  color: #00008b;
+}
+
+.ghibli-theme .sidebar-todo li[data-color="purple"] {
+  background: rgba(221, 160, 221, 0.4);
+  color: #800080;
+}
+
+.ghibli-theme .sidebar-todo li[data-color="orange"] {
+  background: rgba(255, 165, 0, 0.4);
+  color: #ff4500;
+}
+
+/* Tick/Cross button styling */
+.ghibli-theme .sidebar-todo li .todo-action-buttons {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ghibli-theme .sidebar-todo li .todo-btn {
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  color: #4b0082;
+  font-weight: bold;
+}
+
+.ghibli-theme .sidebar-todo li .todo-btn:hover {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.1);
+}
+
+.ghibli-theme .sidebar-todo li .todo-btn-tick:hover {
+  background: rgba(144, 238, 144, 0.5);
+  border-color: #90ee90;
+}
+
+.ghibli-theme .sidebar-todo li .todo-btn-cross:hover {
+  background: rgba(255, 107, 107, 0.5);
+  border-color: #ff6b6b;
+}
+
+.ghibli-theme .sidebar-todo li .todo-text {
+  flex: 1;
+}
+
+.ghibli-theme .todo-input-wrap input {
+  width: 100%;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.ghibli-theme .todo-input-wrap input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: 0 0 8px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .add-todo-btn {
+  width: 100%;
+  padding: 6px;
+  margin-top: auto;
+  background: rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  border-radius: 12px;
+  color: var(--neon);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: inherit;
+}
+
+.ghibli-theme .add-todo-btn:hover {
+  background: rgba(255, 105, 180, 0.3);
+  border-color: var(--neon);
+  transform: scale(1.02);
+}
+
+.ghibli-theme .sidebar-hint strong {
+  color: var(--neon);
+}
+
+/* Ensure sidebar hint is visible when not collapsed */
+.ghibli-theme .sidebar:not(.collapsed) .sidebar-hint {
+  display: flex !important;
+}
+
+/* Sidebar collapsed state for Ghibli theme */
+.ghibli-theme .sidebar.collapsed {
+  width: 70px;
+  padding: 22px 10px;
+}
+
+.ghibli-theme .sidebar.collapsed .brand-text,
+.ghibli-theme .sidebar.collapsed .brand-sub,
+.ghibli-theme .sidebar.collapsed .sidebar-hint,
+.ghibli-theme .sidebar.collapsed .add-todo-btn,
+.ghibli-theme .sidebar.collapsed .sidebar-footer {
+  display: none;
+}
+
+.ghibli-theme .sidebar.collapsed .nav-btn {
+  display: flex;
+  justify-content: center;
+  padding: 12px 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+  font-size: 0;
+}
+
+.ghibli-theme .sidebar.collapsed .nav-btn i {
+  color: var(--neon);
+  font-size: 20px;
+  margin: 0;
+  min-width: 20px;
+}
+
+.ghibli-theme .sidebar.collapsed .brand {
+  justify-content: center;
+  padding: 8px 0 20px;
+}
+
+.ghibli-theme .sidebar.collapsed .brand-mark {
+  margin: 0;
+}
+
+.ghibli-theme .sidebar.collapsed .sidebar-collapse-btn {
+  transform: rotate(180deg);
+}
+
+.ghibli-theme .sidebar-collapse-btn {
+  position: absolute;
+  bottom: 16px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--neon);
+  border: 2px solid var(--glass-border);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: transform var(--transition), box-shadow var(--transition);
+  z-index: 101;
+}
+
+.ghibli-theme .sidebar-collapse-btn:hover {
+  box-shadow: var(--neon-glow);
+}
+
+/* Main shell expanded when sidebar collapsed */
+.ghibli-theme .sidebar.collapsed + .main-shell {
+  margin-left: 70px;
+  width: calc(100% - 70px);
+}
+
+/* Glass cards - solid and light */
+.ghibli-theme .glass-card {
+  background: var(--glass); 
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.05); /* Softer, ambient shadow */
+}
+
+.ghibli-theme .glass-card:hover {
+  border-color: var(--neon);
+  box-shadow: 0 8px 24px rgba(255, 105, 180, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Colorful cards for This Week (blue) and Goal Tracker (green) */
+/* Commented out to match frosted glass theme
+.ghibli-theme .glass-card.chart-card.span-6 {
+  background: linear-gradient(135deg, rgba(173, 216, 230, 0.6), rgba(135, 206, 235, 0.5));
+  border: 2px solid rgba(100, 150, 200, 0.4);
+  box-shadow: 0 4px 16px rgba(100, 150, 220, 0.25);
+}
+
+.ghibli-theme .glass-card.chart-card.span-6:hover {
+  border-color: rgba(30, 144, 255, 0.6);
+  box-shadow: 0 8px 24px rgba(100, 150, 220, 0.35);
+}
+*/
+
+.ghibli-theme .goal-tracker-card {
+  background: rgba(144, 238, 144, 0.25) !important; /* Much more transparent */
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 8px 32px rgba(34, 139, 34, 0.1) !important;
+}
+
+.ghibli-theme .goal-tracker-card:hover {
+  border-color: rgba(34, 139, 34, 0.6) !important;
+  box-shadow: 0 8px 24px rgba(100, 200, 100, 0.35) !important;
+}
+
+/* Clock and date - light */
+.ghibli-theme .clock-live {
+  text-align: center;
+  padding: 12px 8px;
+}
+
+.ghibli-theme .clock-time {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ghibli-theme .clock-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+/* Mini calendar - light */
+.ghibli-theme .mini-cal-head button {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text);
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ghibli-theme .mini-cal-head button:hover {
+  background: rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .mini-cal-title {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ghibli-theme .mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  text-align: center;
+  font-size: 10px;
+}
+
+.ghibli-theme .mini-cal-dow {
+  color: var(--text-muted);
+  font-weight: 600;
+  padding-bottom: 4px;
+}
+
+.ghibli-theme .mini-cal-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: default;
+  position: relative;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--glass-border);
+}
+
+.ghibli-theme .mini-cal-day.other {
+  opacity: 0.4;
+}
+
+.ghibli-theme .mini-cal-day.today {
+  background: rgba(255, 105, 180, 0.3);
+  color: var(--neon);
+  box-shadow: 0 0 12px rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .mini-cal-day.has-data::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--neon);
+}
+
+/* Main shell */
+.ghibli-theme .main-shell {
+  margin-left: var(--sidebar-w);
+  width: calc(100% - var(--sidebar-w));
+  flex: 1;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ghibli-theme .top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px 16px;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: transparent; 
+  border-bottom: none; 
+}
+
+.ghibli-theme .top-bar-live {
+  min-width: 200px;
+  padding: 12px 18px;
+  border-radius: 20px;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+
+.ghibli-theme .dashboard-clock {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ghibli-theme .dashboard-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.ghibli-theme .search-pill {
+  flex: 1;
+  max-width: 480px;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+
+.ghibli-theme .search-pill i {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.ghibli-theme .search-pill input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.ghibli-theme .search-pill input::placeholder {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .motivational-quote {
+  flex: 1;
+  max-width: 600px;
+  min-width: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 26px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(12px);
+  position: relative;
+  overflow: hidden;
+}
+
+.ghibli-theme .quote-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--neon);
+  letter-spacing: 0.5px;
+  position: relative;
+  z-index: 1;
+}
+
+.ghibli-theme .top-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ghibli-theme .theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 14px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.ghibli-theme .theme-toggle:hover {
+  color: var(--neon);
+  border-color: rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .avatar-ring {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #ff69b4, #ffa500);
+  box-shadow: var(--neon-glow);
+}
+
+.ghibli-theme .avatar-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--bg-mid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--neon);
+}
+
+.ghibli-theme .content-area {
+  flex: 1;
+  padding: 12px 32px 32px;
+  overflow-y: auto;
+}
+
+.ghibli-theme .view {
+  display: none;
+  animation: viewIn 0.5s var(--transition) both;
+  height: 100%;
+  flex-direction: column;
+}
+
+.ghibli-theme .view.active {
+  display: flex;
+}
+
+@keyframes viewIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ghibli-theme .page-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin: 0 0 8px;
+}
+
+.ghibli-theme .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ghibli-theme .time-unit-toggle {
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 10px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ghibli-theme .time-unit-toggle:hover {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: var(--neon);
+  color: var(--neon);
+}
+
+.ghibli-theme .time-unit-toggle.active {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: var(--neon);
+  color: var(--neon);
+}
+
+.ghibli-theme .page-sub {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0 0 32px;
+  font-weight: 500;
+}
+
+/* Grid system */
+.ghibli-theme .grid-dashboard {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+  width: 100%;
+}
+
+.ghibli-theme .span-6 {
+  grid-column: span 6;
+}
+
+.ghibli-theme .span-12 {
+  grid-column: span 12;
+}
+
+.ghibli-theme .span-4 {
+  grid-column: span 4;
+}
+
+.ghibli-theme .span-3 {
+  grid-column: span 3;
+}
+
+/* Hero stat - light and cartoonish */
+.ghibli-theme .hero-stat {
+  padding: 28px;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 182, 193, 0.1));
+  border: 2px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .hero-stat::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -30%;
+  width: 70%;
+  height: 130%;
+  background: radial-gradient(circle, rgba(255, 255, 0, 0.15), transparent 70%);
+  pointer-events: none;
+}
+
+.ghibli-theme .hero-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.ghibli-theme .hero-stat-value {
+  font-size: 48px;
+  font-weight: 800;
+  margin: 10px 0;
+  letter-spacing: -0.04em;
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ghibli-theme .hero-stat-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Chart cards */
+.ghibli-theme .chart-card {
+  padding: 24px;
+  min-height: 300px;
+  position: relative;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .chart-card h3 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.ghibli-theme .chart-wrap {
+  position: relative;
+  height: 240px;
+}
+
+/* Focus unified - light */
+.ghibli-theme .focus-unified {
+  width: 100%;
+  padding: 32px 36px 36px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius);
+  border: 2px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.ghibli-theme .focus-unified::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.ghibli-theme .focus-unified.pomodoro-bg::before {
+  background-image: url('../images/pomobackg.png');
+}
+
+.ghibli-theme .focus-unified.stopwatch-bg::before {
+  background-image: url('../images/stopwatchbackg.png');
+}
+
+.ghibli-theme .focus-unified.pomodoro-bg,
+.ghibli-theme .focus-unified.stopwatch-bg {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.ghibli-theme .focus-unified.running {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.ghibli-theme .focus-unified.running > * {
+  position: relative;
+  z-index: 1;
+}
+
+.ghibli-theme .focus-unified.running::before {
+  opacity: 1;
+}
+
+.ghibli-theme .focus-unified.running .focus-actions {
+  background: rgba(255, 255, 255, 0.005);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  padding: 14px;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.ghibli-theme .focus-unified.running .subject-activity-selector {
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px solid var(--glass-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.ghibli-theme .focus-mode-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.ghibli-theme .focus-mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-muted);
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .focus-mode-btn i {
+  font-size: 18px;
+  margin-bottom: 4px;
+  color: var(--neon);
+}
+
+.ghibli-theme .focus-mode-btn .focus-mode-sub {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.ghibli-theme .focus-mode-btn:hover:not(:disabled) {
+  border-color: rgba(255, 105, 180, 0.4);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-2px);
+}
+
+.ghibli-theme .focus-mode-btn.active {
+  border-color: var(--neon);
+  background: rgba(255, 105, 180, 0.1);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(255, 105, 180, 0.1);
+}
+
+.ghibli-theme .focus-display-wrap {
+  text-align: center;
+  margin-bottom: 32px;
+  position: relative;
+  overflow: visible;
+  border-radius: var(--radius);
+}
+
+.ghibli-theme .focus-timer-hero {
+  font-size: clamp(64px, 16vw, 96px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  margin: 0;
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  z-index: 1;
+}
+
+.ghibli-theme .focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  padding: 16px;
+  margin: 16px 0;
+  background: rgba(255, 255, 255, 0.005);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.ghibli-theme .btn-focus {
+  padding: 16px 32px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+
+.ghibli-theme .btn-focus:active {
+  transform: scale(0.97);
+}
+
+.ghibli-theme .btn-focus-primary {
+  background: linear-gradient(135deg, #ff69b4, #ffa500);
+  color: white;
+  box-shadow: 0 6px 24px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .btn-focus-primary:hover {
+  box-shadow: 0 8px 32px rgba(255, 105, 180, 0.4);
+}
+
+.ghibli-theme .btn-focus-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ghibli-theme .btn-focus-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 105, 180, 0.3);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.ghibli-theme .btn-focus-stop {
+  background: rgba(255, 99, 71, 0.11);
+  color: #ff6347;
+  border: 1px solid rgba(255, 99, 71, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.ghibli-theme .btn-focus-stop:hover {
+  background: rgba(255, 99, 71, 0.15);
+  border-color: rgba(255, 99, 71, 0.35);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Session info display */
+.ghibli-theme .focus-session-info {
+  margin: 16px 0 16px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  text-align: center;
+}
+
+.ghibli-theme .focus-session-info.hidden {
+  display: none;
+}
+
+.ghibli-theme .session-info-text {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--neon);
+  letter-spacing: 0.5px;
+}
+
+/* Subject and activity selectors - light */
+.ghibli-theme .subject-activity-selector {
+  margin: 16px 0 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+}
+
+.ghibli-theme .subject-activity-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--neon);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.ghibli-theme .subject-grid,
+.ghibli-theme .activity-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ghibli-theme .activity-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.ghibli-theme .subject-btn,
+.ghibli-theme .activity-btn {
+  border: 2px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .subject-btn:hover,
+.ghibli-theme .activity-btn:hover {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: rgba(255, 105, 180, 0.4);
+  transform: scale(1.02);
+}
+
+.ghibli-theme .subject-btn.active,
+.ghibli-theme .activity-btn.active {
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .subject-btn[data-subject="Physics"].active {
+  background: #4169e1; /* Royal blue */
+}
+
+.ghibli-theme .subject-btn[data-subject="Chemistry"].active {
+  background: #ff69b4; /* Hot pink */
+}
+
+.ghibli-theme .subject-btn[data-subject="Mathematics"].active {
+  background: #ffd700; /* Gold */
+}
+
+.ghibli-theme .subject-btn[data-subject="Other"].active {
+  background: #ffa500; /* Orange */
+}
+
+.ghibli-theme .activity-btn[data-activity="Theory"].active {
+  background: #87ceeb; /* Sky blue */
+}
+
+.ghibli-theme .activity-btn[data-activity="Practice"].active {
+  background: #ff6347; /* Tomato */
+}
+
+.ghibli-theme .activity-btn[data-activity="Revision"].active {
+  background: #daa520; /* Goldenrod */
+}
+
+/* Duration selector */
+.ghibli-theme .duration-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.ghibli-theme .duration-selector button {
+  background: rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  color: var(--neon);
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.ghibli-theme .duration-selector button:hover {
+  background: rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .duration-selector input {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text);
+  padding: 10px;
+  border-radius: 12px;
+  text-align: center;
+  width: 70px;
+  font-size: 16px;
+}
+
+.ghibli-theme .duration-selector input:focus {
+  outline: none;
+  border-color: var(--neon);
+}
+
+/* Analytics tabs */
+.ghibli-theme .period-tabs {
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  margin-bottom: 24px;
+}
+
+.ghibli-theme .period-tabs button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.ghibli-theme .period-tabs button.active {
+  background: rgba(255, 105, 180, 0.2);
+  color: var(--neon);
+}
+
+/* Tests hero */
+.ghibli-theme .tests-hero {
+  padding: 32px 40px;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 182, 193, 0.1));
+  border: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .tests-hero h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.ghibli-theme .tests-hero p {
+  margin: 0 0 24px;
+  color: var(--text-muted);
+  font-size: 15px;
+  max-width: 560px;
+  line-height: 1.6;
+}
+
+.ghibli-theme .launch-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.ghibli-theme .launch-card {
+  padding: 22px 24px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition);
+  font-family: inherit;
+  color: inherit;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .launch-card:hover {
+  border-color: var(--neon);
+  box-shadow: 0 8px 24px rgba(255, 105, 180, 0.2);
+  transform: translateY(-3px);
+}
+
+.ghibli-theme .launch-card .lc-title {
+  font-weight: 800;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.ghibli-theme .launch-card .lc-meta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Full calendar */
+.ghibli-theme .cal-full {
+  padding: 28px;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius);
+}
+
+.ghibli-theme .cal-full-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+}
+
+.ghibli-theme .cal-full-dow {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 10px;
+}
+
+.ghibli-theme .cal-full-day {
+  min-height: 80px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .cal-full-day.other {
+  opacity: 0.5;
+}
+
+.ghibli-theme .cal-full-day.today {
+  border-color: var(--neon);
+  box-shadow: 0 0 16px rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .cal-full-day .d-num {
+  margin-bottom: 8px;
+}
+
+.ghibli-theme .cal-full-day .d-min {
+  font-size: 11px;
+  color: var(--neon);
+  font-weight: 600;
+}
+
+/* Subject tabs */
+.ghibli-theme .subject-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.ghibli-theme .subject-tab {
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 14px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .subject-tab:hover {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: var(--neon);
+  color: var(--neon);
+  transform: translateY(-2px);
+}
+
+.ghibli-theme .subject-tab.active {
+  background: var(--neon);
+  border-color: var(--neon);
+  color: white;
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .subject-tab[data-subject="physics"] {
+  --tab-color: #4169e1;
+}
+
+.ghibli-theme .subject-tab[data-subject="chemistry"] {
+  --tab-color: #ff69b4;
+}
+
+.ghibli-theme .subject-tab[data-subject="maths"] {
+  --tab-color: #ffd700;
+}
+
+.ghibli-theme .subject-tab[data-subject="physics"].active {
+  background: var(--tab-color);
+  border-color: var(--tab-color);
+  box-shadow: 0 0 20px rgba(65, 105, 225, 0.3);
+}
+
+.ghibli-theme .subject-tab[data-subject="chemistry"].active {
+  background: var(--tab-color);
+  border-color: var(--tab-color);
+  box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .subject-tab[data-subject="maths"].active {
+  background: var(--tab-color);
+  border-color: var(--tab-color);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+}
+
+/* Maths chapters */
+.ghibli-theme .maths-chapters-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ghibli-theme .chapter-tab {
+  width: 100%;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 18px 22px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  min-height: 60px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .chapter-tab:hover {
+  background: rgba(255, 255, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.4);
+  color: #ffd700;
+  transform: translateY(-2px);
+}
+
+.ghibli-theme .chapter-tab:active {
+  transform: translateY(0);
+}
+
+.ghibli-theme .chapter-tab i {
+  font-size: 18px;
+  width: 22px;
+  text-align: center;
+  color: var(--neon);
+}
+
+.ghibli-theme .chapter-tab:hover i {
+  color: var(--text);
+}
+
+/* Radio overlay - light */
+.ghibli-theme .radio-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(1.05);
+  transition: opacity 0.08s ease, transform 0.08s ease;
+}
+
+.ghibli-theme .radio-overlay.show {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: all;
+}
+
+.ghibli-theme .radio-backdrop {
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(3px) brightness(0.9);
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ghibli-theme .radiowheel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(78vw, 640px);
+  height: min(78vw, 640px);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
+
+.ghibli-theme .radio-center {
+  position: absolute;
+  width: 36%;
+  height: 36%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 3px solid var(--glass-border);
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.ghibli-theme .songmetadata {
+  text-align: center;
+  color: var(--text);
+}
+
+.ghibli-theme .current-station {
+  font-size: 1.1rem;
+  line-height: 1.2;
+  margin-bottom: 0.3rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ghibli-theme .current-song {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.ghibli-theme .current-artist {
+  font-size: 0.75rem;
+  color: rgba(75, 0, 130, 0.8);
+}
+
+.ghibli-theme .song-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  margin: 0.7rem 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.ghibli-theme .song-nav-btn {
+  background: rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  color: var(--neon);
+  font-size: 1.3rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghibli-theme .song-nav-btn:hover {
+  background: rgba(255, 105, 180, 0.3);
+  border-color: var(--neon);
+}
+
+.ghibli-theme .song-nav-btn:active {
+  transform: scale(0.95);
+}
+
+.ghibli-theme .radio-station {
+  position: absolute;
+  height: 5rem;
+  width: 5rem;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  overflow: hidden;
+  transform: translate(-50%, -50%);
+}
+
+.ghibli-theme .radio-station.active {
+  box-shadow: 0 0 0 4px rgba(255, 105, 180, 0.8);
+  transform: translate(-50%, -50%) scale(1.15);
+  z-index: 2;
+}
+
+.ghibli-theme .radioimage {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.ghibli-theme .radio-status {
+  position: absolute;
+  top: 1.2rem;
+  right: 1.2rem;
+  z-index: 1010;
+  padding: 0.4rem 0.8rem;
+  border-radius: 0.8rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid var(--glass-border);
+  backdrop-filter: blur(6px);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .radio-status.error {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.5);
+  color: #ff6347;
+}
+
+.ghibli-theme .radio-status.hidden {
+  opacity: 0;
+  transform: translateX(0.4rem);
+}
+
+/* Particle background - lighter */
+.ghibli-theme .particle-bg {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.ghibli-theme .app-bg {
+  z-index: 1;
+}
+
+.ghibli-theme .sidebar {
+  position: fixed;
+  z-index: 100;
+}
+
+.ghibli-theme .main-shell {
+  position: relative;
+  z-index: 2;
+}
+
+/* Progress ring */
+.ghibli-theme .progress-ring {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  transform: rotate(-90deg);
+  z-index: 0;
+}
+
+@keyframes spin-ring {
+  from {
+    transform: rotate(-90deg);
+  }
+  to {
+    transform: rotate(270deg);
+  }
+}
+
+.ghibli-theme .progress-ring__circle {
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+/* Goal list */
+.ghibli-theme .goal-list {
+  margin-bottom: 14px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.ghibli-theme .goal-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ghibli-theme .goal-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+}
+
+.ghibli-theme .goal-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 105, 180, 0.4);
+  border-radius: 3px;
+}
+
+.ghibli-theme .goal-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 105, 180, 0.6);
+}
+
+.ghibli-theme .goal-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .goal-item:last-child {
+  border-bottom: none;
+}
+
+.ghibli-theme .goal-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.ghibli-theme .goal-countdown {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.ghibli-theme .goal-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ghibli-theme .add-goal-btn {
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ghibli-theme .add-goal-btn:hover {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: var(--neon);
+}
+
+/* Goal calendar popup */
+.ghibli-theme .goal-calendar-popup {
+  position: fixed;
+  width: 300px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  color: var(--text);
+  z-index: 99999;
+  display: none;
+  overflow: visible;
+}
+
+.ghibli-theme .goal-calendar-popup.visible {
+  display: block;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-head button {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-head button:hover {
+  background: rgba(255, 105, 180, 0.1);
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day,
+.ghibli-theme .goal-calendar-popup .calendar-weekday {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-weekday {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day {
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  border: 1px solid var(--glass-border);
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day:hover {
+  background: rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day.selected {
+  background: var(--neon);
+  color: white;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day.today {
+  position: relative;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day .today-dot {
+  position: absolute;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  background: #22c55e;
+  border-radius: 50%;
+}
+
+.ghibli-theme .goal-calendar-popup .calendar-day.today.selected .today-dot {
+  background: #fff;
+}
+
+.ghibli-theme .goal-inputs input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.ghibli-theme .goal-date-picker input {
+  width: calc(100% - 44px);
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ghibli-theme .date-toggle {
+  width: 36px;
+  height: 16px;
+  margin-left: -44px;
+  border: 2px solid var(--glass-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ghibli-theme .goal-inputs input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.1);
+}
+
+.ghibli-theme .add-goal-btn:hover {
+  background: rgba(255, 105, 180, 0.1);
+  border-color: var(--neon);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ghibli-theme *,
+  .ghibli-theme *::before,
+  .ghibli-theme *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ——— Profile Panel ——— */
+.ghibli-theme .profile-panel-content {
+  background: linear-gradient(180deg, rgba(255, 228, 228, 0.98), rgba(255, 240, 220, 0.98));
+  border-left: 2px solid var(--glass-border);
+  box-shadow: -8px 0 40px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .profile-panel-overlay {
+  background: rgba(75, 0, 130, 0.3);
+  backdrop-filter: blur(6px);
+}
+
+.ghibli-theme .profile-header {
+  border-bottom: 2px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.ghibli-theme .profile-title {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.ghibli-theme .profile-close {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text-muted);
+}
+
+.ghibli-theme .profile-close:hover {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.4);
+  color: #ff6347;
+}
+
+.ghibli-theme .profile-body::-webkit-scrollbar-track {
+  background: rgba(255, 105, 180, 0.1);
+}
+
+.ghibli-theme .profile-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 105, 180, 0.4);
+}
+
+.ghibli-theme .profile-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 105, 180, 0.6);
+}
+
+.ghibli-theme .profile-identity {
+  border-bottom: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .profile-avatar-large {
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.4), rgba(255, 165, 0, 0.2));
+  border: 3px solid rgba(255, 105, 180, 0.5);
+  box-shadow: 0 0 24px rgba(255, 105, 180, 0.3);
+  color: var(--neon);
+}
+
+.ghibli-theme .profile-name-display {
+  color: var(--text);
+}
+
+.ghibli-theme .profile-edit-btn {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text-muted);
+}
+
+.ghibli-theme .profile-edit-btn:hover {
+  background: rgba(255, 105, 180, 0.2);
+  border-color: rgba(255, 105, 180, 0.5);
+  color: var(--neon);
+}
+
+.ghibli-theme .profile-name-input-wrap input {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  color: var(--text);
+}
+
+.ghibli-theme .profile-name-input-wrap input:focus {
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .profile-btn-save {
+  background: rgba(144, 238, 144, 0.3);
+  color: #228b22;
+  border-color: rgba(144, 238, 144, 0.5);
+}
+
+.ghibli-theme .profile-btn-save:hover {
+  background: rgba(144, 238, 144, 0.5);
+  border-color: #228b22;
+}
+
+.ghibli-theme .profile-btn-cancel {
+  background: rgba(255, 99, 71, 0.2);
+  color: #ff6347;
+  border-color: rgba(255, 99, 71, 0.4);
+}
+
+.ghibli-theme .profile-btn-cancel:hover {
+  background: rgba(255, 99, 71, 0.35);
+  border-color: rgba(255, 99, 71, 0.6);
+}
+
+.ghibli-theme .profile-section-title {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .profile-section-title i {
+  color: var(--neon);
+}
+
+.ghibli-theme .profile-stat-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.ghibli-theme .profile-stat-card:hover {
+  border-color: rgba(255, 105, 180, 0.4);
+  box-shadow: 0 6px 20px rgba(255, 105, 180, 0.15);
+}
+
+.ghibli-theme .profile-stat-icon.today {
+  background: rgba(255, 165, 0, 0.2);
+  color: #ffa500;
+}
+
+.ghibli-theme .profile-stat-icon.week {
+  background: rgba(255, 105, 180, 0.2);
+  color: var(--neon);
+}
+
+.ghibli-theme .profile-stat-icon.year {
+  background: rgba(135, 206, 235, 0.3);
+  color: #4169e1;
+}
+
+.ghibli-theme .profile-stat-value {
+  color: var(--text);
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ghibli-theme .profile-stat-label {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .achievement-item {
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .achievement-item.locked {
+  opacity: 0.5;
+  background: rgba(200, 200, 200, 0.4);
+}
+
+.ghibli-theme .achievement-item.unlocked {
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.15), rgba(255, 255, 255, 0.9));
+  border-color: rgba(255, 105, 180, 0.4);
+  box-shadow: 0 4px 16px rgba(255, 105, 180, 0.15);
+}
+
+.ghibli-theme .achievement-item.unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.4), rgba(255, 165, 0, 0.3));
+  box-shadow: 0 0 16px rgba(255, 105, 180, 0.4);
+  animation: ghibliAchievementGlow 2s ease-in-out infinite;
+}
+
+@keyframes ghibliAchievementGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 105, 180, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(255, 105, 180, 0.7); }
+}
+
+.ghibli-theme .achievement-icon {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-muted);
+  border: 1px solid var(--glass-border);
+}
+
+.ghibli-theme .achievement-item.unlocked .achievement-icon {
+  color: var(--neon);
+  border-color: rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .achievement-name {
+  color: var(--text);
+}
+
+.ghibli-theme .achievement-item.unlocked .achievement-name {
+  color: var(--neon);
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-desc {
+  color: var(--text-muted);
+}
+
+/* ——— Dominator Achievement - Ghibli Theme ——— */
+.ghibli-theme .achievement-item.dominator {
+  grid-column: span 1;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked {
+  background: linear-gradient(145deg, rgba(255, 215, 0, 0.2), rgba(255, 105, 180, 0.15));
+  border-color: rgba(255, 215, 0, 0.4);
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.2);
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(255, 215, 0, 0.5), rgba(255, 165, 0, 0.3));
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+  animation: ghibliDominatorIconGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .badge-svg {
+  animation: ghibliBadgeFloat 3s ease-in-out infinite, ghibliBadgeRebuild 4s ease-in-out infinite, ghibliBadgePulseGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .badge-lightning {
+  animation: ghibliLightningPulse 1.5s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .badge-wing-left,
+.ghibli-theme .achievement-item.dominator.unlocked .badge-wing-right {
+  animation: ghibliWingFlutter 2s ease-in-out infinite;
+  transform-origin: 140px 130px;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .achievement-name {
+  background: linear-gradient(180deg, #FFD700, #FF69B4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-item.dominator.unlocked .achievement-desc {
+  color: #FF8C00;
+  font-weight: 600;
+}
+
+@keyframes ghibliDominatorIconGlow {
+  0%, 100% { box-shadow: 0 0 16px rgba(255, 215, 0, 0.5); }
+  50% { box-shadow: 0 0 28px rgba(255, 215, 0, 0.8); }
+}
+
+@keyframes ghibliBadgeFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes ghibliBadgeRebuild {
+  0%, 85%, 100% { transform: scale(1) translateY(0); }
+  90% { transform: scale(0.92) translateY(3px); }
+  95% { transform: scale(1.05) translateY(-2px); }
+}
+
+@keyframes ghibliBadgePulseGlow {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.5)); }
+  50% { filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8)); }
+}
+
+@keyframes ghibliLightningPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes ghibliWingFlutter {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.03); }
+}
+
+/* Mini dominator badge in Ghibli theme */
+.ghibli-theme .mini-dominator-badge.unlocked {
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+  animation: ghibliMiniBadgeGlow 2s ease-in-out infinite;
+}
+
+@keyframes ghibliMiniBadgeGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.6)) drop-shadow(0 0 12px rgba(255, 105, 180, 0.4));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 12px rgba(255, 215, 0, 1)) drop-shadow(0 0 24px rgba(255, 105, 180, 0.8));
+    transform: scale(1.1);
+  }
+}
+
+/* ——— Premium Medals Ghibli Theme Styling ——— */
+
+/* Relentless - Red Flame Theme */
+.ghibli-theme .achievement-item.premium[data-achievement="relentless"].unlocked {
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.2), rgba(255, 69, 0, 0.15));
+  border-color: rgba(255, 105, 180, 0.5);
+  box-shadow: 0 0 20px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="relentless"].unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.5), rgba(255, 69, 0, 0.3));
+  box-shadow: 0 0 24px rgba(255, 105, 180, 0.6);
+  animation: ghibliRelentlessGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="relentless"].unlocked .achievement-name {
+  background: linear-gradient(180deg, #FF69B4, #FF4500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="relentless"].unlocked .achievement-desc {
+  color: #FF6B6B;
+  font-weight: 600;
+}
+
+@keyframes ghibliRelentlessGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 105, 180, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(255, 69, 0, 0.9); }
+}
+
+/* Executor - Purple Blade Theme */
+.ghibli-theme .achievement-item.premium[data-achievement="executor"].unlocked {
+  background: linear-gradient(145deg, rgba(138, 43, 226, 0.2), rgba(255, 105, 180, 0.15));
+  border-color: rgba(138, 43, 226, 0.5);
+  box-shadow: 0 0 20px rgba(138, 43, 226, 0.3);
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="executor"].unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(138, 43, 226, 0.5), rgba(255, 105, 180, 0.3));
+  box-shadow: 0 0 24px rgba(138, 43, 226, 0.6);
+  animation: ghibliExecutorGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="executor"].unlocked .achievement-name {
+  background: linear-gradient(180deg, #9370DB, #FF69B4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="executor"].unlocked .achievement-desc {
+  color: #8A2BE2;
+  font-weight: 600;
+}
+
+@keyframes ghibliExecutorGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(138, 43, 226, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(255, 105, 180, 0.9); }
+}
+
+/* Juggernaut - Blue Star Theme */
+.ghibli-theme .achievement-item.premium[data-achievement="juggernaut"].unlocked {
+  background: linear-gradient(145deg, rgba(65, 105, 225, 0.2), rgba(0, 191, 255, 0.15));
+  border-color: rgba(65, 105, 225, 0.5);
+  box-shadow: 0 0 20px rgba(65, 105, 225, 0.3);
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="juggernaut"].unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(65, 105, 225, 0.5), rgba(0, 191, 255, 0.3));
+  box-shadow: 0 0 24px rgba(65, 105, 225, 0.6);
+  animation: ghibliJuggernautGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="juggernaut"].unlocked .achievement-name {
+  background: linear-gradient(180deg, #4169E1, #00BFFF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="juggernaut"].unlocked .achievement-desc {
+  color: #1E90FF;
+  font-weight: 600;
+}
+
+@keyframes ghibliJuggernautGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(65, 105, 225, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(0, 191, 255, 0.9); }
+}
+
+/* Titan's Grind - Icy/Snowy Theme with Pink accents */
+.ghibli-theme .achievement-item.premium[data-achievement="titans-grind"].unlocked {
+  background: linear-gradient(145deg, rgba(0, 188, 212, 0.2), rgba(255, 105, 180, 0.15));
+  border-color: rgba(0, 188, 212, 0.5);
+  box-shadow: 0 0 20px rgba(0, 188, 212, 0.3);
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="titans-grind"].unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(0, 188, 212, 0.5), rgba(255, 105, 180, 0.3));
+  box-shadow: 0 0 24px rgba(0, 188, 212, 0.6);
+  animation: ghibliTitanGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="titans-grind"].unlocked .achievement-name {
+  background: linear-gradient(180deg, #00BCD4, #FF69B4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 800;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="titans-grind"].unlocked .achievement-desc {
+  color: #00BCD4;
+  font-weight: 600;
+}
+
+@keyframes ghibliTitanGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 188, 212, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(255, 105, 180, 0.9); }
+}
+
+/* Tabletopper - Rainbow Chroma Theme */
+.ghibli-theme .achievement-item.premium[data-achievement="tabletopper"].unlocked {
+  background: linear-gradient(145deg, rgba(255, 215, 0, 0.2), rgba(255, 105, 180, 0.15));
+  border-color: rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+  animation: ghibliTabletopperPulse 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="tabletopper"].unlocked .achievement-icon {
+  background: linear-gradient(145deg, rgba(255, 215, 0, 0.4), rgba(255, 105, 180, 0.4), rgba(138, 43, 226, 0.4));
+  background-size: 200% 200%;
+  box-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+  animation: ghibliTabletopperChroma 3s linear infinite, ghibliTabletopperGlow 2s ease-in-out infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="tabletopper"].unlocked .achievement-name {
+  background: linear-gradient(90deg, #FF0000, #FF7F00, #FFFF00, #00FF00, #0000FF, #4B0082, #9400D3);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 900;
+  animation: ghibliRainbowText 3s linear infinite;
+}
+
+.ghibli-theme .achievement-item.premium[data-achievement="tabletopper"].unlocked .achievement-desc {
+  color: #FFD700;
+  font-weight: 700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+@keyframes ghibliTabletopperPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 0 40px rgba(255, 105, 180, 0.6), 0 0 60px rgba(138, 43, 226, 0.4); }
+}
+
+@keyframes ghibliTabletopperChroma {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes ghibliTabletopperGlow {
+  0%, 100% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
+  25% { box-shadow: 0 0 30px rgba(255, 105, 180, 0.6); }
+  50% { box-shadow: 0 0 35px rgba(138, 43, 226, 0.7); }
+  75% { box-shadow: 0 0 30px rgba(0, 191, 255, 0.6); }
+}
+
+@keyframes ghibliRainbowText {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+/* Profile button styling for Ghibli */
+.ghibli-theme #profile-btn:hover .avatar-inner {
+  background: rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme #profile-btn .avatar-inner {
+  transition: all 0.3s ease;
+}
+
+.ghibli-theme #profile-btn:hover .avatar-inner {
+  transform: scale(1.05);
+}
+
+/* ——— Achievements Info Modal — Ghibli Theme ——— */
+.ghibli-theme .achievements-modal-backdrop {
+  background: rgba(75, 0, 130, 0.4);
+  backdrop-filter: blur(6px);
+}
+
+.ghibli-theme .achievements-modal-content {
+  background: linear-gradient(180deg, rgba(255, 228, 228, 0.98), rgba(255, 240, 220, 0.98));
+  border: 2px solid var(--glass-border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.ghibli-theme .achievements-modal-header {
+  background: rgba(255, 255, 255, 0.5);
+  border-bottom: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .achievements-modal-header h3 {
+  color: var(--text);
+}
+
+.ghibli-theme .achievements-modal-header h3 i {
+  color: var(--neon);
+}
+
+.ghibli-theme .achievements-modal-close {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text-muted);
+}
+
+.ghibli-theme .achievements-modal-close:hover {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.4);
+  color: #ff6347;
+}
+
+.ghibli-theme .achievements-modal-body {
+  background: transparent;
+}
+
+.ghibli-theme .achievements-modal-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ghibli-theme .achievements-modal-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+}
+
+.ghibli-theme .achievements-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 105, 180, 0.5);
+  border-radius: 2px;
+}
+
+.ghibli-theme .achievements-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 105, 180, 0.7);
+}
+
+.ghibli-theme .achievements-modal-footer {
+  background: rgba(255, 255, 255, 0.5);
+  border-top: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .achievements-modal-footer p {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .achievements-modal-footer i {
+  color: var(--neon);
+}
+
+.ghibli-theme .medal-category-title {
+  color: var(--text);
+  border-bottom: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .medal-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .medal-card:hover {
+  border-color: var(--neon);
+  box-shadow: 0 4px 16px rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme .medal-card.info-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .medal-card.info-card .medal-icon {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--neon);
+}
+
+.ghibli-theme .medal-card.premium-info {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 215, 0, 0.3);
+}
+
+.ghibli-theme .medal-card.premium-info .medal-name {
+  color: var(--neon);
+}
+
+.ghibli-theme .medal-name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.ghibli-theme .medal-desc {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .no-achievements {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .no-achievements i {
+  color: var(--neon);
+  opacity: 0.5;
+}
+
+/* Achievements info button in Ghibli theme */
+.ghibli-theme .achievements-info-btn {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--neon);
+}
+
+.ghibli-theme .achievements-info-btn:hover {
+  background: rgba(255, 105, 180, 0.2);
+  border-color: var(--neon);
+}
+
+/* ——— Friends UI — Ghibli Theme ——— */
+
+/* Find Friend Search Bar */
+.ghibli-theme .friend-search {
+  display: flex;
+  gap: 10px;
+}
+
+.ghibli-theme .friend-search input {
+  flex: 1;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.ghibli-theme .friend-search input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px rgba(255, 105, 180, 0.15);
+}
+
+.ghibli-theme .friend-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.ghibli-theme .friend-search button {
+  padding: 12px 20px;
+  background: rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  border-radius: var(--radius-sm);
+  color: var(--neon);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghibli-theme .friend-search button:hover {
+  background: rgba(255, 105, 180, 0.3);
+  border-color: var(--neon);
+  transform: translateY(-1px);
+}
+
+/* Modern Search Box - for Gmail ID input */
+.ghibli-theme .modern-search-container {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.ghibli-theme .modern-search-box {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: 16px;
+  padding: 6px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.ghibli-theme .modern-search-box:focus-within {
+  border-color: var(--neon);
+  box-shadow: 0 4px 30px rgba(255, 105, 180, 0.2);
+  transform: translateY(-2px);
+}
+
+.ghibli-theme .modern-search-box .search-icon {
+  font-size: 20px;
+  color: var(--text-muted);
+  margin: 0 16px;
+  transition: color 0.3s ease;
+}
+
+.ghibli-theme .modern-search-box:focus-within .search-icon {
+  color: var(--neon);
+}
+
+.ghibli-theme .modern-search-box input {
+  flex: 1;
+  padding: 16px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+}
+
+.ghibli-theme .modern-search-box input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.ghibli-theme .modern-search-box .search-submit-btn {
+  padding: 14px 24px;
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.9), rgba(255, 165, 0, 0.9));
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ghibli-theme .modern-search-box .search-submit-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 105, 180, 1), rgba(255, 165, 0, 1));
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(255, 105, 180, 0.4);
+}
+
+/* Friend Search Results */
+.ghibli-theme .friends-search-results {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ghibli-theme .friends-search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+}
+
+.ghibli-theme .friends-search-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--neon);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.15);
+}
+
+.ghibli-theme .friends-search-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ghibli-theme .friends-search-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.3), rgba(255, 165, 0, 0.2));
+  border: 2px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--neon);
+  overflow: hidden;
+}
+
+.ghibli-theme .friends-search-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ghibli-theme .friends-search-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.ghibli-theme .friends-search-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.ghibli-theme .friends-search-username {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.ghibli-theme .friends-search-item .action-btn {
+  padding: 8px 16px;
+  background: rgba(255, 105, 180, 0.2);
+  border: 2px solid rgba(255, 105, 180, 0.4);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: none;
+}
+
+.ghibli-theme .friends-search-item .action-btn:hover {
+  background: rgba(255, 105, 180, 0.3);
+  border-color: var(--neon);
+}
+
+/* Friend List Items */
+.ghibli-theme .friend-item,
+.ghibli-theme .request-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  transform: translateZ(0);
+  will-change: transform;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ghibli-theme .friend-item:hover,
+.ghibli-theme .request-item:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--neon);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.15);
+}
+
+.ghibli-theme .friend-info,
+.ghibli-theme .request-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ghibli-theme .friend-avatar,
+.ghibli-theme .request-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.3), rgba(255, 165, 0, 0.2));
+  border: 2px solid var(--glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: var(--neon);
+  overflow: hidden;
+}
+
+.ghibli-theme .friend-avatar img,
+.ghibli-theme .request-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ghibli-theme .friend-details,
+.ghibli-theme .request-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.ghibli-theme .friend-name,
+.ghibli-theme .request-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.ghibli-theme .friend-status,
+.ghibli-theme .request-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ghibli-theme .friend-status.online {
+  color: var(--neon);
+}
+
+.ghibli-theme .friend-status.studying {
+  color: #ffa500;
+}
+
+/* Friend Profile Modal */
+.ghibli-theme .friend-profile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background: rgba(75, 0, 130, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  padding: 0;
+}
+
+.ghibli-theme .friend-profile-modal {
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
+  background: linear-gradient(180deg, rgba(255, 228, 228, 0.98), rgba(255, 240, 220, 0.98));
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.ghibli-theme .friend-profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border-bottom: 2px solid var(--glass-border);
+}
+
+.ghibli-theme .friend-profile-header h3 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0;
+}
+
+.ghibli-theme .friend-profile-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transform: translateZ(0);
+  transition: none;
+}
+
+.ghibli-theme .friend-profile-close:hover {
+  background: rgba(255, 99, 71, 0.2);
+  border-color: rgba(255, 99, 71, 0.4);
+  color: #ff6347;
+}
+
+.ghibli-theme .friend-profile-body {
+  padding: 24px;
+  overflow-y: auto;
+  max-height: calc(100vh - 70px);
+}
+
+.ghibli-theme .friend-profile-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.ghibli-theme .friend-profile-avatar-xl {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(255, 105, 180, 0.4), rgba(255, 165, 0, 0.2));
+  border: 3px solid rgba(255, 105, 180, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 40px;
+  color: var(--neon);
+  margin-bottom: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 24px rgba(255, 105, 180, 0.3);
+}
+
+.ghibli-theme .friend-profile-avatar-xl img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ghibli-theme .friend-profile-name {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.ghibli-theme .friend-profile-username {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.ghibli-theme .friend-profile-last-sync {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Subject Breakdown */
+.ghibli-theme #friend-subject-breakdown {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.ghibli-theme #friend-subject-breakdown > div[style*="flex-direction:column"] > div {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 105, 180, 0.2);
+}
+
+.ghibli-theme #friend-subject-breakdown > div[style*="flex-direction:column"] > div:last-child {
+  border-bottom: none;
+}
+
+/* Stats Grid */
+.ghibli-theme .friend-profile-stats,
+.ghibli-theme .profile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ghibli-theme .friend-profile-stats .profile-stat-card,
+.ghibli-theme .profile-stats-grid .profile-stat-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 16px 12px;
+  text-align: center;
+  transform: translateZ(0);
+  transition: border-color 0.15s ease;
+}
+
+.ghibli-theme .friend-profile-stats .profile-stat-card:hover,
+.ghibli-theme .profile-stats-grid .profile-stat-card:hover {
+  border-color: rgba(255, 105, 180, 0.4);
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.1);
+}
+
+.ghibli-theme .friend-profile-stats .profile-stat-icon,
+.ghibli-theme .profile-stats-grid .profile-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  margin: 0 auto 10px;
+}
+
+.ghibli-theme .friend-profile-stats .profile-stat-value,
+.ghibli-theme .profile-stats-grid .profile-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+  background: linear-gradient(180deg, #ff69b4, #ffa500);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ghibli-theme .friend-profile-stats .profile-stat-label,
+.ghibli-theme .profile-stats-grid .profile-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Achievements Section */
+.ghibli-theme .friend-profile-achievements {
+  border-top: 2px solid var(--glass-border);
+  padding-top: 20px;
+}
+
+.ghibli-theme .friend-profile-achievements h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ghibli-theme #friend-achievements-content {
+  min-height: 60px;
+}
+
+/* Error/Success Messages */
+.ghibli-theme .friends-error {
+  background: rgba(255, 99, 71, 0.2);
+  border: 2px solid rgba(255, 99, 71, 0.4);
+  color: #ff6347;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.ghibli-theme .friends-success {
+  background: rgba(144, 238, 144, 0.3);
+  border: 2px solid rgba(144, 238, 144, 0.5);
+  color: #228b22;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+/* Friends View Container */
+.ghibli-theme .friends-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ghibli-theme .friends-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 12px;
+}
+
+.ghibli-theme .friends-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Pending Requests */
+.ghibli-theme .requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ghibli-theme .request-item .action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.ghibli-theme .request-item .action-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: none;
+}
+
+.ghibli-theme .request-item .action-btn.accept {
+  background: rgba(144, 238, 144, 0.3);
+  border: 2px solid rgba(144, 238, 144, 0.5);
+  color: #228b22;
+}
+
+.ghibli-theme .request-item .action-btn.accept:hover {
+  background: rgba(144, 238, 144, 0.5);
+  border-color: #228b22;
+}
+
+.ghibli-theme .request-item .action-btn.decline {
+  background: rgba(255, 99, 71, 0.2);
+  border: 2px solid rgba(255, 99, 71, 0.4);
+  color: #ff6347;
+}
+
+.ghibli-theme .request-item .action-btn.decline:hover {
+  background: rgba(255, 99, 71, 0.35);
+  border-color: rgba(255, 99, 71, 0.6);
+}
