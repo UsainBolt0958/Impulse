@@ -11,13 +11,17 @@ import NotebookPage from './pages/NotebookPage';
 import CalendarPage from './pages/CalendarPage';
 import PreviousPapersPage from './pages/PreviousPapersPage';
 import PreviousPapersExamPage from './pages/PreviousPapersExamPage';
+import CustomTestBuilderPage from './pages/CustomTestBuilderPage';
+import CustomTestExamPage from './pages/CustomTestExamPage';
+import CustomTestResultsPage from './pages/CustomTestResultsPage';
+import CustomTestPage from './pages/CustomTestPage';
 import Sidebar from './components/Sidebar';
 import { Toaster } from '@/components/ui/sonner';
 
 function AppContent() {
   const location = useLocation();
   // Determine if we are on a full-screen route (like the solving interface)
-  const isFullScreen = location.pathname.startsWith('/solve');
+  const isFullScreen = location.pathname.startsWith('/solve') || location.pathname === '/custom-test/exam';
 
   return (
     <div className={isFullScreen ? "flex h-[100dvh] w-full overflow-hidden bg-background" : "app-layout"}>
@@ -30,6 +34,10 @@ function AppContent() {
           <Route path="/pyq-practice" element={<PYQPracticePage />} />
           <Route path="/test-series" element={<TestSeriesPage />} />
           <Route path="/exam-player" element={<ExamPlayer />} />
+          <Route path="/custom-test" element={<CustomTestPage />} />
+          <Route path="/custom-test/build" element={<CustomTestBuilderPage />} />
+          <Route path="/custom-test/exam" element={<CustomTestExamPage />} />
+          <Route path="/custom-test/results/:resultId" element={<CustomTestResultsPage />} />
           
           <Route path="/practice" element={<Navigate to="/pyq-practice" replace />} />
           <Route path="/tests" element={<Navigate to="/test-series" replace />} />

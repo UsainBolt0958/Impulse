@@ -521,6 +521,7 @@
         .badge-done { background: #dbeafe; color: #1e40af; border: 1px solid #3b82f6; }
        
         .test-info-grid {
+            position: relative;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 20px;
@@ -1159,6 +1160,132 @@
             text-align: center;
             will-change: auto;
         }
+        .comparison-metrics {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(24px, 5vw, 64px);
+            width: 100%;
+            margin-top: 2px;
+        }
+        .score-metric,
+        .percentile-metric {
+            text-align: center;
+        }
+        .score-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 130px;
+        }
+        .percentile-metric {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 250px;
+        }
+        .percentile-orb::before {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 250px;
+            height: 250px;
+            border-radius: 50%;
+            background: conic-gradient(from 210deg, #2563eb, #22d3ee, #2dd4bf, #2563eb);
+            content: "";
+            transform: translate(-50%, -50%);
+            animation: percentile-orbit 12s linear infinite;
+        }
+        .percentile-orb::after {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 232px;
+            height: 232px;
+            border-radius: 50%;
+            background: #fff;
+            content: "";
+            transform: translate(-50%, -50%);
+        }
+        .percentile-orb {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 250px;
+            height: 250px;
+            flex: 0 0 250px;
+            border-radius: 50%;
+            background: #eff6ff;
+            box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12), 0 0 0 10px rgba(59, 130, 246, 0.06);
+        }
+        .percentile-orb::before,
+        .percentile-orb::after {
+            pointer-events: none;
+        }
+        .percentile-value,
+        .percentile-metric .comparison-label {
+            position: relative;
+            z-index: 1;
+        }
+        .percentile-value {
+            max-width: 190px;
+            color: #1d4ed8;
+            font-size: 42px;
+            font-weight: 800;
+            line-height: 1.15;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+        .percentile-range {
+            position: relative;
+            z-index: 1;
+            color: #475569;
+            font-size: 14px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .percentile-value.below-threshold {
+            max-width: 176px;
+            color: #334155;
+            font-size: 19px;
+            line-height: 1.35;
+            white-space: normal;
+        }
+        @keyframes percentile-orbit {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        .percentile-metric .comparison-label {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+        }
+        @media (max-width: 480px) {
+            .comparison-metrics { gap: 14px; }
+            .score-metric { min-width: 76px; }
+            .percentile-metric { min-width: 0; flex: 0 0 auto; }
+            .percentile-orb,
+            .percentile-orb::before { width: 210px; height: 210px; }
+            .percentile-orb::after { width: 194px; height: 194px; }
+            .percentile-orb { flex-basis: 210px; }
+            .percentile-value { max-width: 160px; font-size: 36px; }
+            .percentile-range { font-size: 12px; }
+            .percentile-value.below-threshold { max-width: 150px; font-size: 17px; }
+            .percentile-metric .comparison-label { font-size: 11px; }
+            .comparison-label { font-size: 10px; }
+        }
+        @media (max-width: 360px) {
+            .comparison-metrics { flex-direction: column; }
+            .score-metric { min-width: 0; }
+            .percentile-metric { width: 100%; flex: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .percentile-orb::before {
+                animation: none;
+            }
+        }
         
         /* DETAILED ANALYSIS STYLES */
         .detailed-analysis-card { 
@@ -1732,6 +1859,7 @@
         .sol-item { 
             border-bottom: 1px solid #eee; 
             padding: 15px 0;
+            line-height: 2;
             will-change: auto;
         }
         .sol-q { 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList, BarChart3, Bookmark, Calendar, FileText } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, BarChart3, Bookmark, Calendar, FileText, FilePlus2 } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 
 function Sidebar() {
@@ -11,6 +11,7 @@ function Sidebar() {
     { path: '/pyq-practice', icon: BookOpen, label: 'PYQ Practice' },
     { path: '/previous-papers', icon: FileText, label: 'Previous Papers' },
     { path: '/test-series', icon: ClipboardList, label: 'Test Series' },
+    { path: '/custom-test', icon: FilePlus2, label: 'Custom Test' },
     { path: '/analysis', icon: BarChart3, label: 'Analysis' },
     { path: '/notebook', icon: Bookmark, label: 'Notebook' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' }

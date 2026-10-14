@@ -3312,60 +3312,39 @@ history.attempts.push(currentAttempt);
 // Save updated history
 localStorage.setItem('test_analytics_history', JSON.stringify(history));
 localStorage.setItem('test_analytics_last_signature', attemptSignature);
-            let positiveMarks = 0;
-            if (res.solutions && Array.isArray(res.solutions)) {
-                res.solutions.forEach((sol) => {
-                    if (!sol || !sol.status) return;
-                    const type = sol.type || 'MCQ';
-                    const sec = sol.sec || 'A';
-                    const _m = getMarkingForSection(sec, type);
-                    const plusMark = _m.plus != null ? _m.plus : 3;
-                    if (sol.status === 'correct') {
-                        positiveMarks += plusMark;
-                    } else if (sol.status === 'partial') {
-                        positiveMarks += sol.points || 1; // Use stored points value
-                    }
-                });
-            }
+updatePredictedPercentileDisplay(comb);
             
-            let airDisplay = 'NOT QUALIFIED';  // Default: NOT QUALIFIED
-            if (res.total >= minQual) {
-                const airData = getAIR(res.total, positiveMarks);
-                airDisplay = airData.rank.toLocaleString();
-            }
+// Update score comparison graph
+const maxScore = 158;  // Topper score (reference maximum)
+const avgIITianScore = 68;
+const userScorePercent = (comb.total / maxScore) * 100;
+const avgScorePercent = (avgIITianScore / maxScore) * 100;
             
-            document.getElementById('res-air').innerText = airDisplay;
+document.getElementById('user-bar').style.height = userScorePercent + '%';
+document.getElementById('user-score').innerText = comb.total;
+document.getElementById('avg-bar').style.height = avgScorePercent + '%';
             
-            // Update score comparison graph
-            const maxScore = 158;  // Topper score (reference maximum)
-            const avgIITianScore = 68;
-            const userScorePercent = (res.total / maxScore) * 100;
-            const avgScorePercent = (avgIITianScore / maxScore) * 100;
-            
-            document.getElementById('user-bar').style.height = userScorePercent + '%';
-            document.getElementById('user-score').innerText = res.total;
-            document.getElementById('avg-bar').style.height = avgScorePercent + '%';
-            
-            document.getElementById('res-time').innerText = `${res.time}m`;
+document.getElementById('res-time').innerText = `${comb.time}m`;
 
-            // Score Table
-            const tb = document.getElementById('sc-body');
-            const subjectKeys = Object.keys(res.sub || {});
-            const headerRow = document.querySelector('#section-scorecard thead tr');
-            if (headerRow && subjectKeys.length) {
-                headerRow.innerHTML = `<th>PAPER / SUBJECT</th>${subjectKeys.map(sub => `<th>${sub}</th>`).join('')}<th>TOTAL</th>`;
-            }
-            let htm = `<tr><td>Score</td>${subjectKeys.map(sub => `<td>${res.sub[sub] || 0}</td>`).join('')}<td class="sc-row-total">${res.total} / ${isCombinedResult ? 360 : 180}</td></tr>`;
-            tb.innerHTML = htm;
+// Score Table
+const tb = document.getElementById('sc-body');
+const subjectKeys = Object.keys(comb.sub || {});
+const headerRow = document.querySelector('#section-scorecard thead tr');
+if (headerRow && subjectKeys.length) {
+    headerRow.innerHTML = `<th>PAPER / SUBJECT</th>${subjectKeys.map(sub => `<th>${sub}</th>`).join('')}<th>TOTAL</th>`;
+}
+const isCombinedResult = (comb.solutions || []).length > 60;
+let htm = `<tr><td>Score</td>${subjectKeys.map(sub => `<td>${comb.sub[sub] || 0}</td>`).join('')}<td class="sc-row-total">${comb.total} / ${isCombinedResult ? 360 : 180}</td></tr>`;
+tb.innerHTML = htm;
 
-            // Chart (include partial answers)
-            const totalQ = (res.acc.cor||0) + (res.acc.wrg||0) + (res.acc.un||0) + (res.acc.partial||0);
-            const tQ = totalQ || 1;
-            const pc = (v) => ((v/tQ)*100) + '%';
-            document.getElementById('val-cor').innerText = res.acc.cor || 0; document.getElementById('bar-cor').style.height = pc(res.acc.cor || 0);
-            if(document.getElementById('val-part')) { document.getElementById('val-part').innerText = res.acc.partial || 0; document.getElementById('bar-part').style.height = pc(res.acc.partial || 0); }
-            document.getElementById('val-wrg').innerText = res.acc.wrg || 0; document.getElementById('bar-wrg').style.height = pc(res.acc.wrg || 0);
-            document.getElementById('val-un').innerText = res.acc.un || 0; document.getElementById('bar-un').style.height = pc(res.acc.un || 0);
+// Chart (include partial answers)
+const totalQ = (comb.acc.cor||0) + (comb.acc.wrg||0) + (comb.acc.un||0) + (comb.acc.partial||0);
+const tQ = totalQ || 1;
+const pc = (v) => ((v/tQ)*100) + '%';
+document.getElementById('val-cor').innerText = comb.acc.cor || 0; document.getElementById('bar-cor').style.height = pc(comb.acc.cor || 0);
+if(document.getElementById('val-part')) { document.getElementById('val-part').innerText = comb.acc.partial || 0; document.getElementById('bar-part').style.height = pc(comb.acc.partial || 0); }
+document.getElementById('val-wrg').innerText = comb.acc.wrg || 0; document.getElementById('bar-wrg').style.height = pc(comb.acc.wrg || 0);
+document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElementById('bar-un').style.height = pc(comb.acc.un || 0);
 
             // Solutions
             const sl = document.getElementById('sol-list');
@@ -3384,7 +3363,7 @@ localStorage.setItem('test_analytics_last_signature', attemptSignature);
                 return String(sel);
             };
 
-            sl.innerHTML = res.solutions.map((s, i) => `
+            sl.innerHTML = comb.solutions.map((s, i) => `
                 <div class="sol-item">
                     <div class="sol-q">${i+1}. ${s.sub} (Sec ${s.sec}) - Q${s.id} <span style="font-size:11px; padding:2px 6px; border-radius:3px; background:${s.status=='correct'?'#d1fae5':(s.status=='wrong'?'#fee2e2':'#eee')}">${s.status.toUpperCase()}</span></div>
                     <div class="sol-ans">Correct Ans: ${fmtSel(s.correct)} &nbsp; | &nbsp; Your Ans: ${fmtSel(s.sel)}</div>
@@ -3401,7 +3380,7 @@ localStorage.setItem('test_analytics_last_signature', attemptSignature);
                         console.warn('Analysis took too long, skipping');
                     }, 3000); // 3 second timeout
                     
-                    generateDetailedAnalysis(res);
+                    generateDetailedAnalysis(comb);
                     clearTimeout(analysisTimeout);
                 } catch(e) {
                     console.error('Analysis error (non-critical):', e);
@@ -3412,6 +3391,34 @@ localStorage.setItem('test_analytics_last_signature', attemptSignature);
             }
         }
 
+
+        function updatePredictedPercentileDisplay(result) {
+            const value = document.getElementById('predicted-percentile-value');
+            const range = document.getElementById('predicted-percentile-range');
+            if (!value) return;
+
+            const prediction = window.testSeriesAdapter?.predictPercentile(result);
+            value.classList.toggle('below-threshold', Boolean(prediction?.belowThreshold));
+            if (prediction?.belowThreshold) {
+                value.innerText = 'Improve to get above 90 percentile';
+                if (range) {
+                    range.innerText = '';
+                    range.hidden = true;
+                }
+            } else if (prediction) {
+                value.innerText = `${prediction.estimate.toFixed(1)}`;
+                if (range) {
+                    range.innerText = `${prediction.min.toFixed(1)}–${prediction.max.toFixed(1)}%ile`;
+                    range.hidden = false;
+                }
+            } else {
+                value.innerText = window.testSeriesAdapter?.test ? 'Not set' : '--';
+                if (range) {
+                    range.innerText = '';
+                    range.hidden = true;
+                }
+            }
+        }
 
         function renderResult(res, paperNum) {
             document.getElementById('res-subtitle').innerText = paperNum ? `PAPER ${paperNum}` : 'COMBINED RESULT';
@@ -3428,46 +3435,12 @@ localStorage.setItem('test_analytics_last_signature', attemptSignature);
                 analyticsTracker.subjectTimeLog = res.analytics.subjectTimeLog || {};
                 console.log('📊 Restored analytics in renderResult for Paper', paperNum);
             }
-            renderResultUI(res, false); // Pass false - no AIR for individual papers
+            renderResultUI(res);
         }
 
         
-        function renderResultUI(res, showAIR = false) {
-            // Calculate AIR based on score with precise linear trend interpolation
-            const minQual = 76;  // Minimum qualifying score
-            
-            // Calculate positive marks for tie-breaking within same score range
-            let positiveMarks = 0;
-            if (res.solutions && Array.isArray(res.solutions)) {
-                res.solutions.forEach((sol) => {
-                    if (!sol || !sol.status) return;
-                    const type = sol.type || 'MCQ';
-                    const sec = sol.sec || 'A';
-                    const _m = getMarkingForSection(sec, type);
-                    const plusMark = _m.plus != null ? _m.plus : 3;
-                    if (sol.status === 'correct') {
-                        positiveMarks += plusMark;
-                    } else if (sol.status === 'partial') {
-                        positiveMarks += sol.points || 1; // Use stored points value
-                    }
-                });
-            }
-            
-            let airDisplay = 'NOT QUALIFIED';  // Default: NOT QUALIFIED
-            if (showAIR && res.total >= minQual) {
-                const airData = getAIR(res.total, positiveMarks);
-                airDisplay = airData.rank.toLocaleString();
-            } else if (!showAIR) {
-                airDisplay = '-';  // No AIR shown for individual papers
-            }
-            
-            const airInfoIcon = !showAIR ? `<span class="air-info-wrapper" onclick="event.stopPropagation(); var tt=this.querySelector('.air-tooltip'); tt.style.display=tt.style.display==='block'?'none':'block'; return false;"><i data-lucide="info" class="air-info-icon"></i><span class="air-tooltip" style="display:none;">Attempt Both papers to get AIR</span></span>` : (showAIR && res.total >= minQual ? `<span class="air-info-wrapper" onclick="event.stopPropagation(); var tt=this.querySelector('.air-tooltip'); tt.style.display=tt.style.display==='block'?'none':'block'; return false;"><i data-lucide="info" class="air-info-icon"></i><span class="air-tooltip" style="display:none;">The 2025 marks vs rank data is taken from official report by IIT</span></span>` : '');
-            document.getElementById('res-air').innerHTML = airDisplay + airInfoIcon;
-            
-            // Initialize Lucide icons
-            if (typeof lucide !== 'undefined') {
-                try { lucide.createIcons(); } catch(e) {}
-            }
+        function renderResultUI(res) {
+            updatePredictedPercentileDisplay(res);
             
             // Update user score bar (max 180 or 360)
             const isCombinedResult = (res.solutions || []).length > 60;
@@ -6177,5 +6150,3 @@ window.act = a => {
         console.error(e);
         document.body.innerHTML = '<pre style="white-space:pre-wrap;padding:12px;font-family:monospace;">' + (e && e.stack ? e.stack : String(e)) + '</pre>';
     }
-
-

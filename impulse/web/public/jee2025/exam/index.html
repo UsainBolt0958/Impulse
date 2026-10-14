@@ -65,7 +65,6 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
         .section-header h2 { font-size: 24px; font-weight: 700; color: #1e293b; margin: 0; }
-        .air-badge { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 15px; }
         .analysis-section { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
         .analysis-section-title { font-size: 14px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; display: flex; align-items: center; gap: 10px; }
         .analysis-section-title i { color: #3b82f6; width: 20px; height: 20px; }
@@ -129,7 +128,59 @@
             background: #d1fae5 !important;
             border-color: #10b981 !important;
         }
+        @media (max-width: 768px) {
+            .result-sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+                max-height: none;
+                padding: 8px 0;
+                border-right: 0;
+                border-bottom: 1px solid #e2e8f0;
+                overflow: hidden;
+            }
+            .sidebar-header { display: none; }
+            .sidebar-nav {
+                flex-direction: row;
+                width: 100%;
+                overflow-x: auto;
+                overscroll-behavior-x: contain;
+            }
+            .sidebar-nav .nav-item {
+                flex: 0 0 auto;
+                padding: 10px 12px;
+                white-space: nowrap;
+            }
+            .result-content {
+                width: 100%;
+                max-width: 100%;
+                margin-left: 0;
+                padding: 24px;
+            }
+            .result-page-header {
+                grid-template-columns: 1fr auto;
+                padding: 0 12px;
+            }
+            .header-left { display: none; }
+            .header-center { justify-content: flex-start; }
+        }
+        @media (max-width: 480px) {
+            .result-content { padding: 16px; }
+            .score-comparison-card { padding: 16px; }
+        }
+        .dynamic-test-results [data-section="strengths"],
+        .dynamic-test-results [data-section="insights"],
+        .dynamic-test-results #section-strengths,
+        .dynamic-test-results #section-insights {
+            display: none !important;
+        }
     </style>
+    <script>
+        const dynamicTestParams = new URLSearchParams(window.location.search);
+        if (dynamicTestParams.has('testId') && dynamicTestParams.has('seriesId')) {
+            document.documentElement.classList.add('dynamic-test-results');
+        }
+    </script>
 </head>
 <body oncontextmenu="return false;">
 
@@ -391,18 +442,28 @@
                 <div id="section-overview" class="result-section active">
                     <div class="section-header">
                         <h2>Performance Overview</h2>
-                        <div class="air-badge">AIR <span id="res-air">--</span></div>
                     </div>
                     
                     <div class="score-comparison-card">
-                        <div class="chart-title">YOUR SCORE</div>
+                        <div class="chart-title">SCORE SUMMARY</div>
                         <div class="comparison-bar-wrap">
-                            <div class="comparison-col">
-                                <div class="comparison-bar-container">
-                                    <div class="comparison-bar user-bar" id="user-bar" style="height: 0%;"></div>
+                            <div class="comparison-metrics">
+                                <div class="score-metric">
+                                    <div class="comparison-bar-container">
+                                        <div class="comparison-bar user-bar" id="user-bar" style="height: 0%;"></div>
+                                    </div>
+                                    <div>
+                                        <div class="comparison-score" id="user-score">0</div>
+                                        <div class="comparison-label">Your Score</div>
+                                    </div>
                                 </div>
-                                <div class="comparison-score" id="user-score">0</div>
-                                <div class="comparison-label">Your Score</div>
+                                <div class="percentile-metric">
+                                    <div class="percentile-orb">
+                                        <div class="percentile-value" id="predicted-percentile-value">--</div>
+                                        <div class="percentile-range" id="predicted-percentile-range"></div>
+                                        <div class="comparison-label">Predicted Percentile</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -42,6 +42,7 @@ export function buildExamConfig(series, test) {
     sections: buildSectionConfig(series.sections || []),
     marking: buildMarkingScheme(series.sections || []),
     rankMapping: series.rankMapping || getDefaultRankMapping(),
+    percentileMarks: test.percentileMarks || null,
     answerKey: null, // Will be built from questions
     storageNamespace: `test_series_${test.id}`,
     duration: (test.durationMinutes || (test.durationSec ? Math.round(test.durationSec / 60) : 0) || series.durationMinutes || 0),

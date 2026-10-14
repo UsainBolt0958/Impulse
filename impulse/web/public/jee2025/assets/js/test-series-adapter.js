@@ -69,6 +69,7 @@ class TestSeriesAdapter {
         marking: this.buildMarkingScheme(sourceSections),
         duration: (test.durationMinutes || (test.durationSec ? Math.round(test.durationSec / 60) : 0) || series.durationMinutes || 0),
         rankMapping: series.rankMapping || this.getDefaultRankMapping(),
+        percentileMarks: test.percentileMarks || null,
       };
 
       // Update storage keys
@@ -273,6 +274,93 @@ class TestSeriesAdapter {
 
     if (score >= rankMapping[0][0]) return 1;
     return rankMapping[rankMapping.length - 1][1];
+  }
+
+  predictPercentile(result) {
+    const percentileMarks = this.config?.percentileMarks;
+    if (!result || !percentileMarks || typeof percentileMarks !== 'object') return null;
+
+    const anchors = Object.entries(percentileMarks)
+      .map(([percentile, marks]) => ({
+        percentile: Number(percentile),
+        marks: Number(marks),
+      }))
+      .filter((anchor) => (
+        Number.isFinite(anchor.percentile)
+        && anchor.percentile >= 90
+        && anchor.percentile <= 99.9
+        && Number.isFinite(anchor.marks)
+      ))
+      .sort((a, b) => a.percentile - b.percentile);
+    const ninetyPercentileAnchor = anchors.find((anchor) => anchor.percentile === 90);
+
+    if (
+      anchors.length < 2
+      || !ninetyPercentileAnchor
+      || new Set(anchors.map((anchor) => anchor.percentile)).size !== anchors.length
+      || anchors.some((anchor, index) => (
+        index > 0 && anchors[index - 1].marks >= anchor.marks
+      ))
+    ) {
+      return null;
+    }
+
+    const score = Number(result.total);
+    if (!Number.isFinite(score)) return null;
+    if (score < ninetyPercentileAnchor.marks) {
+      return { belowThreshold: true };
+    }
+
+    let basePercentile = ninetyPercentileAnchor.percentile;
+    if (score >= anchors[anchors.length - 1].marks) {
+      basePercentile = anchors[anchors.length - 1].percentile;
+    } else {
+      for (let index = 0; index < anchors.length - 1; index += 1) {
+        const lower = anchors[index];
+        const upper = anchors[index + 1];
+        if (score < lower.marks || score > upper.marks) continue;
+
+        const scoreFraction = (score - lower.marks) / (upper.marks - lower.marks);
+        basePercentile = lower.percentile
+          + (upper.percentile - lower.percentile) * scoreFraction;
+        break;
+      }
+    }
+
+    const solutions = Array.isArray(result.solutions) ? result.solutions : [];
+    const countStatus = (status) => solutions.filter((solution) => (
+      String(solution?.status || '').toLowerCase() === status
+    )).length;
+    const readCount = (value, fallback) => (
+      value == null || !Number.isFinite(Number(value)) ? fallback : Number(value)
+    );
+    const correct = readCount(result.acc?.cor, countStatus('correct'));
+    const wrong = readCount(result.acc?.wrg, countStatus('wrong'));
+    const partial = readCount(result.acc?.partial, countStatus('partial'));
+    const attempted = correct + wrong + partial;
+    const unattempted = readCount(result.acc?.un, Math.max(0, solutions.length - attempted));
+    const totalQuestions = readCount(
+      result.totalQuestions,
+      solutions.length || attempted + unattempted
+    );
+    const accuracy = attempted > 0 ? correct / attempted : 0;
+    const coverage = totalQuestions > 0 ? attempted / totalQuestions : 0;
+    const accuracyBonus = accuracy >= 0.9
+      ? 0.4
+      : accuracy >= 0.8
+        ? 0.2
+        : 0;
+    const adjustedPercentile = basePercentile
+      + accuracyBonus * Math.min(1, coverage / 0.5);
+    const center = Math.max(90, Math.min(99.9, adjustedPercentile));
+    const roundToTenth = (value) => Math.round((value + 1e-8) * 10) / 10;
+    const min = Math.max(90, Math.min(99.6, roundToTenth(center - 0.2)));
+
+    return {
+      estimate: roundToTenth(center),
+      min,
+      max: Number((min + 0.4).toFixed(1)),
+    };
   }
 
   /**

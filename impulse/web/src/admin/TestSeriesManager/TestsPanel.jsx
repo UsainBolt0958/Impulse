@@ -7,6 +7,12 @@ import { Plus, Edit3, Trash2, ArrowLeft, CheckCircle, Circle, Settings } from 'l
 import { getSeriesTests, createTest, deleteTest, updateTest } from '@/lib/portalServer';
 import { toast } from 'sonner';
 
+const PERCENTILE_ANCHORS = [
+  99.9, 99.6, 99.4, 99.2, 99, 98.5, 98, 97.5,
+  97, 96.5, 96, 95.5, 95, 94.5, 94, 93.5,
+  93, 92.5, 92, 91.5, 91, 90.5, 90,
+];
+
 export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack }) {
   const [tests, setTests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,6 +21,9 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
   const [isCreating, setIsCreating] = useState(false);
   const [editingDuration, setEditingDuration] = useState(null);
   const [durationValue, setDurationValue] = useState('');
+  const [editingPercentiles, setEditingPercentiles] = useState(null);
+  const [percentileValues, setPercentileValues] = useState({});
+  const [isSavingPercentiles, setIsSavingPercentiles] = useState(false);
 
   useEffect(() => {
     loadTests();
@@ -109,6 +118,59 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
       toast.success('Duration updated');
     } catch (err) {
       toast.error('Failed to update duration');
+    }
+  };
+
+  const handleEditPercentiles = (test) => {
+    const savedMarks = test.percentileMarks || {};
+    setEditingPercentiles(test.id);
+    setPercentileValues(Object.fromEntries(
+      PERCENTILE_ANCHORS.map((percentile) => [
+        String(percentile),
+        savedMarks[percentile] == null ? '' : String(savedMarks[percentile]),
+      ])
+    ));
+  };
+
+  const handleSavePercentiles = async (testId) => {
+    const marks = PERCENTILE_ANCHORS
+      .map((percentile) => {
+        const rawValue = percentileValues[String(percentile)]?.trim();
+        return rawValue === '' || rawValue == null
+          ? null
+          : { percentile, marks: Number(rawValue) };
+      })
+      .filter(Boolean);
+
+    if (
+      marks.length < 2
+      || !marks.some((entry) => entry.percentile === 90)
+      || marks.some((entry) => !Number.isFinite(entry.marks))
+    ) {
+      toast.error('Enter the score in marks for the 90th-percentile cutoff and at least one other cutoff.');
+      return;
+    }
+
+    if (marks.some((entry, index) => index > 0 && marks[index - 1].marks <= entry.marks)) {
+      toast.error('Marks must decrease as the percentile cutoffs decrease.');
+      return;
+    }
+
+    setIsSavingPercentiles(true);
+    try {
+      const percentileMarks = Object.fromEntries(
+        marks.map(({ percentile, marks: score }) => [String(percentile), score])
+      );
+      const updated = await updateTest(testId, { percentileMarks });
+      setTests((currentTests) => currentTests.map((test) => (
+        test.id === testId ? updated : test
+      )));
+      setEditingPercentiles(null);
+      toast.success('Percentile marks saved');
+    } catch (err) {
+      toast.error('Failed to save percentile marks');
+    } finally {
+      setIsSavingPercentiles(false);
     }
   };
 
@@ -254,6 +316,72 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
                     </div>
                   )}
                 </div>
+                {editingPercentiles === test.id ? (
+                  <div
+                    className="space-y-3 rounded-lg border border-border bg-muted/20 p-3"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div>
+                      <div className="font-semibold text-foreground">Score-to-percentile cutoffs</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Enter the test score in marks that corresponds to each percentile, not a percentage of total marks. The 90th-percentile score and at least one other cutoff are required.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {PERCENTILE_ANCHORS.map((percentile) => (
+                        <label key={percentile} className="space-y-1 text-xs font-medium text-muted-foreground">
+                          <span>{percentile}%ile</span>
+                          <Input
+                            type="number"
+                            step="any"
+                            value={percentileValues[String(percentile)] ?? ''}
+                            onChange={(event) => setPercentileValues((current) => ({
+                              ...current,
+                              [String(percentile)]: event.target.value,
+                            }))}
+                            placeholder="Marks"
+                            aria-label={`${percentile} percentile marks`}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={isSavingPercentiles}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleSavePercentiles(test.id);
+                        }}
+                      >
+                        {isSavingPercentiles ? 'Saving...' : 'Save cutoffs'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingPercentiles(null);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleEditPercentiles(test);
+                    }}
+                  >
+                    <Settings size={14} className="mr-2" />
+                    Set percentile marks
+                  </Button>
+                )}
                 <div className="flex gap-2 pt-2 border-t">
                   <Button
                     size="sm"

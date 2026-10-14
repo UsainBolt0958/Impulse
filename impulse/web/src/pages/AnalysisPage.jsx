@@ -7,10 +7,10 @@ import StatsCard from '@/components/StatsCard.jsx';
 import { useMetrics } from '@/hooks/useMetrics';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
 import { useQuestions } from '@/hooks/useQuestions';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TrendingUp, Target, Clock, Award, BarChart3, ChevronDown } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const PERIOD_OPTIONS = [
   { id: 'daily', label: 'Daily' },
@@ -133,7 +133,7 @@ function AnalysisPage() {
               <p className="text-lg text-muted-foreground">Detailed insights into your preparation</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
               <StatsCard
                 label="Total Solved"
                 value={getTotalSolved()}
@@ -251,51 +251,15 @@ function AnalysisPage() {
               </TabsContent>
 
               <TabsContent value="subjects" className="space-y-8">
-                <PerformanceChart
-                  type="bar"
-                  data={subjectMetrics}
-                  title="Questions Solved by Subject"
-                  dataKey="solved"
-                  xKey="subject"
-                />
-                <PerformanceChart
-                  type="bar"
-                  data={subjectMetrics}
-                  title="Accuracy by Subject (%)"
-                  dataKey="accuracy"
-                  xKey="subject"
-                />
-                <PerformanceChart
-                  type="bar"
-                  data={subjectMetrics}
-                  title="Average Time by Subject (seconds)"
-                  dataKey="avgTime"
-                  xKey="subject"
-                />
+                <PerformanceChart type="bar" data={subjectMetrics} title="Questions Solved by Subject" dataKey="solved" xKey="subject" />
+                <PerformanceChart type="bar" data={subjectMetrics} title="Accuracy by Subject (%)" dataKey="accuracy" xKey="subject" />
+                <PerformanceChart type="bar" data={subjectMetrics} title="Average Time by Subject (seconds)" dataKey="avgTime" xKey="subject" />
               </TabsContent>
 
               <TabsContent value="exams" className="space-y-8">
-                <PerformanceChart
-                  type="bar"
-                  data={examMetrics}
-                  title="Questions Solved by Exam"
-                  dataKey="solved"
-                  xKey="exam"
-                />
-                <PerformanceChart
-                  type="bar"
-                  data={examMetrics}
-                  title="Accuracy by Exam (%)"
-                  dataKey="accuracy"
-                  xKey="exam"
-                />
-                <PerformanceChart
-                  type="bar"
-                  data={examMetrics}
-                  title="Average Time by Exam (seconds)"
-                  dataKey="avgTime"
-                  xKey="exam"
-                />
+                <PerformanceChart type="bar" data={examMetrics} title="Questions Solved by Exam" dataKey="solved" xKey="exam" />
+                <PerformanceChart type="bar" data={examMetrics} title="Accuracy by Exam (%)" dataKey="accuracy" xKey="exam" />
+                <PerformanceChart type="bar" data={examMetrics} title="Average Time by Exam (seconds)" dataKey="avgTime" xKey="exam" />
               </TabsContent>
             </Tabs>
           </div>
