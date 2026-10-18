@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useParams } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
@@ -6,6 +6,7 @@ import Footer from '@/components/Footer.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ColoredIcon from '@/components/ColoredIcon';
 import { ArrowLeft, BookOpen } from 'lucide-react';
+import { loadPublicSeries, loadTests } from '@/lib/portalServer';
 
 function titleCase(value = '') {
   return value
@@ -16,6 +17,57 @@ function titleCase(value = '') {
 function PreviousPapersExamPage() {
   const { examKey } = useParams();
   const examTitle = titleCase(examKey);
+  const [importedPapers, setImportedPapers] = useState([]);
+  const [isLoadingImports, setIsLoadingImports] = useState(true);
+  const [importLoadError, setImportLoadError] = useState('');
+
+  useEffect(() => {
+    let isCurrent = true;
+    setImportedPapers([]);
+    setIsLoadingImports(true);
+    setImportLoadError('');
+    Promise.all([loadPublicSeries(), loadTests()])
+      .then(([series, tests]) => {
+        if (!isCurrent) return;
+        const paperSeries = new Map(series
+          .filter((item) => (
+            item.meta?.kind === 'previous-papers'
+            && item.meta?.examKey === examKey
+          ))
+          .map((item) => [item.id, item]));
+        const papers = tests
+          .filter((test) => (
+            test.published
+            && test.meta?.kind === 'previous-paper'
+            && test.meta?.examKey === examKey
+            && paperSeries.has(test.seriesId)
+          ))
+          .map((test) => ({
+            ...test,
+            series: paperSeries.get(test.seriesId),
+            questionCount: (test.sections || []).reduce(
+              (count, section) => count + (section.questions || []).length,
+              0
+            ),
+          }))
+          .sort((left, right) => (
+            Number(right.meta.year) - Number(left.meta.year)
+            || String(left.meta.shiftName).localeCompare(String(right.meta.shiftName))
+          ));
+        setImportedPapers(papers);
+      })
+      .catch((error) => {
+        if (!isCurrent) return;
+        setImportLoadError(error.message || 'Could not load imported papers.');
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoadingImports(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [examKey]);
 
   const yearCards = examKey === 'jee-advanced'
     ? [
@@ -51,7 +103,7 @@ function PreviousPapersExamPage() {
             <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <h1 className="text-4xl font-black uppercase tracking-tight mb-2">{examTitle}</h1>
-                <p className="text-sm text-muted-foreground">Choose a year to view the paper set.</p>
+                <p className="text-sm text-muted-foreground">Choose an imported paper or browse the available year sets.</p>
               </div>
 
               <Link
@@ -65,6 +117,38 @@ function PreviousPapersExamPage() {
             </div>
 
             <div className="space-y-4">
+              {importedPapers.length > 0 ? (
+                <section className="space-y-4" aria-labelledby="imported-papers-heading">
+                  <h2 id="imported-papers-heading" className="text-xl font-black uppercase tracking-tight">
+                    Imported papers
+                  </h2>
+                  {importedPapers.map((paper) => (
+                    <a
+                      key={paper.id}
+                      href={`/jee2025/exam/index.html?testId=${encodeURIComponent(paper.id)}&seriesId=${encodeURIComponent(paper.seriesId)}&paper=1`}
+                      className="block no-underline"
+                    >
+                      <Card className="w-full border-border overflow-hidden transition-all duration-200 hover:border-primary hover:shadow-md hover:-translate-y-0.5">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="flex flex-wrap items-center gap-3 text-xl font-black uppercase tracking-tight">
+                            <ColoredIcon icon={BookOpen} name={examKey} size={7} />
+                            <span>{paper.meta.year} · {paper.meta.shiftName}</span>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-0 pb-5 text-sm text-muted-foreground">
+                          {paper.questionCount} questions · {paper.durationMinutes || paper.series.durationMinutes || 0} minutes
+                        </CardContent>
+                      </Card>
+                    </a>
+                  ))}
+                </section>
+              ) : null}
+              {isLoadingImports ? (
+                <p className="py-4 text-sm text-muted-foreground">Loading imported papers...</p>
+              ) : null}
+              {importLoadError ? (
+                <p role="alert" className="py-4 text-sm text-destructive">{importLoadError}</p>
+              ) : null}
               {yearCards.map((item) => {
                 const cardBody = (
                   <Card

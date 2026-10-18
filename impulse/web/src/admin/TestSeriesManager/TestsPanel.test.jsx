@@ -42,6 +42,24 @@ describe('TestsPanel', () => {
     });
   });
 
+  it('keeps duration editing inside the test card instead of opening subjects', async () => {
+    const onSelectTest = vi.fn();
+    render(
+      <TestsPanel
+        series={{ id: 'series-1', title: 'Series 1' }}
+        onSelectTest={onSelectTest}
+        onBack={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /edit duration/i }));
+
+    const durationInput = screen.getByPlaceholderText('Duration (min)');
+    fireEvent.click(durationInput);
+
+    expect(onSelectTest).not.toHaveBeenCalled();
+  });
+
   it('saves paper-specific percentile marks', async () => {
     updateTest.mockResolvedValue({
       id: 'test-1',

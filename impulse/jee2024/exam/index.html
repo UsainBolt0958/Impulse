@@ -138,7 +138,7 @@
         }
     </style>
 </head>
-<body oncontextmenu="return false;">
+<body>
 
     <div id="dbg-sess" style="position:fixed;right:12px;top:90px;background:#fff;border:1px solid #ddd;padding:6px;font-size:12px;z-index:9999;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
 
@@ -166,13 +166,17 @@
             <p style="color:rgba(255,255,255,0.95); margin-bottom:30px; font-size: 13px; text-transform: uppercase;">Unofficial Examination Portal</p>
            
             <input type="text" class="auth-field" id="u-name" placeholder="Candidate Name">
-            <input type="text" class="auth-field" id="u-id" placeholder="Application Number">
+            <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:15px; position:relative;">
+                <input type="text" class="auth-field" id="u-id" placeholder="Random Number (Remember it for future login)" style="flex:1; min-width:0; margin-bottom:0;">
+                <details style="position:relative; flex-shrink:0;">
+                    <summary aria-label="Information about combined result" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border:1px solid rgba(255,255,255,0.6); border-radius:50%; color:#fff; cursor:pointer; font-weight:700; list-style:none;">i</summary>
+                    <div style="position:absolute; z-index:20; top:46px; right:0; width:min(320px, 80vw); padding:12px; border-radius:6px; background:#fff; color:#1f2937; box-shadow:0 4px 16px rgba(0,0,0,0.25); font-size:13px; line-height:1.5;">
+                        After attempting Paper 1, attempt Paper 2 with the same login details to get the AIR for the combined result (Paper 1 + Paper 2).
+                    </div>
+                </details>
+            </div>
             <input type="password" class="auth-field" value="password" placeholder="Password">
             <button class="auth-btn" type="button" onclick="(window.tryLogin || function(){alert('Login function unavailable, please refresh.')})()">Login</button>
-            <button class="policy-btn" type="button" onclick="openPolicyModal()">
-                <i class="fas fa-shield-alt" style="margin-right:8px;"></i>Read Policies
-            </button>
-            <div style="margin-top:14px; font-size:12px; color:rgba(255,255,255,0.9);">BY FOCUS HUB</div>
         </div>
     </div>
 
@@ -407,7 +411,7 @@
                 <div class="home-brand">IIT-JEE ADVANCED 2024 - RESULT</div>
             </div>
             <div class="header-right">
-                <button class="btn" onclick="window.location.href='../index.html'">Back to FocusHub</button>
+                <button class="btn" onclick="window.location.href='/previous-papers/jee-advanced'">Back to Home</button>
             </div>
         </header>
 
@@ -1274,62 +1278,6 @@
     <script src="assets/js/review-mode.obf.js"></script>
     <script src="assets/js/error-handler.obf.js"></script>
     <script>initFromFocusHub();</script>
-    <!-- Code Protection Script -->
-    <script>
-    (function() {
-      'use strict';
-      
-      // Disable right-click
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-        return false;
-      });
-      
-      // Disable common dev tools shortcuts
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'F12' || 
-            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
-            (e.ctrlKey && e.key === 'U')) {
-          e.preventDefault();
-          return false;
-        }
-      });
-      
-      // Detect dev tools opening
-      let devToolsOpen = false;
-      const threshold = 160;
-      
-      setInterval(function() {
-        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-        
-        if (widthThreshold || heightThreshold) {
-          if (!devToolsOpen) {
-            devToolsOpen = true;
-            document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#1a1a2e;color:#fff;font-family:sans-serif;"><h1>Developer tools are not allowed</h1></div>';
-          }
-        } else {
-          devToolsOpen = false;
-        }
-      }, 500);
-      
-      // Disable console methods
-      const consoleMethods = ['log', 'error', 'warn', 'info', 'debug', 'table', 'trace'];
-      consoleMethods.forEach(method => {
-        console[method] = function() {};
-      });
-      
-      // Anti-debugging with debugger statement
-      setInterval(function() {
-        const start = performance.now();
-        debugger;
-        const end = performance.now();
-        if (end - start > 100) {
-          location.reload();
-        }
-      }, 1000);
-    })();
-    </script>
     <script>
         if (window.lucide) { lucide.createIcons(); }
         function showResultSection(sectionId) {

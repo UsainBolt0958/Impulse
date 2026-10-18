@@ -24,6 +24,7 @@ import {
   Star,
   Sun,
   Trash2,
+  Upload,
   UserCircle2,
   Users,
 } from 'lucide-react';
@@ -39,8 +40,25 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import ColoredIcon from '@/components/ColoredIcon';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
-import { loadSeries, createSeries, updateSeries, deleteSeries, uploadImage } from '@/lib/portalServer';
+import {
+  loadSeries,
+  createSeries,
+  updateSeries,
+  deleteSeries,
+  createTest,
+  deleteTest,
+  loadTests,
+  uploadImage,
+} from '@/lib/portalServer';
 import TestSeriesManager from '@/admin/TestSeriesManager';
+import PYQImportDialog from '@/admin/PYQImport/PYQImportDialog';
+import PaperImportDialog from '@/admin/PYQImport/PaperImportDialog';
+import { buildDynamicPaperSections } from '@/admin/PYQImport/paperImportFormat';
+import {
+  getPaperImportChaptersRemovedByGroup,
+  getPaperImportGroups,
+  getPaperImportId,
+} from '@/admin/PYQImport/paperImportManagement';
 import {
   ADMIN_PROFILE_DEFAULT,
   buildExamCards,
@@ -323,6 +341,9 @@ function AdminPortalPage() {
   const [questionExamFilter, setQuestionExamFilter] = React.useState('all');
   const [questionYearFilter, setQuestionYearFilter] = React.useState('all');
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = React.useState('all');
+  const [isPyqImportOpen, setIsPyqImportOpen] = React.useState(false);
+  const [paperImportExam, setPaperImportExam] = React.useState(null);
+  const [removingPaperId, setRemovingPaperId] = React.useState('');
   const [isDark, setIsDark] = React.useState(() => {
     if (typeof document === 'undefined') return false;
     return document.documentElement.classList.contains('dark');
@@ -527,6 +548,16 @@ function AdminPortalPage() {
 
   const examCards = React.useMemo(() => buildExamCards(portal.questions, portal.exams), [portal.questions, portal.exams]);
   const examOptions = React.useMemo(() => examCards.map((exam) => exam.label), [examCards]);
+  const pyqExamOptions = React.useMemo(() => {
+    const knownExams = Object.keys(EXAM_SUBJECT_OPTIONS).flatMap((exam) => (
+      exam === 'JEE' ? ['JEE MAINS', 'JEE ADVANCED'] : [exam]
+    ));
+    return [...new Set([
+      ...knownExams,
+      ...examOptions,
+      ...portal.questions.map((question) => question.exam).filter(Boolean),
+    ])].sort((left, right) => left.localeCompare(right));
+  }, [examOptions, portal.questions]);
 
   const filteredQuestions = React.useMemo(() => {
     const search = questionSearch.trim().toLowerCase();
@@ -545,6 +576,10 @@ function AdminPortalPage() {
           .some((value) => String(value).toLowerCase().includes(search));
       });
   }, [portal.questions, questionSearch, questionExamFilter, questionYearFilter, questionDifficultyFilter]);
+  const paperImportGroups = React.useMemo(
+    () => getPaperImportGroups(portal.questions, portal.activity),
+    [portal.questions, portal.activity]
+  );
 
   const activityFeed = React.useMemo(() => {
     return [...portal.activity]
@@ -712,6 +747,221 @@ function AdminPortalPage() {
     }
     toast.success(editingQuestionId ? 'Question updated.' : 'Question added.');
     resetQuestionForm();
+  };
+
+  const handlePyqImport = async (questions, target) => {
+    const timestamp = new Date().toISOString();
+    const importedQuestions = questions.map((question) => normalizeQuestion({
+      ...question,
+      created_at: timestamp,
+      updated_at: timestamp,
+      contributed_by: portal.profile.name,
+    }));
+    const importedActivity = importedQuestions.map((question) => createActivityEntry({
+      type: 'question.created',
+      title: `Imported ${question.exam} ${question.year}`,
+      description: `${target.subject} / ${target.chapter} / ${question.shift}`,
+      exam: question.exam,
+      questionId: question.id,
+      source: 'pyq-json-import',
+    }));
+    const nextPortal = {
+      ...portal,
+      questions: [...importedQuestions, ...portal.questions],
+      activity: [...importedActivity, ...portal.activity],
+    };
+    const savedPortal = await savePortalState(nextPortal);
+    syncPortal(savedPortal);
+    toast.success(`Added ${importedQuestions.length} PYQ question(s) to ${target.exam} / ${target.subject} / ${target.chapter}.`);
+  };
+
+  const handlePaperImport = async (questions, paper) => {
+    const timestamp = new Date().toISOString();
+    const paperImportId = getPaperImportId(paper);
+    const importedQuestions = questions.map((question) => normalizeQuestion({
+      ...question,
+      id: generateId('question'),
+      paper_import_id: paperImportId,
+      created_at: timestamp,
+      updated_at: timestamp,
+      contributed_by: portal.profile.name,
+    }));
+    const examKey = paper.exam === 'MHTCET' ? 'mht-cet' : slugify(paper.exam);
+    const durationMinutes = paper.exam === 'NEET' && Number(paper.year) < 2025 ? 200 : 180;
+    const addToDynamicPreviousPapers = ['JEE MAINS', 'NEET'].includes(paper.exam);
+    let series = null;
+    let createdSeries = null;
+    let importedTest = null;
+    let portalSaveAttempted = false;
+
+    try {
+      if (addToDynamicPreviousPapers) {
+        series = (await loadSeries()).find((item) => (
+          item.meta?.kind === 'previous-papers' && item.meta?.examKey === examKey
+        )) || null;
+        if (!series) {
+          createdSeries = await createSeries(`${paper.exam} Previous Papers`, `Imported ${paper.exam} papers.`);
+          if (!createdSeries?.id) throw new Error('Could not create the dynamic previous-papers series.');
+          series = await updateSeries(createdSeries.id, {
+            published: true,
+            publish_at: timestamp,
+            durationMinutes,
+            meta: { kind: 'previous-papers', examKey, exam: paper.exam },
+          });
+          if (!series?.id) throw new Error('Could not publish the dynamic previous-papers series.');
+        }
+
+        importedTest = await createTest({
+          title: `${paper.year} - ${paper.shiftName}`,
+          seriesId: series.id,
+          durationMinutes,
+          sections: buildDynamicPaperSections(importedQuestions),
+          published: true,
+          publish_at: timestamp,
+          meta: {
+            kind: 'previous-paper',
+            paperImportId,
+            exam: paper.exam,
+            examKey,
+            year: paper.year,
+            shiftName: paper.shiftName,
+          },
+        });
+        if (!importedTest?.id) throw new Error('Could not save the imported paper to the dynamic exam engine.');
+      }
+
+      const importedActivity = importedQuestions.map((question) => createActivityEntry({
+        type: 'question.created',
+        title: `Imported ${question.exam} ${question.year}`,
+        description: `${question.subject} / ${question.chapter} / ${question.shift}`,
+        exam: question.exam,
+        questionId: question.id,
+        source: `${slugify(paper.exam)}-paper-json-import`,
+      }));
+      const nextPortal = {
+        ...portal,
+        questions: [...importedQuestions, ...portal.questions],
+        activity: [...importedActivity, ...portal.activity],
+      };
+      portalSaveAttempted = true;
+      const savedPortal = await savePortalState(nextPortal);
+      syncPortal(savedPortal);
+      toast.success(addToDynamicPreviousPapers
+        ? `Imported ${importedQuestions.length} questions and added ${paper.exam} ${paper.year}, ${paper.shiftName} to Previous Papers.`
+        : `Imported ${importedQuestions.length} questions from ${paper.exam} ${paper.year}, ${paper.shiftName}.`);
+    } catch (error) {
+      const cleanupErrors = [];
+      let testCleanupFailed = false;
+      if (portalSaveAttempted) {
+        try {
+          syncPortal(await savePortalState(portal));
+        } catch (cleanupError) {
+          cleanupErrors.push(`Could not restore the original PYQ library state: ${cleanupError.message}`);
+        }
+      }
+      if (importedTest?.id) {
+        try {
+          await deleteTest(importedTest.id);
+        } catch (cleanupError) {
+          testCleanupFailed = true;
+          cleanupErrors.push(`Could not remove the partially created test: ${cleanupError.message}`);
+        }
+      }
+      if (createdSeries?.id && !testCleanupFailed) {
+        try {
+          await deleteSeries(createdSeries.id);
+        } catch (cleanupError) {
+          cleanupErrors.push(`Could not remove the partially created series: ${cleanupError.message}`);
+        }
+      }
+      if (cleanupErrors.length) {
+        throw new Error(`${error.message} ${cleanupErrors.join(' ')}`);
+      }
+      throw error;
+    }
+  };
+
+  const handlePaperImportDelete = async (group) => {
+    if (removingPaperId) return;
+
+    const chaptersRemoved = getPaperImportChaptersRemovedByGroup(group, portal.questions);
+    const chapterDetails = chaptersRemoved.length
+      ? `\n\nThese chapters will also disappear from PYQ Practice because no other questions use them:\n${chaptersRemoved.join('\n')}`
+      : '\n\nChapters still used by other questions will remain available.';
+    const confirmed = window.confirm(
+      `Permanently remove the entire ${group.exam} ${group.year} paper "${group.shift}", its ${group.questionIds.length} imported questions, and its dynamic exam-engine paper when present?${chapterDetails}`
+    );
+    if (!confirmed) return;
+
+    setRemovingPaperId(group.id);
+    const removedQuestionIds = new Set(group.questionIds);
+    const nextPortal = {
+      ...portal,
+      questions: portal.questions.filter((question) => !removedQuestionIds.has(question.id)),
+      activity: [
+        createActivityEntry({
+          type: 'paper.deleted',
+          title: `Removed ${group.exam} ${group.year} paper`,
+          description: `${group.shift} / ${group.questionIds.length} question(s)`,
+          exam: group.exam,
+          source: 'paper-json-import-removal',
+        }),
+        ...portal.activity.filter((entry) => (
+          !removedQuestionIds.has(entry.questionId)
+          || !String(entry.source || '').endsWith('-paper-json-import')
+        )),
+      ],
+    };
+
+    let portalSaveAttempted = false;
+    try {
+      const dynamicTests = (await loadTests()).filter((test) => (
+        test.meta?.paperImportId === group.id
+      ));
+      const removedTests = [];
+      try {
+        for (const test of dynamicTests) {
+          await deleteTest(test.id);
+          removedTests.push(test);
+        }
+        portalSaveAttempted = true;
+        const savedPortal = await savePortalState(nextPortal);
+        syncPortal(savedPortal);
+      } catch (error) {
+        const restoreErrors = [];
+        for (const test of removedTests) {
+          try {
+            await createTest({
+              title: test.title,
+              seriesId: test.seriesId,
+              durationMinutes: test.durationMinutes,
+              sections: test.sections,
+              published: test.published,
+              publish_at: test.publish_at,
+              meta: test.meta,
+            });
+          } catch (restoreError) {
+            restoreErrors.push(restoreError.message);
+          }
+        }
+        if (portalSaveAttempted) {
+          try {
+            syncPortal(await savePortalState(portal));
+          } catch (restoreError) {
+            restoreErrors.push(`Could not restore the original PYQ library state: ${restoreError.message}`);
+          }
+        }
+        if (restoreErrors.length) {
+          throw new Error(`${error.message} Could not restore the dynamic paper: ${restoreErrors.join('; ')}`);
+        }
+        throw error;
+      }
+      toast.success(`Removed ${group.exam} ${group.year} paper from PYQ Practice and Previous Papers.`);
+    } catch (error) {
+      toast.error(error.message || 'Could not remove the imported paper.');
+    } finally {
+      setRemovingPaperId('');
+    }
   };
 
   const handleQuestionEdit = (question) => {
@@ -988,6 +1238,10 @@ function AdminPortalPage() {
                         <button type="button" onClick={() => setTab('questions')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'questions' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <PencilLine className="h-4 w-4" />
                           {!collapsed && 'Questions'}
+                        </button>
+                        <button type="button" onClick={() => setTab('papers')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'papers' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
+                          <ClipboardList className="h-4 w-4" />
+                          {!collapsed && 'Imported papers'}
                         </button>
                         <button type="button" onClick={() => setTab('exams')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'exams' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <BadgePlus className="h-4 w-4" />
@@ -1444,9 +1698,27 @@ function AdminPortalPage() {
                           <BookOpen className="h-5 w-5" />
                           Question library
                         </CardTitle>
-                        <Badge variant="outline" className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em]">
-                          {filteredQuestions.length} shown
-                        </Badge>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Badge variant="outline" className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em]">
+                            {filteredQuestions.length} shown
+                          </Badge>
+                          <Button type="button" onClick={() => setIsPyqImportOpen(true)} className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import PYQs
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setPaperImportExam('JEE MAINS')} className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import JEE Main paper
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setPaperImportExam('NEET')} className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import NEET paper
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setPaperImportExam('MHTCET')} className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]">
+                            <Upload className="mr-2 h-4 w-4" />
+                            Import MHT CET paper
+                          </Button>
+                        </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Click edit to load a question into the studio, or delete to remove it from storage.
@@ -1518,6 +1790,61 @@ function AdminPortalPage() {
                     </CardContent>
                   </Card>
                 </div>
+                </div>
+              )}
+
+              {tab === 'papers' && (
+                <div className="space-y-6">
+                  <SectionHeading
+                    eyebrow="Whole-paper imports"
+                    title="Imported papers"
+                    description="Review and remove complete JEE Main, NEET, and MHT CET paper imports. Removing a paper deletes its imported questions and, for JEE Main or NEET, its dynamic exam-engine paper."
+                  />
+                  {paperImportGroups.length ? (
+                    <div className="space-y-4">
+                      {paperImportGroups.map((group) => (
+                        <Card key={group.id} className="rounded-[1.75rem] border-border/80">
+                          <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h2 className="font-black uppercase tracking-tight">
+                                  {group.exam} {group.year} · {group.shift}
+                                </h2>
+                                <Badge variant="outline" className="rounded-full">
+                                  {group.questionIds.length} questions
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {group.chapters.length
+                                  ? `Chapters: ${group.chapters.join(', ')}`
+                                  : 'No chapter tags'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Removing this paper also removes chapters no longer used by any remaining questions.
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePaperImportDelete(group)}
+                              disabled={Boolean(removingPaperId)}
+                              className="rounded-full border-border px-3 font-black uppercase tracking-[0.12em] text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              {removingPaperId === group.id ? 'Removing...' : 'Remove paper'}
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <Card className="rounded-[1.75rem] border-border/80">
+                      <CardContent className="p-8 text-center text-sm text-muted-foreground">
+                        No whole-paper JSON imports have been added yet.
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -1858,6 +2185,26 @@ function AdminPortalPage() {
           </section>
         </main>
       </div>
+      {isPyqImportOpen ? (
+        <PYQImportDialog
+          exams={pyqExamOptions}
+          getSubjects={(exam) => getSubjectOptionsForExam(exam, portal.questions)}
+          getChapters={(subject, exam) => getChapterOptionsForSubject(subject, portal.questions, exam)}
+          existingQuestions={portal.questions}
+          contributedBy={portal.profile.name}
+          onClose={() => setIsPyqImportOpen(false)}
+          onImported={handlePyqImport}
+        />
+      ) : null}
+      {paperImportExam ? (
+        <PaperImportDialog
+          exam={paperImportExam}
+          existingQuestions={portal.questions}
+          contributedBy={portal.profile.name}
+          onClose={() => setPaperImportExam(null)}
+          onImported={handlePaperImport}
+        />
+      ) : null}
     </>
   );
 }

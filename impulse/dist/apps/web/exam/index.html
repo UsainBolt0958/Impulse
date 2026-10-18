@@ -1,0 +1,358 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Practice Test Portal</title>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/jee2025/assets/css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { background:#f8fafc; }
+    .home-wrapper { display:block; }
+    .home-card-placeholder { display:none; }
+    .home-body { max-width:1180px; margin:0 auto; padding:24px; }
+    .home-title { margin-bottom:24px; transition: opacity 0.3s ease-in; font-size:28px; }
+    .home-brand { font-size:30px; font-weight:800; }
+    #series-description { transition: opacity 0.3s ease-in; }
+    html.series-background-pending #scr-home { visibility: hidden; }
+    .test-actions .start-btn { width:100%; }
+    .resume-btn {
+      background: #7c3aed;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .resume-btn:hover {
+      background: #6d28d9;
+    }
+    .attempts-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .attempts-label {
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 2px;
+    }
+    .attempt-dot {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 50%;
+      background: #fff;
+      color: #334155;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .attempt-dot:hover,
+    .attempt-dot:focus-visible {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+      outline: none;
+    }
+  </style>
+</head>
+  <script>document.documentElement.classList.add('series-background-pending');</script>
+  <div id="scr-home" class="home-wrapper">
+    <header class="home-header">
+      <div class="header-left">
+        <img src="/logo2.png" alt="Logo" class="header-logo" loading="eager">
+        <div class="home-brand"><strong>IMPULSE</strong></div>
+      </div>
+      <div class="home-user-info">
+        <div style="text-align:right; display:flex; align-items:center; justify-content:flex-end; gap:10px;">
+          <div style="display:inline-block; vertical-align:middle; text-align:right; margin-right: 15px;">
+            <div style="font-weight:700; font-size:14px;" id="disp-uname-home">CANDIDATE</div>
+            <div style="font-size:11px; opacity:0.8;" id="lbl-uid-home">ID: ...</div>
+          </div>
+          <button class="logout-btn" onclick="doLogout()" style="background:#ef4444;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-weight:700;cursor:pointer;">Logout</button>
+        </div>
+        <div class="home-avatar" style="cursor:default;"><i class="fa-solid fa-user"></i></div>
+      </div>
+    </header>
+
+    <div class="home-body fade-in">
+      <h1 class="home-title" id="home-title" style="opacity:0;">Examination Dashboard</h1>
+      <div id="series-description" style="margin-bottom:24px;color:#475569;line-height:1.6;opacity:0;"></div>
+      <div id="cards-container"></div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const testId = params.get('testId');
+    const seriesId = params.get('seriesId');
+    const API_BASE = '';
+    const DEFAULT_LOGO = '/logo2.png';
+    let availableTestCount = 0;
+
+    function el(tag, props = {}, children = []) {
+      const node = document.createElement(tag);
+      Object.entries(props).forEach(([key, value]) => {
+        if (key === 'class') node.className = value;
+        else if (key === 'html') node.innerHTML = value;
+        else node.setAttribute(key, value);
+      });
+      children = Array.isArray(children) ? children : [children];
+      children.forEach(child => {
+        if (typeof child === 'string') node.appendChild(document.createTextNode(child));
+        else if (child) node.appendChild(child);
+      });
+      return node;
+    }
+
+    async function fetchJson(path) {
+      try {
+        const res = await fetch(path);
+        if (!res.ok) return null;
+        return await res.json();
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function getQuestionCount(test) {
+      return (test.sections || []).reduce((sum, sec) => sum + ((sec.questions && sec.questions.length) || sec.questionCount || 0), 0);
+    }
+
+    function getQueryValue(name) {
+      return new URLSearchParams(window.location.search).get(name);
+    }
+
+    function loadAnalyticsHistory() {
+      try {
+        const raw = localStorage.getItem('test_analytics_history');
+        if (!raw) return { attempts: [] };
+        const parsed = JSON.parse(raw);
+        return parsed && Array.isArray(parsed.attempts) ? parsed : { attempts: [] };
+      } catch (err) {
+        return { attempts: [] };
+      }
+    }
+
+    function filterHistoryForCurrentTest(attempts, opts = {}) {
+      const params = new URLSearchParams(window.location.search);
+      const currentTestId = opts.testId || params.get('testId');
+      const currentSeriesId = opts.seriesId || params.get('seriesId');
+      return attempts.filter(entry => {
+        if (currentTestId && entry.testId && entry.testId !== currentTestId) return false;
+        if (currentSeriesId && entry.seriesId && entry.seriesId !== currentSeriesId) return false;
+        return true;
+      });
+    }
+
+    function getAttemptsForTest(testId, seriesId) {
+      const history = loadAnalyticsHistory();
+      const attempts = filterHistoryForCurrentTest(history.attempts || [], { testId, seriesId });
+      if (attempts.length) {
+        const uniqueAttempts = new Map();
+        attempts.forEach((attempt) => {
+          if (attempt?.attemptId && !uniqueAttempts.has(attempt.attemptId)) {
+            uniqueAttempts.set(attempt.attemptId, attempt);
+          }
+        });
+        return Array.from(uniqueAttempts.values());
+      }
+
+      try {
+        const legacy = JSON.parse(localStorage.getItem('test_analytics_data') || 'null');
+        if (legacy && (!testId || !legacy.testId || legacy.testId === testId) && (!seriesId || !legacy.seriesId || legacy.seriesId === seriesId)) {
+          return legacy.attemptId ? [legacy] : [];
+        }
+      } catch (err) {
+        console.warn('Unable to read legacy attempt data', err);
+      }
+      return [];
+    }
+
+    function buildExamUrl(testId, seriesId, extraParams = {}) {
+      const params = new URLSearchParams();
+      if (testId) params.set('testId', testId);
+      if (seriesId) params.set('seriesId', seriesId);
+      Object.entries(extraParams).forEach(([key, value]) => {
+        if (value != null && value !== '') params.set(key, String(value));
+      });
+      return '/jee2025/exam/index.html?' + params.toString();
+    }
+
+    function getStoredSession(testId) {
+      try {
+        const sessionKey = Object.keys(localStorage).find(key => key === `test_series_${testId}_sess_v1`);
+        if (!sessionKey) return null;
+        return JSON.parse(localStorage.getItem(sessionKey));
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function hasResumeForTest(testId, paper) {
+      const session = getStoredSession(testId);
+      if (!session) return false;
+      return session.paper === paper && !session.sub;
+    }
+
+    function goToExam(testId, paper = 1, paperCount = 1, resume = false) {
+      const extra = { paper, paperCount };
+      if (resume) {
+        extra.attemptIndex = 0;
+      }
+      window.location.href = buildExamUrl(testId, seriesId, extra);
+    }
+
+    function doLogout() {
+      const preservedKeys = new Set([
+        'theme',
+        'test_analytics_history',
+        'test_analytics_data',
+        'test_analytics_last_signature'
+      ]);
+      const preserved = {};
+
+      for (const key of Object.keys(localStorage)) {
+        if (
+          preservedKeys.has(key)
+          || (key.startsWith('test_series_') && key.endsWith('_data_v1'))
+          || key.startsWith('exam_analytics_')
+        ) {
+          preserved[key] = localStorage.getItem(key);
+        }
+      }
+
+      localStorage.clear();
+      for (const [key, value] of Object.entries(preserved)) {
+        if (value !== null && value !== undefined) {
+          localStorage.setItem(key, value);
+        }
+      }
+
+      sessionStorage.clear();
+      window.location.href = '/test-series';
+    }
+
+    function renderAttemptDots(testId, seriesId, paperCount) {
+      const attempts = getAttemptsForTest(testId, seriesId);
+      const wrapper = el('div', { class: 'attempts-strip' });
+      if (!attempts.length) return wrapper;
+
+      const label = el('span', { class: 'attempts-label' }, 'Previous attempts');
+      wrapper.appendChild(label);
+      attempts.forEach((attempt, index) => {
+        const hasPaper1 = !!(attempt.rawPaper1 || attempt.paper1);
+        const paper = hasPaper1 ? 1 : 2;
+        const button = el('button', {
+          class: 'attempt-dot',
+          type: 'button',
+          title: `Open attempt ${index + 1} analysis`,
+          'aria-label': `Open attempt ${index + 1} analysis`
+        }, String(index + 1));
+        button.addEventListener('click', () => {
+          if (!attempt.attemptId) return;
+          window.location.href = buildExamUrl(testId, seriesId, {
+            attemptId: attempt.attemptId,
+            paper,
+            paperCount: paperCount || 1
+          });
+        });
+        wrapper.appendChild(button);
+      });
+      return wrapper;
+    }
+
+    function renderCard(test, index, series) {
+      const qCount = getQuestionCount(test);
+      const duration = Number(test.durationMinutes) || Number(series?.durationMinutes) || (Number(test.durationSec) ? Math.round(Number(test.durationSec) / 60) : 0);
+      const card = el('div', { class: 'test-card' });
+      const header = el('div', { class: 'test-card-header' }, [
+        el('div', { class: 'test-name' }, test.title || `Paper ${index + 1}`),
+        el('div', { class: 'test-status-badge badge-avail' }, 'AVAILABLE')
+      ]);
+      const infoGrid = el('div', { class: 'test-info-grid' }, [
+        el('div', { class: 'info-box' }, [ el('div', { class: 'info-label' }, 'Questions'), el('div', { class: 'info-value' }, String(qCount)) ]),
+        el('div', { class: 'info-box' }, [ el('div', { class: 'info-label' }, 'Duration'), el('div', { class: 'info-value' }, `${duration} Mins`) ]),
+        el('div', { class: 'info-box' }, [ el('div', { class: 'info-label' }, 'Marks'), el('div', { class: 'info-value' }, test.markTotal ? String(test.markTotal) : 'N/A') ])
+      ]);
+      const paper = index + 1;
+      const resume = hasResumeForTest(test.id, paper);
+      const buttonText = resume ? `RESUME ${test.title || 'PAPER ' + paper}` : `START ${test.title || 'PAPER ' + paper}`;
+      const buttonClass = resume ? 'start-btn resume-btn' : 'start-btn';
+      const onclick = resume ? `goToExam('${test.id}', ${paper}, ${availableTestCount}, true)` : `goToExam('${test.id}', ${paper}, ${availableTestCount})`;
+      const actions = el('div', { class: 'test-actions' }, el('button', { class: buttonClass, type: 'button', onclick }, buttonText));
+      card.append(header, infoGrid, actions, renderAttemptDots(test.id, series?.id, availableTestCount));
+      return card;
+    }
+
+    async function init() {
+      const test = testId ? await fetchJson(API_BASE + '/api/tests/' + encodeURIComponent(testId)) : null;
+      const series = seriesId ? await fetchJson(API_BASE + '/api/series/' + encodeURIComponent(seriesId)) : null;
+      const testsInSeries = series ? await fetchJson(API_BASE + '/api/series/' + encodeURIComponent(series.id) + '/tests') : null;
+      const allTests = (testsInSeries && testsInSeries.tests) ? testsInSeries.tests : (test ? [test] : []);
+
+      if (series?.backgroundImage) {
+        document.documentElement.style.setProperty(
+          '--series-background-image',
+          `url("${String(series.backgroundImage).replace(/"/g, '\\"')}")`
+        );
+      } else {
+        document.documentElement.style.removeProperty('--series-background-image');
+      }
+
+      const brandText = (test && test.meta && (test.meta.brandText || test.meta.title)) || (series && series.metadata && series.metadata.brandText) || (series && series.title) || 'Practice Test Portal';
+      const logoUrl = (test && test.meta && test.meta.logoUrl) || (series && series.metadata && series.metadata.logoUrl) || DEFAULT_LOGO;
+      const homeLogo = document.querySelector('.header-logo');
+      const homeBrand = document.querySelector('.home-brand');
+      const homeTitle = document.getElementById('home-title');
+      const description = document.getElementById('series-description');
+
+      if (homeLogo) homeLogo.src = logoUrl;
+      if (homeBrand) homeBrand.innerHTML = '<strong>IMPULSE</strong>';
+      if (homeTitle) homeTitle.textContent = series ? 'IMPULSE Dashboard' : 'Examination Dashboard';
+      if (description) description.textContent = series ? (series.description || `Available papers for ${series.title}`) : 'Start your paper using the buttons below.';
+
+      availableTestCount = allTests.length;
+      const cards = document.getElementById('cards-container');
+      cards.innerHTML = '';
+      if (allTests.length === 0 && test) allTests.push(test);
+      if (allTests.length === 0) {
+        cards.appendChild(el('div', { class: 'home-card-placeholder' }, 'No tests available. Please configure test data from the admin panel.'));
+        return;
+      }
+
+      allTests.forEach((t, idx) => {
+        const prepared = Object.assign({}, t);
+        // Calculate total marks: sum of (questions_in_section * posMarks_of_section) for all sections
+        prepared.markTotal = (t.sections || []).reduce((sum, section) => {
+          const sectionQuestionCount = (section.questions && section.questions.length) || (section.questionCount || 0);
+          const sectionMarks = sectionQuestionCount * (section.posMarks || 0);
+          return sum + sectionMarks;
+        }, 0);
+        cards.appendChild(renderCard(prepared, idx, series));
+      });
+
+      // Show title and description after data is loaded with smooth fade
+      if (homeTitle) {
+        homeTitle.style.opacity = '1';
+      }
+      if (description) {
+        description.style.opacity = '1';
+      }
+      document.documentElement.classList.remove('series-background-pending');
+    }
+
+    init();
+  </script>
+</body>
+</html>

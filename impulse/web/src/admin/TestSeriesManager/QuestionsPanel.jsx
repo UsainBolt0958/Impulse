@@ -86,7 +86,7 @@ export default function QuestionsPanel({ test, subject, section, onSelectQuestio
           <div>
             <h2 className="text-2xl font-bold">Questions</h2>
             <p className="text-gray-600 text-sm">
-              {subject} • Section {section?.name} ({section?.type})
+              {subject} • Section {section?.sectionName || section?.name} ({section?.type})
             </p>
           </div>
         </div>
@@ -115,7 +115,9 @@ export default function QuestionsPanel({ test, subject, section, onSelectQuestio
               <CardContent className="py-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="font-medium">Q{idx + 1}</div>
+                    <div className="font-medium">
+                      {q.sourceNumber ? `Question ${q.sourceNumber}` : `Q${idx + 1}`}
+                    </div>
                     <div className="text-sm text-gray-600 line-clamp-2">{q.text}</div>
                     {q.imageUrl && <Badge className="mt-2">Has image</Badge>}
                   </div>

@@ -7,13 +7,13 @@ import TimerComponent from '@/components/TimerComponent.jsx';
 import AnswerFeedback from '@/components/AnswerFeedback.jsx';
 import ProgressBar from '@/components/ProgressBar.jsx';
 import RichText from '@/components/RichText.jsx';
+import BookmarkQuestionButton from '@/components/BookmarkQuestionButton.jsx';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
-import { useMarkedQuestions } from '@/hooks/useMarkedQuestions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bookmark, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { toast } from 'sonner';
 
@@ -23,7 +23,6 @@ function SolvingPage() {
   const location = useLocation();
   const { getQuestionById, questions } = useQuestions();
   const { addSolvedQuestion } = useSolvedQuestions();
-  const { toggleMark, isMarked } = useMarkedQuestions();
 
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [submitted, setSubmitted] = useState(false);
@@ -109,18 +108,13 @@ function SolvingPage() {
     const isCorrect = isNumericQuestion
       ? userValue === correctValue
       : selectedAnswer === question.correct_answer;
-    addSolvedQuestion(questionId, isCorrect, timeTaken);
+    addSolvedQuestion(questionId, isCorrect, timeTaken, question);
     
     if (isCorrect) {
       toast.success('Correct answer');
     } else {
       toast.error('Incorrect answer');
     }
-  };
-
-  const handleMarkForReview = () => {
-    toggleMark(questionId);
-    toast.success(isMarked(questionId) ? 'Removed from notebook' : 'Added to notebook');
   };
 
   const handleNext = () => {
@@ -314,14 +308,7 @@ function SolvingPage() {
               )}
 
               <div className="flex items-center justify-between gap-4">
-                <Button
-                  variant="outline"
-                  onClick={handleMarkForReview}
-                  className="font-bold"
-                >
-                  <ColoredIcon icon={Bookmark} name="bookmark" size={4} className={`${isMarked(questionId) ? 'fill-current' : ''} mr-2`} />
-                  {isMarked(questionId) ? 'Marked' : 'Mark for Review'}
-                </Button>
+                <BookmarkQuestionButton question={question} showLabel />
 
                 <div className="flex items-center gap-2">
                   {!submitted ? (

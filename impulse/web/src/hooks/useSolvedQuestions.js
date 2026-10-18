@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
+import {
+  appendSolvedQuestionAttempts,
+  SOLVED_QUESTIONS_KEY,
+  SOLVED_QUESTIONS_UPDATED_EVENT,
+} from '@/lib/solvedQuestions';
 
-const SOLVED_KEY = 'impulse_solved';
 const LEGACY_SOLVED_KEY = 'examforge_solved';
 
 function migrateSolvedIfNeeded() {
   if (typeof window === 'undefined') return;
-  const current = localStorage.getItem(SOLVED_KEY);
+  const current = localStorage.getItem(SOLVED_QUESTIONS_KEY);
   const legacy = localStorage.getItem(LEGACY_SOLVED_KEY);
   if (!current && legacy) {
-    localStorage.setItem(SOLVED_KEY, legacy);
+    localStorage.setItem(SOLVED_QUESTIONS_KEY, legacy);
   }
 }
 
@@ -16,7 +20,7 @@ function readStoredSolvedQuestions() {
   if (typeof window === 'undefined') return [];
 
   migrateSolvedIfNeeded();
-  const stored = localStorage.getItem(SOLVED_KEY);
+  const stored = localStorage.getItem(SOLVED_QUESTIONS_KEY);
   if (!stored) return [];
 
   try {
@@ -30,20 +34,32 @@ export function useSolvedQuestions() {
   const [solvedQuestions, setSolvedQuestions] = useState(() => readStoredSolvedQuestions());
 
   useEffect(() => {
-    setSolvedQuestions(readStoredSolvedQuestions());
+    const refresh = () => setSolvedQuestions(readStoredSolvedQuestions());
+    const handleStorage = event => {
+      if (event.key === SOLVED_QUESTIONS_KEY) refresh();
+    };
+
+    refresh();
+    window.addEventListener(SOLVED_QUESTIONS_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(SOLVED_QUESTIONS_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
-  const addSolvedQuestion = (questionId, isCorrect, timeTaken) => {
+  const addSolvedQuestion = (questionId, isCorrect, timeTaken, question = {}) => {
     const newSolved = {
       question_id: questionId,
+      subject: question.subject,
+      difficulty: question.difficulty,
       is_correct: isCorrect,
       time_taken: timeTaken,
       timestamp: new Date().toISOString()
     };
 
-    const updated = [...solvedQuestions, newSolved];
+    const updated = appendSolvedQuestionAttempts([newSolved]);
     setSolvedQuestions(updated);
-    localStorage.setItem(SOLVED_KEY, JSON.stringify(updated));
   };
 
   const isQuestionSolved = (questionId) => {
@@ -54,24 +70,32 @@ export function useSolvedQuestions() {
     return solvedQuestions.filter(sq => sq.question_id === questionId);
   };
 
-  const getTotalSolved = () => {
-    return new Set(solvedQuestions.map(sq => sq.question_id)).size;
+  const getUniqueAttemptedCount = () => {
+    return new Set(solvedQuestions.map(sq => sq.question_id).filter(Boolean)).size;
   };
 
-  const getCorrectCount = () => {
+  const getTotalAttempts = () => {
+    return solvedQuestions.filter(sq => sq.question_id).length;
+  };
+
+  const getUniqueSolvedCount = () => {
     const uniqueCorrect = new Set();
     solvedQuestions.forEach(sq => {
-      if (sq.is_correct) {
+      if (sq.is_correct && sq.question_id) {
         uniqueCorrect.add(sq.question_id);
       }
     });
     return uniqueCorrect.size;
   };
 
+  const getCorrectAttemptCount = () => {
+    return solvedQuestions.filter(sq => sq.question_id && sq.is_correct === true).length;
+  };
+
   const getAccuracy = () => {
-    const total = getTotalSolved();
+    const total = getTotalAttempts();
     if (total === 0) return 0;
-    return ((getCorrectCount() / total) * 100).toFixed(1);
+    return ((getCorrectAttemptCount() / total) * 100).toFixed(1);
   };
 
   const getCurrentStreak = () => {
@@ -107,8 +131,12 @@ export function useSolvedQuestions() {
     addSolvedQuestion,
     isQuestionSolved,
     getQuestionAttempts,
-    getTotalSolved,
-    getCorrectCount,
+    getTotalSolved: getUniqueAttemptedCount,
+    getUniqueAttemptedCount,
+    getTotalAttempts,
+    getCorrectCount: getUniqueSolvedCount,
+    getUniqueSolvedCount,
+    getCorrectAttemptCount,
     getAccuracy,
     getCurrentStreak
   };

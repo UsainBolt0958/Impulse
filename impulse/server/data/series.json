@@ -1,1 +1,41 @@
-[]
+[
+  {
+    "id": "series-1792316369979-qpms10",
+    "title": "JEE MAINS Previous Papers",
+    "description": "Imported JEE MAINS papers.",
+    "published": true,
+    "publish_at": "2026-10-18T09:39:29.964Z",
+    "created_at": "2026-10-18T09:39:29.979Z",
+    "updated_at": "2026-10-18T09:39:29.989Z",
+    "durationMinutes": 180,
+    "meta": {
+      "kind": "previous-papers",
+      "examKey": "jee-mains",
+      "exam": "JEE MAINS"
+    }
+  },
+  {
+    "id": "series-1792061780626-2rcj1e",
+    "title": "jee mains",
+    "description": "",
+    "published": true,
+    "publish_at": "2026-10-16T05:10:43.869Z",
+    "created_at": "2026-10-15T10:56:20.626Z",
+    "updated_at": "2026-10-16T13:26:52.089Z",
+    "examLabel": "",
+    "durationMinutes": 90,
+    "backgroundImage": ""
+  },
+  {
+    "id": "series-1792060890004-tg6vo1",
+    "title": "JEE ADV",
+    "description": "",
+    "published": true,
+    "publish_at": "2026-10-15T10:49:18.499Z",
+    "created_at": "2026-10-15T10:41:30.004Z",
+    "updated_at": "2026-10-15T10:49:19.999Z",
+    "examLabel": "",
+    "durationMinutes": 180,
+    "backgroundImage": ""
+  }
+]

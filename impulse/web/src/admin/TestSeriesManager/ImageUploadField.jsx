@@ -27,8 +27,8 @@ export default function ImageUploadField({
     }
 
     // Validate type
-    if (!file.type.startsWith('image/')) {
-      setError('Only image files allowed');
+    if (!/\.(svg|png|jpe?g|webp)$/i.test(file.name)) {
+      setError('Use an SVG, PNG, JPG, or WEBP image');
       return;
     }
 
@@ -80,7 +80,7 @@ export default function ImageUploadField({
         >
           <Upload className="mx-auto h-8 w-8 text-gray-400" />
           <p className="mt-2 text-sm font-medium text-gray-700">Click to upload</p>
-          <p className="text-xs text-gray-500">PNG, JPG up to {maxSizeKB}KB</p>
+          <p className="text-xs text-gray-500">SVG, PNG, JPG, or WEBP up to {maxSizeKB}KB</p>
         </div>
       )}
 
@@ -94,7 +94,7 @@ export default function ImageUploadField({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept=".svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp"
         onChange={handleFileSelect}
         disabled={isLoading}
         className="hidden"

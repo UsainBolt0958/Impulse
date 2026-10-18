@@ -4,8 +4,14 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import TimerComponent from '@/components/TimerComponent.jsx';
 import AnswerFeedback from '@/components/AnswerFeedback.jsx';
 import RichText from '@/components/RichText.jsx';
+import BookmarkQuestionButton from '@/components/BookmarkQuestionButton.jsx';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
+import {
+  getPYQPracticeExitState,
+  getPYQPracticeQuestionSequence,
+  getPYQPracticeReturnState,
+} from '@/lib/pyqPracticeNavigation';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, ChevronLeft, ChevronRight, Check, Settings, XCircle } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
@@ -34,7 +40,9 @@ function FullScreenSolvingPage() {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
 
   const question = getQuestionById(questionId);
-  const currentIndex = questions.findIndex(q => q.id === questionId);
+  const questionSequence = getPYQPracticeQuestionSequence(questions, location.state, question);
+  const questionIndex = questionSequence.findIndex((item) => item.id === questionId);
+  const currentIndex = questionIndex < 0 ? 0 : questionIndex;
 
   const getQuestionType = (item) => {
     const rawType = String(item?.type || item?.question_type || '').trim().toUpperCase();
@@ -68,7 +76,7 @@ function FullScreenSolvingPage() {
     }
     return normalized.replace(/^\+/, '');
   };
-  const hasNext = currentIndex < questions.length - 1;
+  const hasNext = currentIndex < questionSequence.length - 1;
   const hasPrev = currentIndex > 0;
 
   const fontSizes = {
@@ -168,14 +176,24 @@ function FullScreenSolvingPage() {
       ? normalizeAnswerValue(question.correct_answer)
       : question.correct_answer;
     const isCorrect = userAnswer === correctAnswer;
-    addSolvedQuestion(questionId, isCorrect, timeSpent);
+    addSolvedQuestion(questionId, isCorrect, timeSpent, question);
   };
 
   const navigateToQuestion = (index) => {
-    navigate(`/solve/${questions[index].id}`);
+    const nextQuestion = questionSequence[index];
+    if (!nextQuestion) return;
+    const state = getPYQPracticeReturnState(location.state);
+    navigate(`/solve/${nextQuestion.id}`, { replace: true, state });
     setSelectedOption(null);
     setHasChecked(false);
     setTimeSpent(0);
+  };
+
+  const handleExit = () => {
+    navigate(location.state?.from || '/pyq-practice', {
+      replace: true,
+      state: getPYQPracticeExitState(location.state, question),
+    });
   };
 
   return (
@@ -192,15 +210,10 @@ function FullScreenSolvingPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
-                if (location.state?.from) {
-                  navigate(location.state.from, { state: { practiceState: location.state.practiceState } });
-                } else {
-                  navigate(-1);
-                }
-              }}
+              onClick={handleExit}
               className="h-10 w-10 rounded-full border border-border/70 bg-transparent hover:bg-secondary"
-              aria-label="Back"
+              aria-label="Exit question solving"
+              title="Exit question solving"
             >
               <ColoredIcon icon={ArrowLeft} name="arrowleft" size={4} />
             </Button>
@@ -261,14 +274,24 @@ function FullScreenSolvingPage() {
                 <p className="text-sm sm:text-base font-normal text-muted-foreground">
                   {question.exam}
                 </p>
+                {question.shift ? (
+                  <p className="text-sm sm:text-base font-semibold text-muted-foreground">
+                    Shift: {question.shift}
+                  </p>
+                ) : null}
               </div>
 
-              <TimerComponent
-                resetKey={questionId}
-                isRunning={!hasChecked}
-                onTimeUpdate={setTimeSpent}
-                className="shrink-0 mt-1"
-              />
+              <div className="mt-1 flex shrink-0 items-center gap-2">
+                <BookmarkQuestionButton
+                  question={question}
+                  className="h-9 w-9 rounded-full"
+                />
+                <TimerComponent
+                  resetKey={questionId}
+                  isRunning={!hasChecked}
+                  onTimeUpdate={setTimeSpent}
+                />
+              </div>
             </div>
 
             {/* Question Text */}

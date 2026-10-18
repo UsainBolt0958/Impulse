@@ -162,13 +162,17 @@
             <p style="color:rgba(255,255,255,0.95); margin-bottom:30px; font-size: 13px; text-transform: uppercase;">Unofficial Examination Portal</p>
            
             <input type="text" class="auth-field" id="u-name" placeholder="Candidate Name">
-            <input type="text" class="auth-field" id="u-id" placeholder="Application Number">
+            <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:15px; position:relative;">
+                <input type="text" class="auth-field" id="u-id" placeholder="Random Number (Remember it for future login)" style="flex:1; min-width:0; margin-bottom:0;">
+                <details style="position:relative; flex-shrink:0;">
+                    <summary aria-label="Information about combined result" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border:1px solid rgba(255,255,255,0.6); border-radius:50%; color:#fff; cursor:pointer; font-weight:700; list-style:none;">i</summary>
+                    <div style="position:absolute; z-index:20; top:46px; right:0; width:min(320px, 80vw); padding:12px; border-radius:6px; background:#fff; color:#1f2937; box-shadow:0 4px 16px rgba(0,0,0,0.25); font-size:13px; line-height:1.5;">
+                        After attempting Paper 1, attempt Paper 2 with the same login details to get the AIR for the combined result (Paper 1 + Paper 2).
+                    </div>
+                </details>
+            </div>
             <input type="password" class="auth-field" value="password" placeholder="Password">
             <button class="auth-btn" type="button" onclick="(window.tryLogin || function(){alert('Login function unavailable, please refresh.')})()">Login</button>
-            <button class="policy-btn" type="button" onclick="openPolicyModal()">
-                <i class="fas fa-shield-alt" style="margin-right:8px;"></i>Read Policies
-            </button>
-            <div style="margin-top:14px; font-size:12px; color:rgba(255,255,255,0.9);">BY FOCUS HUB</div>
         </div>
     </div>
 
@@ -403,7 +407,7 @@
                 <div class="home-brand">IIT-JEE ADVANCED 2023 - RESULT</div>
             </div>
             <div class="header-right">
-                <button class="btn" onclick="window.location.href='../index.html'">Back to FocusHub</button>
+                <button class="btn" onclick="window.location.href='/previous-papers/jee-advanced'">Back to Home</button>
             </div>
         </header>
 

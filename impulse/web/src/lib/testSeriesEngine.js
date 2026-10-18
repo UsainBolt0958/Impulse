@@ -33,14 +33,24 @@ export async function initTestSeriesEngine(testId, seriesId) {
 }
 
 export function buildExamConfig(series, test) {
+  const testSections = Array.isArray(test.sections) ? test.sections : [];
+  const sourceSections = testSections.length ? testSections : (series.sections || []);
+  const testSubjects = Array.isArray(test.subjects) ? test.subjects : [];
+  let sourceSubjects = testSubjects;
+  if (sourceSubjects.length === 0) {
+    sourceSubjects = series.subjects?.length
+      ? series.subjects
+      : Array.from(new Set(sourceSections.map((section) => section.subject).filter(Boolean)));
+  }
+
   /**
    * Build complete exam configuration from series and test
    * This replaces all the hardcoded values in app.js
    */
   return {
-    subjects: series.subjects || [],
-    sections: buildSectionConfig(series.sections || []),
-    marking: buildMarkingScheme(series.sections || []),
+    subjects: sourceSubjects,
+    sections: buildSectionConfig(sourceSections),
+    marking: buildMarkingScheme(sourceSections),
     rankMapping: series.rankMapping || getDefaultRankMapping(),
     percentileMarks: test.percentileMarks || null,
     answerKey: null, // Will be built from questions
@@ -59,8 +69,10 @@ export function buildSectionConfig(sections) {
    */
   const config = {};
   sections.forEach((section) => {
-    config[section.name] = [
-      section.questionCountPerSubject,
+    const sectionName = section.sectionName || section.name;
+    if (!sectionName) return;
+    config[sectionName] = [
+      section.questionCountPerSubject || section.questionCount || section.questions?.length || 0,
       section.type,
       section.posMarks,
       section.negMarks,
@@ -75,11 +87,13 @@ export function buildMarkingScheme(sections) {
    */
   const scheme = {};
   sections.forEach((section) => {
-    scheme[section.name] = {
+    const sectionName = section.sectionName || section.name;
+    if (!sectionName) return;
+    scheme[sectionName] = {
       type: section.type,
       posMarks: section.posMarks,
       negMarks: section.negMarks,
-      questionCount: section.questionCountPerSubject,
+      questionCount: section.questionCountPerSubject || section.questionCount || section.questions?.length || 0,
     };
   });
   return scheme;
@@ -152,7 +166,7 @@ export function buildAnswerKeyFromQuestions(questions, template) {
 
   template.sections?.forEach((section) => {
     const subject = section.subject;
-    const sectionName = section.sectionName;
+    const sectionName = section.sectionName || section.name;
 
     if (!answerKey[subject]) {
       answerKey[subject] = {};
@@ -161,11 +175,11 @@ export function buildAnswerKeyFromQuestions(questions, template) {
       answerKey[subject][sectionName] = [];
     }
 
-    section.questions?.forEach((questionId) => {
-      const question = questions.find((q) => q.id === questionId);
-      if (question) {
-        answerKey[subject][sectionName].push(question.answer);
-      }
+    section.questions?.forEach((questionItem) => {
+      const question = questionItem && typeof questionItem === 'object'
+        ? questionItem
+        : questions.find((candidate) => candidate.id === questionItem);
+      if (question) answerKey[subject][sectionName].push(question.answer);
     });
   });
 
@@ -267,6 +281,31 @@ export function initExamDatabase(config, template) {
   return db;
 }
 
+function answersMatch(userAnswer, correctAnswer, sectionType) {
+  if (sectionType !== 'NUM') return userAnswer === correctAnswer;
+
+  const toFiniteNumber = (answer) => {
+    if (typeof answer === 'number') {
+      return Number.isFinite(answer) ? answer : null;
+    }
+    if (typeof answer !== 'string') return null;
+
+    const normalized = answer.trim();
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(normalized)) {
+      return null;
+    }
+
+    const numericAnswer = Number(normalized);
+    return Number.isFinite(numericAnswer) ? numericAnswer : null;
+  };
+
+  const numericUserAnswer = toFiniteNumber(userAnswer);
+  const numericCorrectAnswer = toFiniteNumber(correctAnswer);
+  return numericUserAnswer !== null
+    && numericCorrectAnswer !== null
+    && numericUserAnswer === numericCorrectAnswer;
+}
+
 export function calculateScore(userAnswers, answerKey, config) {
   /**
    * Calculate test score based on series marking scheme
@@ -293,7 +332,7 @@ export function calculateScore(userAnswers, answerKey, config) {
 
         if (userAns === null || userAns === '') {
           stats.skipped++;
-        } else if (userAns === correctAns) {
+        } else if (answersMatch(userAns, correctAns, sectionType)) {
           const points = posMarks;
           totalScore += points;
           subjectScores[subject] += points;

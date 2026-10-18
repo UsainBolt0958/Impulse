@@ -898,22 +898,26 @@
 
         .q-img-box {
             border: 1px solid var(--border);
-            padding: 10px;
-            margin-bottom: 20px;
+            padding: 6px;
+            margin-bottom: 12px;
             border-radius: 6px;
             min-height: auto;
             display: block;
             background: #fafafa;
-            max-width: 80%;
+            width: fit-content;
+            max-width: min(65%, 520px);
             margin-left: auto;
             margin-right: auto;
             will-change: auto;
         }
        
         .q-img-box img { 
-            width: 100%; 
+            max-width: 100%; 
+            max-height: 280px;
+            width: auto; 
             height: auto;
             display: block;
+            object-fit: contain;
             will-change: auto;
         }
 
@@ -1191,10 +1195,9 @@
             width: 250px;
             height: 250px;
             border-radius: 50%;
-            background: conic-gradient(from 210deg, #2563eb, #22d3ee, #2dd4bf, #2563eb);
+            background: #000;
             content: "";
             transform: translate(-50%, -50%);
-            animation: percentile-orbit 12s linear infinite;
         }
         .percentile-orb::after {
             position: absolute;
@@ -1219,7 +1222,7 @@
             flex: 0 0 250px;
             border-radius: 50%;
             background: #eff6ff;
-            box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12), 0 0 0 10px rgba(59, 130, 246, 0.06);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12), 0 0 0 10px rgba(0, 0, 0, 0.04);
         }
         .percentile-orb::before,
         .percentile-orb::after {
@@ -1253,9 +1256,6 @@
             line-height: 1.35;
             white-space: normal;
         }
-        @keyframes percentile-orbit {
-            to { transform: translate(-50%, -50%) rotate(360deg); }
-        }
         .percentile-metric .comparison-label {
             color: #64748b;
             font-size: 14px;
@@ -1281,12 +1281,6 @@
             .score-metric { min-width: 0; }
             .percentile-metric { width: 100%; flex: none; }
         }
-        @media (prefers-reduced-motion: reduce) {
-            .percentile-orb::before {
-                animation: none;
-            }
-        }
-        
         /* DETAILED ANALYSIS STYLES */
         .detailed-analysis-card { 
             background: linear-gradient(135deg, #f8f9ff 0%, #fff 100%); 

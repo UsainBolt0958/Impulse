@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 export default function QuestionEditor({ question, section, subject, onBack, onSave }) {
   const [formData, setFormData] = useState({
     id: question?.id || null,
+    sourceId: question?.sourceId || '',
+    sourceNumber: question?.sourceNumber || '',
     text: question?.text || '',
     imageUrl: question?.imageUrl || '',
     type: section?.type || 'MCQ',
@@ -19,24 +21,46 @@ export default function QuestionEditor({ question, section, subject, onBack, onS
       { text: '', imageUrl: '', key: 'C' },
       { text: '', imageUrl: '', key: 'D' },
     ],
-    answer: question?.answer || '',
+    answer: question?.answer ?? '',
+    solution: question?.solution || question?.explanation || '',
   });
 
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSaveQuestion = async () => {
-    if (!formData.text.trim()) {
-      toast.error('Question text required');
+    if (!formData.text.trim() && !formData.imageUrl) {
+      toast.error('Question text or image required');
       return;
     }
 
     if (formData.type === 'MCQ' || formData.type === 'MULTI') {
-      if (!formData.options.some(o => o.text.trim())) {
+      if (!formData.options.some(o => o.text?.trim() || o.imageUrl)) {
         toast.error('Add at least one option');
         return;
       }
       if (!formData.answer) {
         toast.error('Select correct answer');
+        return;
+      }
+    }
+    if (formData.type === 'NUM') {
+      if (formData.answer && typeof formData.answer === 'object') {
+        const { min, max } = formData.answer;
+        if (
+          String(min).trim() === ''
+          || String(max).trim() === ''
+          || !Number.isFinite(Number(min))
+          || !Number.isFinite(Number(max))
+          || Number(min) > Number(max)
+        ) {
+          toast.error('Enter a valid numeric range with minimum no greater than maximum');
+          return;
+        }
+      } else if (
+        String(formData.answer).trim() === ''
+        || !Number.isFinite(Number(formData.answer))
+      ) {
+        toast.error('Enter a valid numeric answer');
         return;
       }
     }
@@ -62,8 +86,14 @@ export default function QuestionEditor({ question, section, subject, onBack, onS
         <div>
           <h2 className="text-2xl font-bold">Edit Question</h2>
           <p className="text-gray-600 text-sm">
-            {subject} • Section {section?.name}
+            {subject} • Section {section?.sectionName || section?.name}
           </p>
+          {formData.sourceId ? (
+            <p className="text-xs text-muted-foreground">
+              Imported ID: {formData.sourceId}
+              {formData.sourceNumber ? ` · Source question ${formData.sourceNumber}` : ''}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -178,16 +208,87 @@ export default function QuestionEditor({ question, section, subject, onBack, onS
           <CardContent className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1">Answer (or range)</label>
-              <Input
-                value={formData.answer}
-                onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
-                placeholder="e.g., 5 or 5.5 or 1-2"
-              />
-              <p className="text-xs text-gray-500 mt-2">For ranges, use: min-max format</p>
+              <label className="mb-3 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.answer && typeof formData.answer === 'object')}
+                  onChange={(event) => setFormData({
+                    ...formData,
+                    answer: event.target.checked ? { min: '', max: '', allowSign: false } : '',
+                  })}
+                />
+                Accept a range of numeric answers
+              </label>
+              {formData.answer && typeof formData.answer === 'object' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="space-y-1 text-sm">
+                      Minimum (inclusive)
+                      <Input
+                        type="number"
+                        step="any"
+                        value={formData.answer.min}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          answer: { ...formData.answer, min: e.target.value },
+                        })}
+                      />
+                    </label>
+                    <label className="space-y-1 text-sm">
+                      Maximum (inclusive)
+                      <Input
+                        type="number"
+                        step="any"
+                        value={formData.answer.max}
+                        onChange={(e) => setFormData({
+                          ...formData,
+                          answer: { ...formData.answer, max: e.target.value },
+                        })}
+                      />
+                    </label>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.answer.allowSign)}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        answer: { ...formData.answer, allowSign: e.target.checked },
+                      })}
+                    />
+                    Match absolute value (allow either sign)
+                  </label>
+                </div>
+              ) : (
+                <Input
+                  type="number"
+                  step="any"
+                  value={formData.answer}
+                  onChange={(e) => setFormData({ ...formData, answer: e.target.value })}
+                  placeholder="e.g., 5, 5.5, or -2.5"
+                />
+              )}
             </div>
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Solution / Explanation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={formData.solution}
+            onChange={(e) => setFormData({ ...formData, solution: e.target.value })}
+            placeholder="Enter the worked solution or explanation..."
+            rows={6}
+          />
+          <p className="mt-2 text-xs text-muted-foreground">
+            Markdown and LaTeX math are supported by the exam review display.
+          </p>
+        </CardContent>
+      </Card>
 
       {/* Buttons */}
       <div className="flex gap-2">

@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit3, Trash2, ArrowLeft, CheckCircle, Circle, Settings } from 'lucide-react';
+import { Plus, Edit3, Trash2, ArrowLeft, CheckCircle, Circle, Settings, Upload } from 'lucide-react';
 import { getSeriesTests, createTest, deleteTest, updateTest } from '@/lib/portalServer';
 import { toast } from 'sonner';
+import TestImportDialog from './TestImportDialog';
 
 const PERCENTILE_ANCHORS = [
   99.9, 99.6, 99.4, 99.2, 99, 98.5, 98, 97.5,
@@ -24,6 +25,7 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
   const [editingPercentiles, setEditingPercentiles] = useState(null);
   const [percentileValues, setPercentileValues] = useState({});
   const [isSavingPercentiles, setIsSavingPercentiles] = useState(false);
+  const [importingTest, setImportingTest] = useState(null);
 
   useEffect(() => {
     loadTests();
@@ -271,7 +273,10 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {editingDuration === test.id ? (
-                    <div className="flex gap-2 items-center">
+                    <div
+                      className="flex gap-2 items-center"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <Input
                         type="number"
                         min="1"
@@ -306,6 +311,7 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
                       <Button
                         size="sm"
                         variant="ghost"
+                        aria-label="Edit duration"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEditDuration(test);
@@ -387,6 +393,20 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
                     size="sm"
                     variant="outline"
                     className="flex-1"
+                    disabled={Boolean(test.published)}
+                    title={test.published ? 'Create an unpublished test before importing' : 'Import question data'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setImportingTest(test);
+                    }}
+                  >
+                    <Upload size={16} className="mr-1" />
+                    Import JSON
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="flex-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectTest(test);
@@ -425,6 +445,19 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
           })}
         </div>
       )}
+
+      {importingTest ? (
+        <TestImportDialog
+          test={importingTest}
+          onClose={() => setImportingTest(null)}
+          onImported={(updatedTest) => {
+            setTests((currentTests) => currentTests.map((test) => (
+              test.id === updatedTest.id ? updatedTest : test
+            )));
+            toast.success('Questions imported as a draft');
+          }}
+        />
+      ) : null}
     </div>
   );
 }

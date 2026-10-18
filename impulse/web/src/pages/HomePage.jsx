@@ -16,11 +16,18 @@ import { Button } from '@/components/ui/button';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
 
 function HomePage() {
-  const { getTotalSolved, getAccuracy, getCurrentStreak, solvedQuestions } = useSolvedQuestions();
+  const {
+    getUniqueAttemptedCount,
+    getTotalAttempts,
+    getUniqueSolvedCount,
+    getAccuracy,
+    getCurrentStreak,
+    solvedQuestions,
+  } = useSolvedQuestions();
   const { getMarkedCount } = useMarkedQuestions();
   const { periodCounts } = useMetrics();
 
-  const weeklySolvedData = useMemo(() => {
+  const weeklyAttemptData = useMemo(() => {
     const days = [];
     const today = new Date();
 
@@ -36,7 +43,7 @@ function HomePage() {
 
       solvedQuestions.forEach((entry) => {
         const solvedAt = new Date(entry.timestamp);
-        if (solvedAt >= date && solvedAt < nextDate) {
+        if (entry.question_id && solvedAt >= date && solvedAt < nextDate) {
           solvedOnDay.add(entry.question_id);
         }
       });
@@ -44,7 +51,7 @@ function HomePage() {
       days.push({
         day: date.toLocaleDateString('en-US', { weekday: 'short' }),
         label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        solved: solvedOnDay.size
+        attempted: solvedOnDay.size
       });
     }
 
@@ -63,7 +70,7 @@ function HomePage() {
         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{item.day}</div>
         <div className="mt-1 text-sm font-semibold text-foreground">{item.label}</div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {item.solved} questions solved
+          {item.attempted} unique questions attempted
         </div>
       </div>
     );
@@ -92,12 +99,25 @@ function HomePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               <StatsCard
-                label="Total Questions Solved"
-                value={getTotalSolved()}
+                label="Unique Questions Attempted"
+                value={getUniqueAttemptedCount()}
+                trend="Each question counts once, including reattempts"
                 icon={(props) => <ColoredIcon icon={Target} name="target" size={6} {...props} />}
               />
               <StatsCard
-                label="Overall Accuracy"
+                label="Total Attempts"
+                value={getTotalAttempts()}
+                trend="Includes every reattempt"
+                icon={(props) => <ColoredIcon icon={BookOpen} name="bookopen" size={6} {...props} />}
+              />
+              <StatsCard
+                label="Unique Questions Solved"
+                value={getUniqueSolvedCount()}
+                trend="Answered correctly at least once"
+                icon={(props) => <ColoredIcon icon={Award} name="award" size={6} {...props} />}
+              />
+              <StatsCard
+                label="Attempt Accuracy"
                 value={`${getAccuracy()}%`}
                 icon={(props) => <ColoredIcon icon={TrendingUp} name="trendingup" size={6} {...props} />}
               />
@@ -112,12 +132,12 @@ function HomePage() {
                 icon={(props) => <ColoredIcon icon={BookMarked} name="bookmark" size={6} {...props} />}
               />
               <StatsCard
-                label="Today's Questions"
+                label="Unique Questions Attempted Today"
                 value={periodCounts.daily}
                 icon={(props) => <ColoredIcon icon={Clock} name="clock" size={6} {...props} />}
               />
               <StatsCard
-                label="This Week"
+                label="Unique Questions Attempted This Week"
                 value={periodCounts.weekly}
                 icon={(props) => <ColoredIcon icon={Award} name="award" size={6} {...props} />}
               />
@@ -136,13 +156,13 @@ function HomePage() {
 
                 <Card className="w-full border-border bg-card/90 backdrop-blur-sm overflow-hidden">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-lg font-black uppercase tracking-tight">Solved This Week</CardTitle>
-                    <p className="text-sm text-muted-foreground">Questions solved on each day over the last 7 days.</p>
+                    <CardTitle className="text-lg font-black uppercase tracking-tight">Questions Attempted This Week</CardTitle>
+                    <p className="text-sm text-muted-foreground">Unique questions attempted each day over the last 7 days.</p>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[320px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={weeklySolvedData} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
+                        <BarChart data={weeklyAttemptData} margin={{ top: 12, right: 8, left: 0, bottom: 8 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                           <Tooltip content={<WeeklyTooltip />} cursor={{ fill: 'hsl(var(--foreground) / 0.06)' }} />
                           <XAxis
@@ -159,8 +179,8 @@ function HomePage() {
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontWeight: 600 }}
                           />
-                          <Bar dataKey="solved" radius={[12, 12, 4, 4]}>
-                            {weeklySolvedData.map((entry, index) => (
+                          <Bar dataKey="attempted" radius={[12, 12, 4, 4]}>
+                            {weeklyAttemptData.map((entry, index) => (
                               <Cell
                                 key={`${entry.day}-${entry.label}`}
                                 fill={weeklyChartPalette[index % weeklyChartPalette.length]}

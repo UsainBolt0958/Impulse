@@ -93,21 +93,34 @@ try{
                 return escapeHtml(text).replace(/\n/g, '<br>');
             }
 
+            const inlineMath = [];
+            const textWithInlineMath = text.replace(/\\\(([\s\S]+?)\\\)|(?<!\$)\$(?!\$)([^\$\n]+?)\$(?!\$)/g, (match, parenthesized, dollarDelimited) => {
+                const token = `IMPULSEINLINEMATH${inlineMath.length}TOKEN`;
+                const mathContent = parenthesized || dollarDelimited;
+                inlineMath.push({
+                    token,
+                    html: renderMath(mathContent, false),
+                });
+                return token;
+            });
             const mathRegex = /(?:\$\$([\s\S]+?)\$\$)|(?:\\\[([\s\S]+?)\\\])|(?:\\\(([\s\S]+?)\\\))|(?:\$([^\$]+?)\$)/g;
             let lastIndex = 0;
             let result = '';
             let match;
 
-            while ((match = mathRegex.exec(text)) !== null) {
+            while ((match = mathRegex.exec(textWithInlineMath)) !== null) {
                 const raw = match[0];
-                result += md.render(text.slice(lastIndex, match.index));
+                result += md.render(textWithInlineMath.slice(lastIndex, match.index));
                 const mathContent = match[1] || match[2] || match[3] || match[4] || '';
                 const isDisplay = Boolean(match[1] || match[2]);
                 result += renderMath(mathContent, isDisplay);
                 lastIndex = match.index + raw.length;
             }
 
-            result += md.render(text.slice(lastIndex));
+            result += md.render(textWithInlineMath.slice(lastIndex));
+            inlineMath.forEach(({ token, html }) => {
+                result = result.split(token).join(html);
+            });
             return result;
         }
 
@@ -204,8 +217,8 @@ try{
                             } else {
                                 launchAttempt();
                             }
-                        } else if (paperParam === '1' || paperParam === '2') {
-                            const paperNum = parseInt(paperParam, 10);
+                        } else {
+                            const paperNum = paperParam === '2' ? 2 : 1;
                             const launch = () => showInstructionsModal(paperNum, false);
                             if (document.readyState === 'loading') {
                                 document.addEventListener('DOMContentLoaded', launch);
@@ -1525,9 +1538,12 @@ try{
             },
             
             // PHASE 1: Check and update panic phase status (last 15 mins)
-            updatePanicPhaseStatus: function(timeRemainingSeconds) {
-                const isLast15Mins = timeRemainingSeconds <= 15 * 60;
-                if (isLast15Mins && !this.isPanicPhase) {
+            updatePanicPhaseStatus: function(timeRemainingSeconds, durationMinutes = getAnalysisDurationMinutes()) {
+                const panicWindowSeconds = window.testSeriesAdapter?.getPanicWindowSeconds
+                    ? window.testSeriesAdapter.getPanicWindowSeconds(durationMinutes)
+                    : Math.min(15, durationMinutes) * 60;
+                const isPanicPhase = timeRemainingSeconds <= panicWindowSeconds;
+                if (isPanicPhase && !this.isPanicPhase) {
                     this.isPanicPhase = true;
                     this.panicPhaseStart = Date.now();
                 }
@@ -1573,6 +1589,10 @@ try{
         function initExamDB(paper) {
             const data = {};
             let durationMinutes = 180;
+            const configuredDuration = Number(window.testSeriesAdapter?.config?.duration);
+            if (Number.isFinite(configuredDuration) && configuredDuration > 0) {
+                durationMinutes = configuredDuration;
+            }
 
             if (window.testSeriesAdapter && window.testSeriesAdapter.template && Array.isArray(window.testSeriesAdapter.template.sections) && window.testSeriesAdapter.template.sections.length) {
                 const tpl = window.testSeriesAdapter.template;
@@ -1611,7 +1631,9 @@ try{
                             text: q.question_text || q.text || q.html || q.prompt || '',
                             type: (section.type || q.type || q.questionType || 'MCQ').toUpperCase(),
                             options,
-                            correct: q.answer || q.correct || q.correct_answer || q.key || null,
+                            correct: q.answer ?? q.correct ?? q.correct_answer ?? q.key ?? null,
+                            solution: q.solution || q.explanation || '',
+                            sourceNumber: q.sourceNumber || '',
                             sel: null,
                             st: 'not-visited',
                             sub: subject,
@@ -1619,10 +1641,6 @@ try{
                         };
                     });
                 });
-
-                if (window.testSeriesAdapter.config?.duration) {
-                    durationMinutes = window.testSeriesAdapter.config.duration;
-                }
 
                 if (window.testSeriesAdapter.answerKey) {
                     window.ANSWER_KEY = window.ANSWER_KEY || {};
@@ -1829,7 +1847,7 @@ try{
             const qImgBox = qImg ? qImg.closest('.q-img-box') : null;
             const qTextEl = document.getElementById('q-text');
             
-            if(lblQno) lblQno.innerText = `Question No. ${q.id}`;
+            if(lblQno) lblQno.innerText = `Question No. ${q.sourceNumber || q.id}`;
             if(markPos) markPos.innerText = `+${pos}`;
             if(markNeg) markNeg.innerText = `-${neg}`;
             if(lblPal) lblPal.innerText = `${s} : SECTION ${sec}`;
@@ -2017,6 +2035,19 @@ try{
                     inp.appendChild(timeBadge);
                 }
 
+                if (q.solution && String(q.solution).trim()) {
+                    const solutionPanel = document.createElement('section');
+                    solutionPanel.className = 'question-solution-review';
+                    solutionPanel.style.cssText = 'margin-top:16px;padding:16px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;';
+                    const solutionTitle = document.createElement('h3');
+                    solutionTitle.textContent = 'Solution';
+                    solutionTitle.style.cssText = 'margin:0 0 8px;font-size:16px;font-weight:700;';
+                    const solutionText = document.createElement('div');
+                    solutionText.innerHTML = renderRichText(q.solution);
+                    solutionPanel.append(solutionTitle, solutionText);
+                    inp.appendChild(solutionPanel);
+                }
+
                 // Disable editing
                 options.forEach(opt => opt.style.pointerEvents = 'none');
                 const kpBtns = inp.querySelectorAll('.kp-btn');
@@ -2193,7 +2224,10 @@ try{
                     
                     // PHASE 1: Check for panic phase (last 15 mins)
                     if (analyticsTracker && analyticsTracker.updatePanicPhaseStatus) {
-                        analyticsTracker.updatePanicPhaseStatus(sess.tm);
+                        analyticsTracker.updatePanicPhaseStatus(
+                            sess.tm,
+                            getAnalysisDurationMinutes()
+                        );
                     }
                     
                     // Save every 15 seconds for consistency (aligned with auto-save throttle)
@@ -2423,7 +2457,9 @@ try{
                                 text: q.text || q.html || '',
                                 type: sec.type || q.type || 'MCQ',
                                 options: (q.options || []).map((o, i) => ({ key: o.key || String.fromCharCode(65+i), text: o.text || o, imageUrl: resolveQuestionImageUrl(o.imageUrl || o.img || '') })),
-                                correct: q.answer || q.correct || q.key || null,
+                                correct: q.answer ?? q.correct ?? q.key ?? null,
+                                solution: q.solution || q.explanation || '',
+                                sourceNumber: q.sourceNumber || '',
                                 sel: null,
                                 st: null
                             }));
@@ -2574,11 +2610,35 @@ try{
             }
         }
 
+        function getAnalysisDurationMinutes(result) {
+            const resultDuration = Number(result?.durationMinutes);
+            if (Number.isFinite(resultDuration) && resultDuration > 0) return resultDuration;
+
+            const configuredDuration = Number(window.testSeriesAdapter?.config?.duration);
+            if (Number.isFinite(configuredDuration) && configuredDuration > 0) return configuredDuration;
+
+            return (result?.solutions || []).length > 60 ? 360 : 180;
+        }
+
+        function setAnalysisDurationLabels(durationMinutes) {
+            const timeLimit = document.getElementById('result-time-limit');
+            const analysisLimit = document.getElementById('analysis-time-limit');
+            const panicWindowTitle = document.getElementById('panic-window-title');
+            const panicWindowDescription = document.getElementById('panic-window-description');
+            const panicWindowMinutes = Math.min(15, durationMinutes);
+
+            if (timeLimit) timeLimit.innerText = `Minutes / ${durationMinutes}`;
+            if (analysisLimit) analysisLimit.innerText = `out of ${durationMinutes} min`;
+            if (panicWindowTitle) panicWindowTitle.innerText = panicWindowMinutes;
+            if (panicWindowDescription) panicWindowDescription.innerText = panicWindowMinutes;
+        }
+
         /* RESULT LOGIC */
         function calcScore() {
             // Collect answers for server-side scoring. If server scoring isn't available
             // compute a deterministic provisional score locally so user sees immediate results.
-            let res = { answers: [], totalQuestions: 0, attempted: 0, sub: {}, time: (window.testSeriesAdapter?.config?.duration || 180) - Math.ceil(sess.tm/60) };
+            const durationMinutes = getAnalysisDurationMinutes();
+            let res = { answers: [], totalQuestions: 0, attempted: 0, sub: {}, durationMinutes, time: durationMinutes - Math.ceil(sess.tm/60) };
             getSessionSubjects().forEach(subject => {
                 getSessionSections(subject).forEach(section => {
                     const questions = (sess.data[subject] && sess.data[subject][section]) ? sess.data[subject][section] : [];
@@ -2613,7 +2673,7 @@ try{
 
             // PROVISIONAL LOCAL SCORING: deterministic heuristic so user sees immediate results
             try {
-                const provisional = { total: 0, sub: {}, acc: { cor:0, wrg:0, un:0, partial:0 }, time: res.time, solutions: [], paper: sess.paper || 1 };
+                const provisional = { total: 0, sub: {}, acc: { cor:0, wrg:0, un:0, partial:0 }, time: res.time, durationMinutes, solutions: [], paper: sess.paper || 1 };
                 if (!Array.isArray(res.answers)) {
                     console.warn('res.answers is not an array:', res.answers);
                     // Still save what we have
@@ -3239,7 +3299,7 @@ try{
             analyticsTracker.marksEarnedLog = mergeSubjectLogs(analyticsTracker.marksEarnedLog, a1.marksEarnedLog, a2.marksEarnedLog);
             
             // Merge golden hour logs - adjust p2 timestamps to be after p1
-            const p1MaxTime = r1.time || 180;
+            const p1MaxTime = getAnalysisDurationMinutes(r1);
             const goldenHour1 = (a1.goldenHourLog || []).map(e => ({ ...e, paper: 1 }));
             const goldenHour2 = (a2.goldenHourLog || []).map(e => ({ 
                 ...e, 
@@ -3294,6 +3354,7 @@ try{
             
             const comb = {
                 total: (r1.total || 0) + (r2.total || 0),
+                durationMinutes: getAnalysisDurationMinutes(r1) + getAnalysisDurationMinutes(r2),
                 sub: mergeSubjectLogs(r1.sub || {}, r2.sub || {}),
                 acc: { 
                     cor: (r1.acc?.cor || 0) + (r2.acc?.cor || 0), 
@@ -3305,6 +3366,7 @@ try{
                 solutions: [...(r1.solutions || []).map(s => ({...s, paper: 1})), ...(r2.solutions || []).map(s => ({...s, paper: 2}))] // Merge with paper identifier
             };
             document.getElementById('res-subtitle').innerText = "COMBINED (PAPER 1 + PAPER 2)";
+            setAnalysisDurationLabels(comb.durationMinutes);
 
 // Add to history
 history.attempts.push(currentAttempt);
@@ -3333,8 +3395,8 @@ const headerRow = document.querySelector('#section-scorecard thead tr');
 if (headerRow && subjectKeys.length) {
     headerRow.innerHTML = `<th>PAPER / SUBJECT</th>${subjectKeys.map(sub => `<th>${sub}</th>`).join('')}<th>TOTAL</th>`;
 }
-const isCombinedResult = (comb.solutions || []).length > 60;
-let htm = `<tr><td>Score</td>${subjectKeys.map(sub => `<td>${comb.sub[sub] || 0}</td>`).join('')}<td class="sc-row-total">${comb.total} / ${isCombinedResult ? 360 : 180}</td></tr>`;
+const maxPossibleScore = getMaximumPossibleScore(comb);
+let htm = `<tr><td>Score</td>${subjectKeys.map(sub => `<td>${comb.sub[sub] || 0}</td>`).join('')}<td class="sc-row-total">${comb.total} / ${maxPossibleScore}</td></tr>`;
 tb.innerHTML = htm;
 
 // Chart (include partial answers)
@@ -3439,12 +3501,19 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
         }
 
         
+        function getMaximumPossibleScore(result) {
+            const dynamicMaximum = window.testSeriesAdapter?.getMaximumScore?.();
+            if (Number.isFinite(dynamicMaximum) && dynamicMaximum > 0) {
+                return dynamicMaximum;
+            }
+            return (result.solutions || []).length > 60 ? 360 : 180;
+        }
+
         function renderResultUI(res) {
             updatePredictedPercentileDisplay(res);
+            setAnalysisDurationLabels(getAnalysisDurationMinutes(res));
             
-            // Update user score bar (max 180 or 360)
-            const isCombinedResult = (res.solutions || []).length > 60;
-            const maxPossibleScore = isCombinedResult ? 360 : 180;
+            const maxPossibleScore = getMaximumPossibleScore(res);
             const userScorePercent = (res.total / maxPossibleScore) * 100;
             document.getElementById('user-bar').style.height = userScorePercent + '%';
             document.getElementById('user-score').innerText = res.total;
@@ -3780,22 +3849,23 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 const partial = res.acc && res.acc.partial ? res.acc.partial : 0;
                 
                 const totalAttempted = cor + wrg + partial;
-                // res.time is already time USED (calculated as 180 - remaining time)
+                const durationMinutes = getAnalysisDurationMinutes(res);
                 let timeUsed = res.time || 0;
                 if (timeUsed <= 0 && analyticsTracker && analyticsTracker.timePerQuestion) {
                     const times = Object.values(analyticsTracker.timePerQuestion).filter(t => t > 0);
                     timeUsed = times.length > 0 ? Math.round(times.reduce((a, b) => a + b, 0) / 60) : 0;
                 }
+                timeUsed = Math.min(Math.max(timeUsed, 0), durationMinutes);
                 
                 if (timeUsed <= 0 || totalAttempted <= 0) {
-                    return { avgTimePerQ: 0, timeUsed: 0, qpm: 0, apm: 0, totalAttempted: 0 };
+                    return { avgTimePerQ: 0, timeUsed: 0, qpm: 0, apm: 0, totalAttempted: 0, durationMinutes };
                 }
                 
                 const avgTimePerQ = Math.round((timeUsed * 60) / totalAttempted);
                 const qpm = Math.round((totalAttempted / timeUsed) * 10) / 10; // Round to 1 decimal
                 const apm = Math.round((cor / timeUsed) * 10) / 10; // Round to 1 decimal
 
-                return { avgTimePerQ, timeUsed, qpm, apm, totalAttempted };
+                return { avgTimePerQ, timeUsed, qpm, apm, totalAttempted, durationMinutes };
             } catch(e) {
                 console.error('Time metrics error:', e);
                 return null;
@@ -3812,8 +3882,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 const apmEl = document.getElementById('apm');
                 
                 if(avgEl) avgEl.innerText = Math.round(metrics.avgTimePerQ || 0) + 's';
-                const isCombined = metrics.timeUsed > 180;
-                if(totalEl) totalEl.innerText = Math.round(metrics.timeUsed || 0) + (isCombined ? '/360' : '/180');
+                if(totalEl) totalEl.innerText = `${Math.round(metrics.timeUsed || 0)}/${metrics.durationMinutes}`;
                 if(qpmEl) qpmEl.innerText = (Math.round(metrics.qpm * 10) / 10) || '0';
                 if(apmEl) apmEl.innerText = (Math.round(metrics.apm * 10) / 10) || '0';
             } catch(e) {
@@ -4116,14 +4185,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                     const subject = sol.sub || '';
                     const section = sol.sec || '';
                     const qid = sol.id || (idx + 1);
-                    const paper = sol.paper || 1;
-                    const compositeKey = `${subject}_${section}_${qid}`;
-                    
-                    // Get time spent using paper-specific prefixed key
-                    const prefixedKey = `paper${paper}_${compositeKey}`;
-                    const timeSpent = analyticsTracker.timePerQuestion[prefixedKey] 
-                        || analyticsTracker.timePerQuestion[compositeKey] 
-                        || 0;
+                    const timeSpent = getQuestionTimeSpent(sol, idx, res);
                     
                     // Determine color based on time - NEW THRESHOLDS
                     let bgColor, textColor;
@@ -4186,6 +4248,18 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 const container = document.getElementById('time-heatmap-full');
                 if (container) container.innerHTML = '<p style="text-align:center;color:#f00;">Error generating heatmap</p>';
             }
+        }
+
+        function getQuestionTimeSpent(solution, index, result) {
+            const subject = solution.sub || '';
+            const section = solution.sec || '';
+            const questionId = solution.id || (index + 1);
+            const paper = solution.paper || result.paper || 1;
+            const compositeKey = `${subject}_${section}_${questionId}`;
+
+            return analyticsTracker.timePerQuestion[`paper${paper}_${compositeKey}`]
+                || analyticsTracker.timePerQuestion[compositeKey]
+                || 0;
         }
 
         // 2. PACE ANALYSIS TIMELINE - DISABLED (Analytics tracking preserved)
@@ -4476,15 +4550,10 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 
                 // Create bins from actual time data - ONLY for attempted questions (correct, wrong, partial)
                 const times = res.solutions
-                    .filter(sol => sol.status === 'correct' || sol.status === 'wrong' || sol.status === 'partial')
-                    .map(sol => {
-                        // Look up using composite key: subject_section_qid (check prefixed too)
-                        const compositeKey = `${sol.sub}_${sol.sec}_${sol.id}`;
-                        return analyticsTracker.timePerQuestion['paper1_' + compositeKey] 
-                            || analyticsTracker.timePerQuestion['paper2_' + compositeKey]
-                            || analyticsTracker.timePerQuestion[compositeKey] 
-                            || 0;
-                    }).filter(t => t > 0);
+                    .map((sol, index) => ({ solution: sol, index }))
+                    .filter(({ solution }) => solution.status === 'correct' || solution.status === 'wrong' || solution.status === 'partial')
+                    .map(({ solution, index }) => getQuestionTimeSpent(solution, index, res))
+                    .filter(timeSpent => timeSpent > 0);
                 
                 // If no attempted questions with time data, show message
                 if (times.length === 0) {
@@ -4706,15 +4775,18 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 const container = document.getElementById('golden-hour-container');
                 if (!container) return;
                 
-                // Divide exam into 30-minute blocks (0-30, 30-60, 60-90, 90-120, 120-150, 150-180)
-                const blocks = [
-                    { label: '0-30 min', start: 0, end: 30, marks: 0, questions: [] },
-                    { label: '30-60 min', start: 30, end: 60, marks: 0, questions: [] },
-                    { label: '60-90 min', start: 60, end: 90, marks: 0, questions: [] },
-                    { label: '90-120 min', start: 90, end: 120, marks: 0, questions: [] },
-                    { label: '120-150 min', start: 120, end: 150, marks: 0, questions: [] },
-                    { label: '150-180 min', start: 150, end: 180, marks: 0, questions: [] }
-                ];
+                const durationMinutes = getAnalysisDurationMinutes(res);
+                const blocks = [];
+                for (let start = 0; start < durationMinutes; start += 30) {
+                    const end = Math.min(start + 30, durationMinutes);
+                    blocks.push({
+                        label: `${start}-${end} min`,
+                        start,
+                        end,
+                        marks: 0,
+                        questions: []
+                    });
+                }
                 
                 // Process golden hour log to calculate marks per block
                 analyticsTracker.goldenHourLog.forEach(entry => {
@@ -4901,12 +4973,16 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
         // 4. PANIC MODE METRIC - Last 15 mins accuracy vs baseline
         function generatePanicModeMetric(res) {
             try {
+                const durationMinutes = getAnalysisDurationMinutes(res);
+                const panicWindowMinutes = Math.min(15, durationMinutes);
+                const panicStartMinute = durationMinutes - panicWindowMinutes;
+
                 // Check for combined stats first (from merged results)
                 const hasPanicStats = analyticsTracker.panicPhaseStats && analyticsTracker.panicPhaseStats.totalCount > 0;
                 
                 if ((!analyticsTracker.panicPhaseLog || analyticsTracker.panicPhaseLog.length === 0) && !hasPanicStats) {
                     const container = document.getElementById('panic-mode-container');
-                    if (container) container.innerHTML = '<p style="text-align:center;color:#999;padding:15px;">Exam finished before panic phase (last 15 mins)</p>';
+                    if (container) container.innerHTML = `<p style="text-align:center;color:#999;padding:15px;">Exam finished before the final ${panicWindowMinutes} mins</p>`;
                     return;
                 }
                 
@@ -4931,8 +5007,13 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 
                 // Calculate baseline accuracy (before panic phase)
                 const baselineSolutions = res.solutions.filter(s => {
-                    const sTime = analyticsTracker.goldenHourLog.find(g => g.qid === s.id)?.elapsedMinutes || 0;
-                    return sTime < 165; // Before last 15 mins
+                    const sTime = analyticsTracker.goldenHourLog.find(g => (
+                        g.qid === s.id
+                        && g.subject === s.sub
+                        && g.section === s.sec
+                        && (s.paper == null || g.paper == null || g.paper === s.paper)
+                    ))?.elapsedMinutes || 0;
+                    return sTime < panicStartMinute;
                 });
                 const baselineCorrect = baselineSolutions.filter(s => s.status === 'correct').length;
                 const baselineAttempted = baselineSolutions.filter(s => s.status === 'correct' || s.status === 'wrong' || s.status === 'partial').length;
@@ -4942,7 +5023,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 
                 let html = `<div style="margin-bottom:15px; padding:12px; background:${accuracyDrop > 20 ? '#fee2e2' : '#d1fae5'}; border-radius:8px; border-left:4px solid ${accuracyDrop > 20 ? '#ef4444' : '#10b981'};">`;
                 html += `<div style="font-weight:600; color:${accuracyDrop > 20 ? '#991b1b' : '#065f46'};">${accuracyDrop > 20 ? '⚠️ Panic Mode Detected' : '✅ Steady Under Pressure'}</div>`;
-                html += `<div style="font-size:12px; color:${accuracyDrop > 20 ? '#991b1b' : '#065f46'}; margin-top:5px;">Last 15 mins accuracy: ${panicAccuracy.toFixed(1)}%</div>`;
+                html += `<div style="font-size:12px; color:${accuracyDrop > 20 ? '#991b1b' : '#065f46'}; margin-top:5px;">Last ${panicWindowMinutes} mins accuracy: ${panicAccuracy.toFixed(1)}%</div>`;
                 html += `<div style="font-size:11px; color:${accuracyDrop > 20 ? '#991b1b' : '#065f46'}; margin-top:3px;">Baseline: ${baselineAccuracy.toFixed(1)}% | Drop: ${accuracyDrop.toFixed(1)}%</div>`;
                 html += `</div>`;
                 

@@ -39,6 +39,7 @@ import {
   CUSTOM_TEST_SESSION_KEY,
   getQuestionType,
 } from '@/lib/customTest';
+import { appendSolvedQuestionAttempts } from '@/lib/solvedQuestions';
 
 function readSession() {
   try {
@@ -158,6 +159,20 @@ function CustomTestExamPage() {
       const storedResults = JSON.parse(window.localStorage.getItem(CUSTOM_TEST_RESULTS_KEY) || '[]');
       const results = Array.isArray(storedResults) ? storedResults : [];
       window.localStorage.setItem(CUSTOM_TEST_RESULTS_KEY, JSON.stringify([result, ...results].slice(0, 50)));
+      const attemptTimestamp = new Date(result.submittedAt).toISOString();
+      appendSolvedQuestionAttempts(result.questionResults
+        .filter((questionResult) => questionResult.hasAnswer)
+        .map((questionResult) => ({
+          question_id: questionResult.questionId,
+          exam: 'Custom Test',
+          subject: questionResult.subject,
+          chapter: questionResult.chapter,
+          difficulty: questionResult.difficulty,
+          is_correct: questionResult.isCorrect,
+          time_taken: questionResult.timeSpent,
+          timestamp: attemptTimestamp,
+          attempt_id: `custom-test:${result.id}:${questionResult.questionId}`,
+        })));
       window.localStorage.removeItem(CUSTOM_TEST_SESSION_KEY);
       toast.success(automatic ? 'Time is up. Your test has been submitted.' : 'Custom test submitted.');
       navigate(`/custom-test/results/${encodeURIComponent(result.id)}`, { replace: true });

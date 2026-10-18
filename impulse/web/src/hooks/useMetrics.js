@@ -26,6 +26,7 @@ export function useMetrics() {
 
       solvedQuestions.forEach(sq => {
         const date = new Date(sq.timestamp);
+        if (!sq.question_id || !Number.isFinite(date.getTime())) return;
         if (date >= today) daily.add(sq.question_id);
         if (date >= weekAgo) weekly.add(sq.question_id);
         if (date >= yearAgo) yearly.add(sq.question_id);

@@ -71,7 +71,7 @@ export async function loadPortalStateFromServer() {
 }
 
 export async function loadPublicQuestionsFromServer() {
-  const data = await requestJson('/questions', { method: 'GET' });
+  const data = await requestJson('/questions', { method: 'GET', cache: 'no-store' });
   return Array.isArray(data?.questions) ? data.questions : [];
 }
 
@@ -180,20 +180,25 @@ export async function getSeriesTests(seriesId) {
 // Image Upload
 export async function uploadImage(file) {
   if (!file) return null;
-  
-  return new Promise((resolve) => {
+
+  const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result.split(',')[1];
-      requestJson('/uploads', {
-        method: 'POST',
-        body: JSON.stringify({
-          filename: file.name,
-          data: base64,
-          mime: file.type,
-        }),
-      }).then(resolve);
-    };
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error(`Could not read "${file.name}".`));
     reader.readAsDataURL(file);
+  });
+  if (typeof dataUrl !== 'string') {
+    throw new Error(`Could not read "${file.name}" as an image.`);
+  }
+  const base64 = dataUrl.split(',')[1];
+  if (!base64) throw new Error(`Could not encode "${file.name}" as an image.`);
+
+  return requestJsonOrThrow('/uploads', {
+    method: 'POST',
+    body: JSON.stringify({
+      filename: file.name,
+      data: base64,
+      mime: file.type,
+    }),
   });
 }

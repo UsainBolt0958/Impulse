@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import QuestionCard from '@/components/QuestionCard.jsx';
@@ -312,10 +312,22 @@ function PYQPracticePage() {
 
   // Navigation State
   const location = useLocation();
+  const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [selectedExam, setSelectedExam] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
+
+  useLayoutEffect(() => {
+    if (step === 4) {
+      const scrollContainer = document.querySelector('.main-content');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = 0;
+      } else {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, [step, selectedChapter]);
 
   // Filter State
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -384,7 +396,8 @@ function PYQPracticePage() {
   };
 
   useEffect(() => {
-    if (location.state?.practiceState) {
+    const savedPracticeState = location.state?.practiceState;
+    if (savedPracticeState) {
       const {
         step: savedStep,
         selectedExam: savedExam,
@@ -392,7 +405,7 @@ function PYQPracticePage() {
         selectedChapter: savedChapter,
         appliedFilters: savedAppliedFilters,
         localFilters: savedLocalFilters,
-      } = location.state.practiceState;
+      } = savedPracticeState;
 
       setStep(savedStep || 1);
       setSelectedExam(savedExam || null);
@@ -400,8 +413,13 @@ function PYQPracticePage() {
       setSelectedChapter(savedChapter || null);
       setAppliedFilters(savedAppliedFilters || { difficulty: [], year: [] });
       setLocalFilters(savedLocalFilters || { difficulty: [], year: [] });
+      navigate({
+        pathname: location.pathname,
+        search: location.search,
+        hash: location.hash,
+      }, { replace: true, state: null });
     }
-  }, [location.state]);
+  }, [location.hash, location.pathname, location.search, location.state, navigate]);
 
   const openFilterModal = () => {
     setLocalFilters(appliedFilters);
@@ -441,11 +459,22 @@ function PYQPracticePage() {
         return accumulator;
       }, new Map());
 
-    return presetCards.map(({ chapter, icon }) => ({
+    const presetChapterNames = new Set(presetCards.map(({ chapter }) => chapter));
+    const chaptersWithCounts = presetCards.map(({ chapter, icon }) => ({
       chapter,
       icon,
       count: questionChapterCounts.get(chapter) || 0,
     }));
+    const iconPool = SUBJECT_CHAPTER_ICON_POOLS[selectedSubject] || [BookOpen, Calculator, Atom, FlaskConical];
+    const customChapterCards = [...questionChapterCounts.entries()]
+      .filter(([chapter]) => chapter !== 'Unspecified' && !presetChapterNames.has(chapter))
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([chapter, count], index) => ({
+        chapter,
+        count,
+        icon: iconPool[(presetCards.length + index) % iconPool.length],
+      }));
+    return [...chaptersWithCounts, ...customChapterCards];
   }, [questions, selectedExam, selectedSubject]);
 
   const filteredQuestions = useMemo(() => {
@@ -458,11 +487,23 @@ function PYQPracticePage() {
       if (appliedFilters.difficulty.length > 0 && !appliedFilters.difficulty.includes(q.difficulty)) return false;
       
       // Note: Data seed year is a number, checking against string or number
-      if (appliedFilters.year.length > 0 && !appliedFilters.year.includes(q.year.toString())) return false;
+      if (appliedFilters.year.length > 0 && !appliedFilters.year.includes(String(q.year))) return false;
       
       return true;
     });
   }, [questions, selectedExam, selectedSubject, selectedChapter, appliedFilters]);
+  const availableQuestionYears = useMemo(() => {
+    const matchingQuestionYears = (questions || [])
+      .filter((question) => (
+        question.exam === selectedExam
+        && question.subject === selectedSubject
+        && (!selectedChapter || question.chapter === selectedChapter)
+      ))
+      .map((question) => String(question.year))
+      .filter((year) => /^\d{4}$/.test(year));
+    return [...new Set([...YEARS, ...matchingQuestionYears])]
+      .sort((left, right) => Number(right) - Number(left));
+  }, [questions, selectedExam, selectedSubject, selectedChapter]);
 
   return (
     <>
@@ -603,10 +644,11 @@ function PYQPracticePage() {
                 {/* Questions List */}
                 {filteredQuestions.length > 0 ? (
                   <div className="space-y-4">
-                    {filteredQuestions.map(question => (
+                    {filteredQuestions.map((question, index) => (
                       <QuestionCard
                         key={question.id}
                         question={question}
+                        questionNumber={index + 1}
                         isSolved={isQuestionSolved(question.id)}
                         state={{
                           from: '/pyq-practice',
@@ -675,7 +717,7 @@ function PYQPracticePage() {
               <div className="space-y-4">
                 <h4 className="font-bold text-sm uppercase tracking-widest text-muted-foreground border-b-2 border-border pb-2">Year</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  {YEARS.map(year => (
+                  {availableQuestionYears.map(year => (
                     <div key={year} className="flex items-center gap-3">
                       <Checkbox
                         id={`year-${year}`}

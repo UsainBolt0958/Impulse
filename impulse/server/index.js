@@ -84,11 +84,44 @@ async function writeJsonFile(filePath, data) {
 
 function sendFile(response, filePath, contentType = 'application/octet-stream') {
   readFile(filePath).then((buf) => {
-    response.writeHead(200, { 'Content-Type': contentType });
+    response.writeHead(200, {
+      'Content-Type': contentType,
+      'X-Content-Type-Options': 'nosniff',
+      ...(contentType === 'image/svg+xml'
+        ? {
+            'Content-Security-Policy': "default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src data:; sandbox",
+          }
+        : {}),
+    });
     response.end(buf);
   }).catch(() => {
     sendJson(response, 404, { error: 'Not found' });
   });
+}
+
+function getImageContentType(filename) {
+  const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+  return {
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+  }[extension] || null;
+}
+
+function isSafeSvg(buffer) {
+  const svg = buffer.toString('utf8').replace(/^\uFEFF/, '');
+  if (!/^\s*(?:<\?xml[^?]*\?>\s*)?<svg\b/i.test(svg)) return false;
+
+  return !(
+    /<!DOCTYPE|<!ENTITY|<\s*(?:script|foreignObject|iframe|object|embed)\b/i.test(svg)
+    || /\bon[a-z]+\s*=/i.test(svg)
+    || /\b(?:href|xlink:href)\s*=\s*(["'])(?!#)[\s\S]*?\1/i.test(svg)
+    || /\bsrc\s*=/i.test(svg)
+    || /url\(\s*(?!#)/i.test(svg)
+    || /@import|javascript\s*:/i.test(svg)
+  );
 }
 
 function sendJson(response, statusCode, payload) {
@@ -179,9 +212,23 @@ const server = createServer(async (request, response) => {
 
   // Serve uploaded files
   if (url.pathname.startsWith('/uploads/')) {
-    const rel = url.pathname.replace('/uploads/', '');
-    const filePath = resolve(UPLOADS_DIR, rel);
-    return sendFile(response, filePath, 'application/octet-stream');
+    let rel;
+    try {
+      rel = decodeURIComponent(url.pathname.slice('/uploads/'.length));
+    } catch {
+      sendJson(response, 400, { error: 'Invalid upload path' });
+      return;
+    }
+    if (!rel || rel !== rel.split(/[\\/]/).pop() || rel.includes('..')) {
+      sendJson(response, 400, { error: 'Invalid upload path' });
+      return;
+    }
+    const contentType = getImageContentType(rel);
+    if (!contentType) {
+      sendJson(response, 415, { error: 'Unsupported uploaded file type' });
+      return;
+    }
+    return sendFile(response, resolve(UPLOADS_DIR, rel), contentType);
   }
 
   // Engine: list public series
@@ -393,13 +440,53 @@ const server = createServer(async (request, response) => {
       for await (const chunk of request) chunks.push(chunk);
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       // Expect { filename, data: base64, mime }
-      if (!body.data || !body.filename) { sendJson(response, 400, { error: 'Missing data or filename' }); return; }
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${body.filename.replace(/[^a-zA-Z0-9._-]/g, '')}`;
-      const outPath = resolve(UPLOADS_DIR, name);
+      if (
+        typeof body.data !== 'string'
+        || !body.data
+        || typeof body.filename !== 'string'
+        || !body.filename
+      ) {
+        sendJson(response, 400, { error: 'Missing data or filename' });
+        return;
+      }
+      const contentType = getImageContentType(body.filename);
+      if (!contentType) {
+        sendJson(response, 415, { error: 'Only SVG, PNG, JPG, and WEBP images are supported' });
+        return;
+      }
+      const expectedMime = contentType;
+      const mimeAliases = contentType === 'image/jpeg' ? ['image/jpeg', 'image/jpg'] : [contentType];
+      if (body.mime && !mimeAliases.includes(body.mime)) {
+        sendJson(response, 415, { error: 'Image file extension and MIME type do not match' });
+        return;
+      }
+      if (typeof body.data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(body.data)) {
+        sendJson(response, 400, { error: 'Invalid base64 image data' });
+        return;
+      }
+      if (body.data.length > Math.ceil(5 * 1024 * 1024 * 4 / 3) + 4) {
+        sendJson(response, 413, { error: 'Image exceeds the 5 MB upload limit' });
+        return;
+      }
       const buf = Buffer.from(body.data, 'base64');
+      if (buf.length > 5 * 1024 * 1024) {
+        sendJson(response, 413, { error: 'Image exceeds the 5 MB upload limit' });
+        return;
+      }
+      if (contentType === 'image/svg+xml' && !isSafeSvg(buf)) {
+        sendJson(response, 400, { error: 'SVG contains unsupported or unsafe markup' });
+        return;
+      }
+      const safeFilename = body.filename.split(/[\\/]/).pop().replace(/[^a-zA-Z0-9._-]/g, '');
+      if (!safeFilename || safeFilename === '.' || safeFilename === '..') {
+        sendJson(response, 400, { error: 'Invalid image filename' });
+        return;
+      }
+      const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${safeFilename}`;
+      const outPath = resolve(UPLOADS_DIR, name);
       await writeFile(outPath, buf);
       const urlPath = `/uploads/${name}`;
-      sendJson(response, 200, { url: urlPath });
+      sendJson(response, 200, { url: urlPath, mime: expectedMime });
     } catch (e) {
       sendJson(response, 400, { error: 'Invalid JSON body' });
     }

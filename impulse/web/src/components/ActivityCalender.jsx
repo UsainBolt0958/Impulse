@@ -5,10 +5,20 @@ import { useQuestions } from '@/hooks/useQuestions';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 function toDateKey(date) {
+  if (Number.isNaN(date.getTime())) return null;
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getUniqueQuestionCount(entries) {
+  return new Set(entries.map(entry => entry.question_id).filter(Boolean)).size;
+}
+
+function getEntryExam(entry, question) {
+  if (String(entry.attempt_id || '').startsWith('custom-test:')) return 'Custom Test';
+  return entry.exam || question?.exam || 'Unknown';
 }
 
 function ActivityCalendar({ compact = false }) {
@@ -38,7 +48,7 @@ function ActivityCalendar({ compact = false }) {
         const sqDate = toDateKey(new Date(sq.timestamp));
         return sqDate === key;
       });
-      cells.push({ key, day, entries });
+      cells.push({ key, day, entries, questionCount: getUniqueQuestionCount(entries) });
     }
     while (cells.length % 7 !== 0) cells.push(null);
     return cells;
@@ -50,16 +60,17 @@ function ActivityCalendar({ compact = false }) {
   }, [selectedDate, solvedQuestions]);
 
   const examBreakdown = useMemo(() => {
-    const counts = {};
+    const questionIdsByExam = {};
 
     selectedEntries.forEach(entry => {
       const question = questions.find(q => q.id === entry.question_id);
-      const exam = question?.exam || 'Unknown';
-      counts[exam] = (counts[exam] || 0) + 1;
+      const exam = getEntryExam(entry, question);
+      if (!questionIdsByExam[exam]) questionIdsByExam[exam] = new Set();
+      questionIdsByExam[exam].add(entry.question_id);
     });
 
-    return Object.entries(counts)
-      .map(([exam, count]) => ({ exam, count }))
+    return Object.entries(questionIdsByExam)
+      .map(([exam, questionIds]) => ({ exam, count: questionIds.size }))
       .sort((a, b) => b.count - a.count || a.exam.localeCompare(b.exam));
   }, [selectedEntries, questions]);
 
@@ -68,21 +79,22 @@ function ActivityCalendar({ compact = false }) {
 
     return selectedEntries.filter(entry => {
       const question = questions.find(q => q.id === entry.question_id);
-      return (question?.exam || 'Unknown') === selectedExam;
+      return getEntryExam(entry, question) === selectedExam;
     });
   }, [selectedEntries, questions, selectedExam]);
 
   const subjectDistribution = useMemo(() => {
-    const counts = {};
+    const questionIdsBySubject = {};
 
     selectedExamEntries.forEach(entry => {
       const question = questions.find(q => q.id === entry.question_id);
       const subject = question?.subject || 'Unknown';
-      counts[subject] = (counts[subject] || 0) + 1;
+      if (!questionIdsBySubject[subject]) questionIdsBySubject[subject] = new Set();
+      questionIdsBySubject[subject].add(entry.question_id);
     });
 
-    return Object.entries(counts)
-      .map(([subject, count]) => ({ subject, count }))
+    return Object.entries(questionIdsBySubject)
+      .map(([subject, questionIds]) => ({ subject, count: questionIds.size }))
       .sort((a, b) => b.count - a.count || a.subject.localeCompare(b.subject));
   }, [selectedExamEntries, questions]);
 
@@ -96,7 +108,7 @@ function ActivityCalendar({ compact = false }) {
     return (
       <div className="rounded-xl border border-border bg-card px-3 py-2 shadow-lg">
         <div className="text-sm font-semibold text-foreground">{item.name}</div>
-        <div className="text-xs text-muted-foreground">{item.value} solved</div>
+        <div className="text-xs text-muted-foreground">{item.value} unique questions attempted</div>
       </div>
     );
   };
@@ -105,8 +117,14 @@ function ActivityCalendar({ compact = false }) {
   const examChartData = examDistribution.map(item => ({ name: item.exam, value: item.count }));
 
   const selectedStats = useMemo(() => {
-    const total = selectedExamEntries.length;
-    const correct = selectedExamEntries.filter(e => e.is_correct).length;
+    const questionIds = new Set(selectedEntries.map(entry => entry.question_id).filter(Boolean));
+    const correctQuestionIds = new Set(
+      selectedEntries
+        .filter(entry => entry.is_correct && entry.question_id)
+        .map(entry => entry.question_id)
+    );
+    const total = questionIds.size;
+    const correct = correctQuestionIds.size;
     const accuracy = total ? ((correct / total) * 100).toFixed(1) : '0.0';
     return { total, correct, accuracy };
   }, [selectedExamEntries]);
@@ -167,6 +185,10 @@ function ActivityCalendar({ compact = false }) {
             </div>
           </div>
 
+          <p className={`relative z-10 mb-3 text-center text-muted-foreground ${compact ? 'text-[9px] sm:text-[10px]' : 'text-xs'}`}>
+            Daily totals count unique questions per day. Reattempts on another day appear in both daily totals but count once on the dashboard.
+          </p>
+
           <div className={`relative z-10 grid grid-cols-7 ${compact ? 'gap-1 mb-1 text-[9px]' : 'gap-2 sm:gap-3 mb-2 text-[11px] sm:text-xs'} font-semibold uppercase tracking-[0.18em] text-muted-foreground`}>
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className={`px-1 py-1 text-center ${compact ? 'text-[10px]' : ''}`}>{compact ? day[0] : day}</div>
@@ -179,7 +201,7 @@ function ActivityCalendar({ compact = false }) {
                 return <div key={`empty-${index}`} className={`rounded-2xl border border-foreground/30 dark:border-border bg-card ${compact ? 'min-h-[46px] sm:min-h-[52px]' : 'min-h-[78px] sm:min-h-[96px]'}`} />;
               }
 
-              const count = cell.entries.length;
+              const count = cell.questionCount;
               const isSelected = selectedDate === cell.key;
 
               return (
@@ -188,10 +210,16 @@ function ActivityCalendar({ compact = false }) {
                   type="button"
                   onClick={() => setSelectedDate(cell.key)}
                   className={`group relative rounded-2xl border text-left transition-all duration-200 ${compact ? 'min-h-[46px] sm:min-h-[52px] p-1.5 sm:p-2' : 'min-h-[78px] sm:min-h-[96px] p-3 sm:p-4'} ${getDayTone(count)} hover:border-foreground hover:ring-2 hover:ring-foreground/90 hover:-translate-y-0.5 hover:shadow ${isSelected ? 'ring-2 ring-foreground border-foreground shadow' : ''}`}
+                  aria-label={`${cell.key}, ${count} unique question${count === 1 ? '' : 's'} attempted`}
                 >
                   <div className="flex h-full items-start justify-start">
                     <div className={`${compact ? 'text-xs sm:text-sm' : 'text-sm sm:text-base'} font-bold`}>{cell.day}</div>
                   </div>
+                  {count > 0 && (
+                    <div className={`absolute bottom-1.5 right-2 font-bold ${compact ? 'text-[9px]' : 'text-xs'} opacity-80`}>
+                      {count}
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -213,7 +241,7 @@ function ActivityCalendar({ compact = false }) {
               <div>
                 <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Day analysis</div>
                 <h3 className="mt-1 text-2xl sm:text-3xl font-black tracking-tight text-foreground">{selectedDate}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Summary of the questions practiced on this day</p>
+                <p className="mt-1 text-sm text-muted-foreground">Unique questions attempted on this day; retries are counted once per day.</p>
               </div>
               <button
                 type="button"
@@ -227,11 +255,11 @@ function ActivityCalendar({ compact = false }) {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
               <div className="rounded-2xl border border-border bg-card p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Practiced</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Unique attempted</div>
                 <div className="mt-1 text-3xl font-black text-foreground">{selectedStats.total}</div>
               </div>
               <div className="rounded-2xl border border-border bg-card p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Correct</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Solved correctly</div>
                 <div className="mt-1 text-3xl font-black text-foreground">{selectedStats.correct}</div>
               </div>
               <div className="rounded-2xl border border-border bg-card p-4">
@@ -352,8 +380,8 @@ function ActivityCalendar({ compact = false }) {
                       <PieChart>
                         <Pie
                           data={[
-                            { name: 'Correct', value: selectedExamEntries.filter(e => e.is_correct).length },
-                            { name: 'Wrong', value: selectedExamEntries.filter(e => !e.is_correct).length }
+                            { name: 'Correct', value: selectedStats.correct },
+                            { name: 'Wrong', value: Math.max(0, selectedStats.total - selectedStats.correct) }
                           ]}
                           dataKey="value"
                           nameKey="name"

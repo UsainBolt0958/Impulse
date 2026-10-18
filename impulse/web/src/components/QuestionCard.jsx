@@ -5,8 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2 } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 import RichText from './RichText';
+import BookmarkQuestionButton from './BookmarkQuestionButton';
 
-function QuestionCard({ question, isSolved, state }) {
+function QuestionCard({ question, questionNumber, isSolved, state }) {
   const getDifficultyColor = (difficulty) => {
     switch (difficulty) {
       case 'Easy': return 'bg-green-100 text-green-900 border-green-900';
@@ -17,11 +18,22 @@ function QuestionCard({ question, isSolved, state }) {
   };
 
   return (
-    <Link to={`/solve/${question.id}`} state={state}>
-      <Card className="hover:shadow-lg transition-all duration-200 hover:-translate-y-1 cursor-pointer border-border">
+    <Card className="relative border-border transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+      <BookmarkQuestionButton
+        question={question}
+        className="absolute right-4 top-4 z-10"
+      />
+      <Link to={`/solve/${question.id}`} state={state} className="block">
         <CardContent className="p-6">
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div className="text-base font-medium leading-relaxed flex-1">
+          <div className="mb-4 flex items-start justify-between gap-4 pr-12">
+            <div className="flex-1 text-base font-medium leading-relaxed">
+              {questionNumber ? (
+                <div className="mb-3">
+                  <Badge variant="outline" className="font-bold text-xs uppercase tracking-wide">
+                    Question {questionNumber}
+                  </Badge>
+                </div>
+              ) : null}
               <RichText>{question.question_text}</RichText>
               {(() => {
                 const imageSrc = String(question.image || question.question_image || '').trim();
@@ -37,9 +49,7 @@ function QuestionCard({ question, isSolved, state }) {
                 ) : null;
               })()}
             </div>
-            {isSolved && (
-              <ColoredIcon icon={CheckCircle2} name="checkcircle2" size={5} />
-            )}
+            {isSolved && <ColoredIcon icon={CheckCircle2} name="checkcircle2" size={5} />}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -60,8 +70,8 @@ function QuestionCard({ question, isSolved, state }) {
             </Badge>
           </div>
         </CardContent>
-      </Card>
-    </Link>
+      </Link>
+    </Card>
   );
 }
 

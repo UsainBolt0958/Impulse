@@ -7,6 +7,7 @@ import FullScreenSolvingPage from './pages/FullScreenSolvingPage.jsx';
 import TestSeriesPage from './pages/TestSeriesPage';
 import ExamPlayer from './pages/ExamPlayer';
 import AnalysisPage from './pages/AnalysisPage';
+import ProfilePage from './pages/ProfilePage';
 import NotebookPage from './pages/NotebookPage';
 import CalendarPage from './pages/CalendarPage';
 import PreviousPapersPage from './pages/PreviousPapersPage';
@@ -46,6 +47,7 @@ function AppContent() {
           <Route path="/solve/:questionId" element={<FullScreenSolvingPage />} />
           
           <Route path="/analysis" element={<AnalysisPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/previous-papers" element={<PreviousPapersPage />} />

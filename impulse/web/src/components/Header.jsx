@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Sun, Moon } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Sun, Moon, UserRound } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 
 function Header() {
+  const location = useLocation();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -56,6 +57,20 @@ function Header() {
           >
             {isDark ? <ColoredIcon icon={Sun} name="sun" size={5} /> : <ColoredIcon icon={Moon} name="moon" size={5} />}
           </button>
+
+          <Link
+            to="/profile"
+            aria-label="Profile"
+            title="Profile"
+            aria-current={location.pathname === '/profile' ? 'page' : undefined}
+            className={`ml-2 rounded-md p-2 transition ${
+              location.pathname === '/profile'
+                ? 'bg-secondary text-green-500'
+                : 'text-green-500 hover:bg-secondary'
+            }`}
+          >
+            <UserRound className="h-5 w-5" />
+          </Link>
         </div>
       </div>
     </header>

@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- 
+        PRIMARY IMPLEMENTATION: This file contains the complete JEE exam engine.
+        
+        ⚠️ NOTE: The frontend/js/ directory contains a duplicate/older implementation.
+        For production, use ONLY this file (index.html).
+        Delete or archive frontend/js/ to avoid state conflicts.
+        
+        Features:
+        - Answer recording with 4-layer persistence
+        - Automatic save every 2-3 seconds
+        - Session recovery on page reload
+        - Fixed answer key: MCQ→A, MULTI→AB, NUM→5
+        - Floating-point numeric comparison (5, 5.0, 5.00 all treated as equivalent)
+        - Real-time exam UI with subject/section navigation
+    -->
+    <meta charset="UTF-8">
+    <!-- Resolve assets/images from project root; exam UI unchanged -->
+    <base href="../">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IIT-JEE ADVANCED 2021 | UNOFFICIAL PORTAL</title>
+   
+    <!-- Preload critical resources for faster rendering -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style">
+    <link rel="preload" href="images/i1-21.png" as="image">
+    <link rel="preload" href="images/i2-21.png" as="image">
+    <link rel="preload" href="images/i3-21.png" as="image">
+    <link rel="preload" href="images/i5-21.png" as="image">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+   
+    <link rel="stylesheet" href="assets/css/styles.css">
+    
+    <!-- Sidebar Navigation Styles -->
+    <style>
+        .result-page-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 24px; }
+        .header-center { display: flex; align-items: center; justify-content: center; text-align: center; }
+        .header-right { text-align: right; }
+        .result-sidebar { width: 280px; background: #fff; border-right: 1px solid #e2e8f0; padding: 24px; position: fixed; height: 100vh; top: 0; left: 0; overflow-y: auto; z-index: 10; }
+        .sidebar-header { margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; text-align: center; }
+        .sidebar-header h3 { font-size: 20px; font-weight: 700; color: #1e293b; margin: 0; }
+        .sidebar-header p { font-size: 13px; color: #64748b; margin: 4px 0 0 0; }
+        .result-page-header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 24px; }
+        .header-left { display: flex; justify-content: center; }
+        .header-center { text-align: center; }
+        .header-right { text-align: right; }
+        .result-sidebar { width: 280px; background: #fff; border-right: 1px solid #e2e8f0; padding: 24px 0; position: fixed; height: 100vh; top: 0; left: 0; overflow-y: auto; z-index: 10; }
+        .sidebar-header { margin-bottom: 24px; padding: 0 24px 20px; border-bottom: 2px solid #f1f5f9; text-align: center; }
+        .sidebar-nav { display: flex; flex-direction: column; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-radius: 0; cursor: pointer; font-size: 14px; font-weight: 500; color: #64748b; transition: all 0.2s ease; }
+        .nav-item:hover { background: #f1f5f9; color: #334155; }
+        .nav-item.active { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35); }
+        .nav-item i { width: 20px; height: 20px; }
+        .result-content { flex: 1; margin-left: 280px; padding: 32px; max-width: calc(100% - 280px); }
+        .result-section { display: none; }
+        .result-section.active { display: block; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
+        .section-header h2 { font-size: 24px; font-weight: 700; color: #1e293b; margin: 0; }
+        .air-badge { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: #fff; padding: 10px 20px; border-radius: 10px; font-weight: 700; font-size: 15px; }
+        .analysis-section { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .analysis-section-title { font-size: 14px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; display: flex; align-items: center; gap: 10px; }
+        .analysis-section-title i { color: #3b82f6; width: 20px; height: 20px; }
+        .pattern-box { border-radius: 12px; padding: 24px; }
+        .strength-box { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #86efac; }
+        .weakness-box { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fca5a5; }
+        .pattern-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .strength-box .pattern-title { color: #166534; }
+        .weakness-box .pattern-title { color: #991b1b; }
+        .metric-box { background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; text-align: center; }
+        .metric-label { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 12px; }
+        .metric-value { font-size: 28px; font-weight: 800; color: #3b82f6; }
+        .streak-box { background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; text-align: center; }
+        .mark-item.positive { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #86efac; border-radius: 12px; padding: 28px; text-align: center; }
+        .mark-item.negative { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fca5a5; border-radius: 12px; padding: 28px; text-align: center; }
+        .correct-box { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #86efac; border-radius: 12px; padding: 24px; text-align: center; }
+        .wrong-box { background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 1px solid #fca5a5; border-radius: 12px; padding: 24px; text-align: center; }
+        .time-box { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .time-display { font-size: 36px; font-weight: 800; color: var(--primary); margin: 16px 0 8px; }
+        .time-label { font-size: 13px; color: #64748b; }
+        .score-card-full { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    /* Error Reduction Bar Graph Styles */
+        .error-reduction-container { display: flex; flex-direction: column; gap: 12px; }
+        .error-bar-item { display: flex; align-items: center; gap: 12px; }
+        .error-label { width: 110px; font-size: 12px; font-weight: 600; color: #64748b; text-align: right; flex-shrink: 0; }
+        .error-bar-wrapper { flex: 1; height: 28px; background: #f1f5f9; border-radius: 6px; overflow: hidden; position: relative; }
+        .error-bar { height: 100%; border-radius: 6px; transition: width 0.6s ease-out; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+        .error-bar.current { background: linear-gradient(135deg, #64748b 0%, #475569 100%); }
+        .error-bar.perfect { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .error-score { width: 50px; font-size: 14px; font-weight: 700; color: #1e293b; text-align: left; flex-shrink: 0; }
+    /* Review Mode Styles */
+        .review-mode-badge {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .review-header-indicator {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .time-spent-badge {
+            background: #f3f4f6;
+            color: #374151;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+            display: inline-block;
+        }
+        .opt-label.correct-answer {
+            background: #d1fae5 !important;
+            border-color: #10b981 !important;
+        }
+        .opt-label.wrong {
+            background: #fee2e2 !important;
+            border-color: #ef4444 !important;
+        }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <div id="dbg-sess" style="position:fixed;right:12px;top:90px;background:#fff;border:1px solid #ddd;padding:6px;font-size:12px;z-index:9999;display:none;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+
+    <!-- Pending Submits Modal -->
+    <div id="pending-modal" style="display:none; position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:20000; align-items:center; justify-content:center;">
+        <div style="width:760px; max-width:94%; background:#fff; border-radius:8px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div style="font-weight:700;">Pending Submissions</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn" onclick="flushPendingSubmits();">Retry All Now</button>
+                    <button class="btn" onclick="closePendingModal();" style="background:#ef4444;color:#fff;">Close</button>
+                </div>
+            </div>
+            <div id="pending-list" style="max-height:420px; overflow:auto; border-top:1px solid #eee; padding-top:12px;"></div>
+            <div id="pending-empty" style="display:none; text-align:center; color:#666; padding:18px 0;">No pending submissions.</div>
+        </div>
+    </div>
+
+    <div id="scr-login" class="screen auth-container">
+        <div class="auth-card fade-in">
+            <div class="logo-row">
+                <img src="images/i3-21.png" alt="IIT Logo" class="logo-img" loading="eager">
+            </div>
+            <div class="auth-logo">IIT-JEE ADVANCED 2021</div>
+            <p style="color:rgba(255,255,255,0.95); margin-bottom:30px; font-size: 13px; text-transform: uppercase;">Unofficial Examination Portal</p>
+           
+            <input type="text" class="auth-field" id="u-name" placeholder="Candidate Name">
+            <div style="display:flex; gap:8px; align-items:flex-start; margin-bottom:15px; position:relative;">
+                <input type="text" class="auth-field" id="u-id" placeholder="Random Number (Remember it for future login)" style="flex:1; min-width:0; margin-bottom:0;">
+                <details style="position:relative; flex-shrink:0;">
+                    <summary aria-label="Information about combined result" style="display:flex; align-items:center; justify-content:center; width:40px; height:40px; border:1px solid rgba(255,255,255,0.6); border-radius:50%; color:#fff; cursor:pointer; font-weight:700; list-style:none;">i</summary>
+                    <div style="position:absolute; z-index:20; top:46px; right:0; width:min(320px, 80vw); padding:12px; border-radius:6px; background:#fff; color:#1f2937; box-shadow:0 4px 16px rgba(0,0,0,0.25); font-size:13px; line-height:1.5;">
+                        After attempting Paper 1, attempt Paper 2 with the same login details to get the AIR for the combined result (Paper 1 + Paper 2).
+                    </div>
+                </details>
+            </div>
+            <input type="password" class="auth-field" value="password" placeholder="Password">
+            <button class="auth-btn" type="button" onclick="(window.tryLogin || function(){alert('Login function unavailable, please refresh.')})()">Login</button>
+        </div>
+    </div>
+
+    <!-- Policy Modal -->
+    <div id="policy-modal" class="policy-modal" onclick="closePolicyModalOnBackdrop(event)">
+        <div class="policy-modal-content" onclick="event.stopPropagation()">
+            <div class="policy-modal-header">
+                <div class="policy-modal-title">
+                    <i class="fas fa-shield-alt"></i>
+                    Policies & Guidelines
+                </div>
+                <button class="policy-modal-close" onclick="closePolicyModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="policy-note-header">NOTE:</div>
+            <ul class="policy-list">
+                <li class="policy-item">
+                    <div class="policy-item-number">1</div>
+                    <div class="policy-item-text">
+                        <strong>Login Credentials & Combined Results:</strong> You may use any login credentials of your choice, but please ensure you remember your Application ID. To receive combined results, you must log in to Paper 2 using the exact same credentials you used for Paper 1.
+                    </div>
+                </li>
+                <li class="policy-item">
+                    <div class="policy-item-number">2</div>
+                    <div class="policy-item-text">
+                        <strong>Browser Storage & Incognito Mode:</strong> This exam portal saves your data locally within your web browser. To prevent the loss of your exam analysis data, please use a standard browser window rather than Incognito or Private Browsing mode.
+                    </div>
+                </li>
+                <li class="policy-item">
+                    <div class="policy-item-number">3</div>
+                    <div class="policy-item-text">
+                        <strong>Data Loss Disclaimer:</strong> Currently, our system saves data directly to your device's local storage rather than a centralized server database. Consequently, FocusHub cannot be held responsible for any loss of exam analysis data if you clear your browser's cache or site data.
+                    </div>
+                </li>
+                <li class="policy-item">
+                    <div class="policy-item-number">4</div>
+                    <div class="policy-item-text">
+                        <strong>Platform Access & Unofficial Status:</strong> FocusHub currently offers its core exam preparation tools for free to support students in their studies. Please note that this is an unofficial website designed strictly to simulate the real exam interface. Any IIT logos used are solely for educational simulation purposes and do not imply any official affiliation, endorsement, or representation.
+                    </div>
+                </li>
+                <li class="policy-item">
+                    <div class="policy-item-number">5</div>
+                    <div class="policy-item-text">
+                        <strong>Copyright Disclaimer & Takedown Policy:</strong> We do not claim ownership of the institutional logos used to replicate the exam environment. If you are an authorized representative of an institution and wish to have your logo removed from our platform, please contact us at <strong>focushubquery@gmail.com</strong>. We will promptly process your removal request within 48 hours.
+                    </div>
+                </li>
+            </ul>
+            <div class="policy-modal-footer">
+                <button class="policy-agree-btn" onclick="closePolicyModal()">I Understand</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-home" class="home-wrapper hidden">
+        <header class="home-header">
+            <div class="header-left">
+                <img src="images/i2-21.png" alt="Logo" class="header-logo" loading="eager">
+                <div class="home-brand">IIT-JEE ADVANCED 2021</div>
+            </div>
+            <div class="home-user-info">
+                <div style="text-align:right;">
+                    <div style="display:inline-block; vertical-align:middle; text-align:right; margin-right: 15px;">
+                        <div style="font-weight:700; font-size:14px;" id="disp-uname-home">CANDIDATE</div>
+                        <div style="font-size:11px; opacity:0.8;" id="lbl-uid-home">ID: ...</div>
+                    </div>
+                    <button class="logout-btn" onclick="doLogout()">Logout</button>
+                    <div id="pending-badge-home" onclick="openPendingModal()" style="display:none; margin-left:12px; background:#f59e0b; color:#fff; padding:6px 10px; border-radius:12px; font-size:12px; vertical-align:middle; cursor:pointer;">Pending: <span id="pending-count-home">0</span></div>
+                </div>
+                <div class="home-avatar" onclick="showProfileModal()" style="cursor:pointer;"><i class="fa-solid fa-user"></i></div>
+            </div>
+        </header>
+       
+        <div class="home-body fade-in">
+            <h1 class="home-title">Examination Dashboard</h1>
+
+            <div class="test-card" id="card-p1">
+                <div class="test-card-header">
+                    <div class="test-name">JEE Advanced 2021 - Paper 1</div>
+                    <div class="test-status-badge badge-avail" id="badge-p1">AVAILABLE</div>
+                </div>
+                <div class="test-info-grid">
+                    <div class="info-box">
+                        <div class="info-label">Questions</div>
+                        <div class="info-value">57</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Duration</div>
+                        <div class="info-value">180 Mins</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Marks</div>
+                        <div class="info-value">180</div>
+                    </div>
+                </div>
+                <div class="test-actions">
+                    <button class="start-btn" id="btn-p1" onclick="goToExam(1)">START PAPER 1</button>
+                </div>
+            </div>
+
+            <div class="test-card" id="card-p2">
+                <div class="test-card-header">
+                    <div class="test-name">JEE Advanced 2021 - Paper 2</div>
+                    <div class="test-status-badge badge-lock" id="badge-p2">LOCKED</div>
+                </div>
+                <div class="test-info-grid">
+                    <div class="info-box">
+                        <div class="info-label">Questions</div>
+                        <div class="info-value">57</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Duration</div>
+                        <div class="info-value">180 Mins</div>
+                    </div>
+                    <div class="info-box">
+                        <div class="info-label">Marks</div>
+                        <div class="info-value">180</div>
+                    </div>
+                </div>
+                <div class="test-actions">
+                    <button class="start-btn" id="btn-p2" onclick="goToExam(2)">START PAPER 2</button>
+                </div>
+            </div>
+
+            <div class="history-section hidden" id="sec-history">
+                <div class="history-header">Previous Attempts & Results</div>
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Paper</th>
+                            <th>Status</th>
+                            <th>Score Obtained</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body"></tbody>
+                </table>
+                <div style="margin-top: 20px; text-align: center;">
+                    <button class="btn btn-pri" id="btn-view-combined" style="display:none;" onclick="showCombinedResult()">View Combined Result</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="scr-exam" class="hidden">
+        <header class="top-bar">
+            <div style="display:flex; align-items:center; gap:15px;">
+                <div class="brand-title">IIT-JEE ADVANCED 2021</div>
+                <div style="background:#333; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;" id="paper-label">Paper 1</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <button class="btn-toggle" type="button" onclick="togglePanel()">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="timer-badge">Time: <span id="time-disp">180:00</span></div>
+                <!-- Save Indicator -->
+                <div id="save-indicator" style="display:none; position:fixed; top:10px; right:10px; background:#28a745; color:#fff; padding:6px 12px; border-radius:4px; font-size:12px; z-index:10000; animation: fadeOut 2s forwards;">
+                    ✓ Saved
+                </div>
+                <!-- Pending submissions badge -->
+                <div id="pending-badge" onclick="openPendingModal()" style="display:none; position:fixed; top:10px; right:130px; background:#f59e0b; color:#fff; padding:6px 10px; border-radius:20px; font-size:12px; z-index:10000; cursor:pointer;">
+                    Pending: <span id="pending-count">0</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="nav-strip">
+            <div class="nav-title">Subject</div>
+            <div class="nav-scroll" id="subject-nav"></div>
+        </div>
+
+        <div class="section-nav" id="section-nav"></div>
+
+        <div class="main-area">
+            <main class="q-section">
+                <div class="q-header">
+                    <span style="font-size:18px;" id="lbl-qno">Question No. 1</span>
+                    <div style="font-size:13px; color:#666;">Marks: <span style="color:var(--success); font-weight:700;" id="mark-pos">+3</span> / <span style="color:var(--danger); font-weight:700;" id="mark-neg">-1</span></div>
+                </div>
+                <div class="q-scroll" id="q-area">
+                    <div class="q-img-box"><img id="q-img" src="" alt="Question"></div>
+                    <div id="inp-area"></div>
+                </div>
+                <footer class="foot-bar">
+                    <div>
+                        <button class="btn" type="button" onclick="act('mark')">Mark for Review & Next</button>
+                        <button class="btn" type="button" onclick="act('clear')">Clear Response</button>
+                    </div>
+                    <div>
+                        <button class="btn" type="button" onclick="act('prev')">Previous</button>
+                        <button class="btn btn-pri" type="button" onclick="act('save')">Save & Next</button>
+                    </div>
+                </footer>
+            </main>
+
+            <aside class="side-panel" id="side-panel">
+                <div class="user-info">
+                    <div class="user-icon"><i class="fa-solid fa-user"></i></div>
+                    <div>
+                        <div style="font-weight:700; font-size:14px;" id="disp-uname-exam">CANDIDATE</div>
+                        <div style="font-size:11px; color:#888;" id="lbl-uid">ID: ...</div>
+                    </div>
+                </div>
+                <div class="leg-grid">
+                    <div class="leg-row">
+                        <div class="leg-item"><div class="shp s-grn" id="c-ans">0</div> Ans</div>
+                        <div class="leg-item"><div class="shp s-red" id="c-nans">0</div> Not Ans</div>
+                    </div>
+                    <div class="leg-row">
+                        <div class="leg-item"><div class="shp s-gry" id="c-nvis">0</div> Not Vis</div>
+                        <div class="leg-item"><div class="shp s-prp" id="c-mrk">0</div> Marked</div>
+                    </div>
+                    <div class="leg-row">
+                        <div class="leg-item"><div class="shp s-prp-t" id="c-mrka">0</div> Ans & Marked</div>
+                    </div>
+                </div>
+                <div class="pal-head" id="lbl-pal">PHYSICS : SECTION A</div>
+                <div class="pal-scroll"><div class="pal-grid" id="pal-grid"></div></div>
+               
+                <div class="submit-area">
+                    <button class="auth-btn" type="button" onclick="finishExam()">SUBMIT TEST</button>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <div id="scr-result" class="screen hidden">
+        <header class="home-header result-page-header">
+            <div class="header-left"></div>
+            <div class="header-center">
+                <img src="images/i2-21.png" alt="Logo" class="header-logo" loading="eager" style="margin-right: 12px;">
+                <div class="home-brand">IIT-JEE ADVANCED 2021 - RESULT</div>
+            </div>
+            <div class="header-right">
+                <button class="btn" onclick="window.location.href='/previous-papers/jee-advanced'">Back to Home</button>
+            </div>
+        </header>
+
+        <div class="result-layout">
+            <!-- Sidebar Navigation -->
+            <aside class="result-sidebar">
+                <div class="sidebar-header">
+                    <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+                        <i data-lucide="arrow-left" style="cursor: pointer; width: 20px; height: 20px;" onclick="showHome()"></i>
+                        <h3>Test Analysis</h3>
+                    </div>
+                    <p id="res-subtitle">PAPER 1</p>
+                </div>
+                
+                <nav class="sidebar-nav">
+                    <div class="nav-item active" data-section="overview" onclick="showResultSection('overview')">
+                        <i data-lucide="layout-dashboard"></i> Overview
+                    </div>
+                    <div class="nav-item" data-section="scorecard" onclick="showResultSection('scorecard')">
+                        <i data-lucide="table"></i> Scorecard
+                    </div>
+                    <div class="nav-item" data-section="subject" onclick="showResultSection('subject')">
+                        <i data-lucide="bar-chart-3"></i> Subject Performance
+                    </div>
+                    <div class="nav-item" data-section="questions" onclick="showResultSection('questions')">
+                        <i data-lucide="target"></i> Question Types
+                    </div>
+                    <div class="nav-item" data-section="time" onclick="showResultSection('time')">
+                        <i data-lucide="clock"></i> Time Analysis
+                    </div>
+                    <div class="nav-item" data-section="accuracy" onclick="showResultSection('accuracy')">
+                        <i data-lucide="check-circle"></i> Accuracy
+                    </div>
+                    <div class="nav-item" data-section="strengths" onclick="showResultSection('strengths')">
+                        <i data-lucide="lightbulb"></i> Strengths & Weaknesses
+                    </div>
+                    <div class="nav-item" data-section="insights" onclick="showResultSection('insights')">
+                        <i data-lucide="graduation-cap"></i> Insights
+                    </div>
+                    
+                    
+                    <div class="nav-item" data-section="consistency" onclick="showResultSection('consistency')">
+                        <i data-lucide="scale"></i> Consistency Score
+                    </div>
+                    <div class="nav-item" data-section="fatigue" onclick="showResultSection('fatigue')">
+                        <i data-lucide="dumbbell"></i> Fatigue Analysis
+                    </div>
+                    <div class="nav-item" data-section="streaks" onclick="showResultSection('streaks')">
+                        <i data-lucide="flame"></i> Streak Analysis
+                    </div>
+                    <div class="nav-item" data-section="golden" onclick="showResultSection('golden')">
+                        <i data-lucide="trophy"></i> Golden Hour
+                    </div>
+                    <div class="nav-item" data-section="ego" onclick="showResultSection('ego')">
+                        <i data-lucide="alert-triangle"></i> Ego Trap
+                    </div>
+                    <div class="nav-item" data-section="blind" onclick="showResultSection('blind')">
+                        <i data-lucide="eye"></i> Blind Skipping
+                    </div>
+                    <div class="nav-item" data-section="panic" onclick="showResultSection('panic')">
+                        <i data-lucide="alert-circle"></i> Panic Mode
+                    </div>
+                    <div class="nav-item" data-section="marked" onclick="showResultSection('marked')">
+                        <i data-lucide="bookmark"></i> Marked Review
+                    </div>
+                    <div class="nav-item" data-section="roi" onclick="showResultSection('roi')">
+                        <i data-lucide="dollar-sign"></i> ROI per Subject
+                    </div>
+                    <div class="nav-item" data-section="projection" onclick="showResultSection('projection')">
+                        <i data-lucide="trending-up"></i> Score Projection
+                    </div>
+                    <div class="nav-item" id="review-mode-btn" onclick="enterReviewMode()" style="margin-top: 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff;">
+                        <i data-lucide="eye"></i> Review Questions
+                    </div>
+                </nav>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="result-content">
+                
+                <!-- SECTION 1: OVERVIEW -->
+                <div id="section-overview" class="result-section active">
+                    <div class="section-header">
+                        <h2>Performance Overview</h2>
+                        <div class="air-badge">AIR <span id="res-air">--</span></div>
+                    </div>
+                    
+                    <div class="score-comparison-card">
+                        <div class="chart-title">YOUR SCORE</div>
+                        <div class="comparison-bar-wrap">
+                            <div class="comparison-col">
+                                <div class="comparison-bar-container">
+                                    <div class="comparison-bar user-bar" id="user-bar" style="height: 0%;"></div>
+                                </div>
+                                <div class="comparison-score" id="user-score">0</div>
+                                <div class="comparison-label">Your Score</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="charts-row">
+                        <div class="chart-box">
+                            <div class="chart-title">ACCURACY BREAKDOWN</div>
+                            <div class="bar-wrap" id="chart-acc">
+                                <div class="bar-col">
+                                    <div class="bar-val" style="color:var(--success)" id="val-cor">0</div>
+                                    <div class="bar b-cor" style="height:0%" id="bar-cor"></div>
+                                    <div class="bar-lbl">Correct</div>
+                                </div>
+                                <div class="bar-col">
+                                    <div class="bar-val" style="color:#6f42c1" id="val-part">0</div>
+                                    <div class="bar b-part" style="height:0%" id="bar-part"></div>
+                                    <div class="bar-lbl">Partial</div>
+                                </div>
+                                <div class="bar-col">
+                                    <div class="bar-val" style="color:var(--danger)" id="val-wrg">0</div>
+                                    <div class="bar b-wrg" style="height:0%" id="bar-wrg"></div>
+                                    <div class="bar-lbl">Wrong</div>
+                                </div>
+                                <div class="bar-col">
+                                    <div class="bar-val" style="color:#666" id="val-un">0</div>
+                                    <div class="bar b-un" style="height:0%" id="bar-un"></div>
+                                    <div class="bar-lbl">Unattempted</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chart-box time-box">
+                            <div class="chart-title">TIME SPENT</div>
+                            <div class="time-display" id="res-time">00:00</div>
+                            <div class="time-label">Minutes / 180</div>
+                        </div>
+                    </div>
+
+                    <div style="text-align:center; margin: 24px 0;">
+                        <button class="btn btn-pri" onclick="toggleSolutions()">View Detailed Solutions</button>
+                    </div>
+
+                    <div class="sol-box" id="sol-box">
+                        <h3 style="border-bottom:1px solid #eee; padding-bottom:10px;">Question Analysis</h3>
+                        <div id="sol-list"></div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: SCORECARD -->
+                <div id="section-scorecard" class="result-section">
+                    <div class="section-header">
+                        <h2>Detailed Scorecard</h2>
+                    </div>
+                    <div class="score-card-full">
+                        <table class="sc-table">
+                            <thead>
+                                <tr>
+                                    <th>PAPER / SUBJECT</th>
+                                    <th>PHYSICS</th>
+                                    <th>CHEMISTRY</th>
+                                    <th>MATHS</th>
+                                    <th>TOTAL</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sc-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: SUBJECT PERFORMANCE -->
+                <div id="section-subject" class="result-section">
+                    <div class="section-header">
+                        <h2>Subject & Section Performance</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <table class="analysis-table" id="subject-section-table">
+                            <thead>
+                                <tr>
+                                    <th>Subject</th>
+                                    <th>Sec A</th>
+                                    <th>Sec B</th>
+                                    <th>Sec C</th>
+                                    <th>Sec D</th>
+                                    <th>Total</th>
+                                    <th>Accuracy</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="subject-section-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SECTION 4: QUESTION TYPES -->
+                <div id="section-questions" class="result-section">
+                    <div class="section-header">
+                        <h2>Question Type Performance</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="qtype-grid">
+                            <div class="qtype-card" id="qtype-mcq">
+                                <div class="qtype-label">MCQ</div>
+                                <div class="qtype-stats">
+                                    <div class="qtype-value" id="mcq-correct">0</div>
+                                    <div class="qtype-detail" id="mcq-detail">0/0 • 0%</div>
+                                </div>
+                            </div>
+                            <div class="qtype-card" id="qtype-multi">
+                                <div class="qtype-label">Multi-Select</div>
+                                <div class="qtype-stats">
+                                    <div class="qtype-value" id="multi-correct">0</div>
+                                    <div class="qtype-detail" id="multi-detail">0/0 • 0%</div>
+                                </div>
+                            </div>
+                            <div class="qtype-card" id="qtype-num">
+                                <div class="qtype-label">Numerical</div>
+                                <div class="qtype-stats">
+                                    <div class="qtype-value" id="num-correct">0</div>
+                                    <div class="qtype-detail" id="num-detail">0/0 • 0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 5: TIME ANALYSIS -->
+                <div id="section-time" class="result-section">
+                    <div class="section-header">
+                        <h2>Time Analysis</h2>
+                    </div>
+                    
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="timer"></i> TIME EFFICIENCY METRICS</div>
+                        <div class="time-metrics">
+                            <div class="metric-box">
+                                <div class="metric-label">Avg Time / Question</div>
+                                <div class="metric-value" id="avg-time-q">--</div>
+                                <div class="metric-hint">seconds</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Total Time Used</div>
+                                <div class="metric-value" id="total-time-used">--</div>
+                                <div class="metric-hint">out of 180 min</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Questions / Minute</div>
+                                <div class="metric-value" id="qpm">--</div>
+                                <div class="metric-hint">efficiency rate</div>
+                            </div>
+                            <div class="metric-box">
+                                <div class="metric-label">Accuracy / Minute</div>
+                                <div class="metric-value" id="apm">--</div>
+                                <div class="metric-hint">quality metric</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="timer"></i> TIME DISTRIBUTION HEAT MAP</div>
+                        <div id="time-heatmap-full" class="heatmap-full-container"></div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="hourglass"></i> TIME DISTRIBUTION HISTOGRAM</div>
+                        <div class="histogram-container" id="time-histogram"></div>
+                    </div>
+
+                    <!-- SUBJECT-WISE TIME HISTOGRAM -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="bar-chart-2"></i> SUBJECT-WISE TIME DISTRIBUTION</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Average time spent per subject</div>
+                        <div id="subject-time-histogram" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Subject-wise time analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+
+                    <!-- SUBJECT-WISE ACCURACY -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="target"></i> SUBJECT-WISE ACCURACY</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Accuracy breakdown by subject with visual progress bars</div>
+                        <div id="subject-accuracy-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Subject-wise accuracy analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+
+                    <!-- SUBJECT-WISE NEGATIVE MARKING -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="trending-down"></i> SUBJECT-WISE NEGATIVE MARKING</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Marks lost due to wrong answers per subject</div>
+                        <div id="subject-negative-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Subject-wise negative marking analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+
+                    <!-- SUBJECT-WISE STREAKS -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="flame"></i> SUBJECT-WISE STREAK ANALYSIS</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Best and worst streaks per subject</div>
+                        <div id="subject-streaks-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Subject-wise streak analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+
+                    <!-- SUBJECT-WISE WASTED TIME -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="clock"></i> SUBJECT-WISE WASTED TIME</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Time spent on wrong answers per subject</div>
+                        <div id="subject-wasted-time-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Subject-wise wasted time analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 6: ACCURACY ANALYSIS -->
+                <div id="section-accuracy" class="result-section">
+                    <div class="section-header">
+                        <h2>Accuracy Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="check-circle"></i> POSITIVE MARKS EARNED</div>
+                        <div class="marks-box">
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="heart" style="color:#22c55e;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Marks from Correct</div>
+                                <div style="font-size:28px; font-weight:800; color:#10b981; margin:8px 0;" id="positive-marks">0</div>
+                            </div>
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="star" style="color:#eab308;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Partial Marks Gained</div>
+                                <div style="font-size:28px; font-weight:800; color:#3b82f6; margin:8px 0;" id="partial-marks-positive">0</div>
+                            </div>
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="target" style="color:#06b6d4;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Total Positive Marks</div>
+                                <div style="font-size:28px; font-weight:800; color:#06b6d4; margin:8px 0;" id="total-positive">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="x-circle"></i> NEGATIVE MARKS LOST</div>
+                        <div class="marks-box">
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="heart-crack" style="color:#ef4444;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Marks from Wrong</div>
+                                <div style="font-size:28px; font-weight:800; color:#ef4444; margin:8px 0;" id="negative-marks">-0</div>
+                            </div>
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="alert-triangle" style="color:#f97316;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Risk Taken</div>
+                                <div style="font-size:20px; font-weight:800; color:#f97316; margin:8px 0;" id="risk-taken">0</div>
+                            </div>
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="ban" style="color:#dc2626;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Total Negative Marks</div>
+                                <div style="font-size:28px; font-weight:800; color:#dc2626; margin:8px 0;" id="total-negative">-0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="trending-down"></i> NEGATIVE MARKING IMPACT</div>
+                        <div class="negative-impact-box">
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Wrong Answers Cost</div>
+                                <div style="font-size:20px; font-weight:800; color:#ef4444;" id="neg-cost">-0</div>
+                            </div>
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Risk-Reward Ratio</div>
+                                <div style="font-size:20px; font-weight:800; color:#4c80b8;" id="risk-ratio">0%</div>
+                            </div>
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Safe Attempts</div>
+                                <div style="font-size:20px; font-weight:800; color:#10b981;" id="safe-attempts">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="target"></i> CONFIDENCE CALIBRATION</div>
+                        <div class="calibration-grid">
+                            <div class="calibration-box correct-box">
+                                <div style="font-weight:600; color:#10b981;"><i data-lucide="check-circle"></i> Marked & Correct</div>
+                                <div style="font-size:20px; font-weight:800; margin-top:8px;" id="mark-correct-count">0</div>
+                                <div style="font-size:11px; color:#999;">Good judgment</div>
+                            </div>
+                            <div class="calibration-box wrong-box">
+                                <div style="font-weight:600; color:#ef4444;"><i data-lucide="x-circle"></i> Marked & Wrong</div>
+                                <div style="font-size:20px; font-weight:800; margin-top:8px;" id="mark-wrong-count">0</div>
+                                <div style="font-size:11px; color:#999;">Need confidence check</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 7: STRENGTHS & WEAKNESSES -->
+                <div id="section-strengths" class="result-section">
+                    <div class="section-header">
+                        <h2>Strengths & Weaknesses</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="lightbulb"></i> STRENGTHS & WEAKNESSES</div>
+                        <div class="patterns-container">
+                            <div class="pattern-box strength-box">
+                                <div class="pattern-title"><i data-lucide="check-circle"></i> TOP STRENGTHS</div>
+                                <ul class="pattern-list" id="strengths-list">
+                                    <li>Analyzing...</li>
+                                </ul>
+                            </div>
+                            <div class="pattern-box weakness-box">
+                                <div class="pattern-title"><i data-lucide="alert-triangle"></i> AREAS TO IMPROVE</div>
+                                <ul class="pattern-list" id="weaknesses-list">
+                                    <li>Analyzing...</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION: INSIGHTS -->
+                <div id="section-insights" class="result-section">
+                    <div class="section-header">
+                        <h2>Personalized Insights</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="graduation-cap"></i> PERSONALIZED INSIGHTS & RECOMMENDATIONS</div>
+                        <div class="insights-box">
+                            <div id="insights-content">
+                                <p style="text-align: center; color: #999;">Generating insights...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+<!-- SECTION 8: CONSISTENCY SCORE -->
+                <div id="section-consistency" class="result-section">
+                    <div class="section-header">
+                        <h2>Consistency Score</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="scale"></i> CONSISTENCY SCORE</div>
+                        <div class="consistency-meter">
+                            <div class="meter-fill" id="consistency-fill" style="width: 75%"></div>
+                            <div style="text-align:center; margin-top:10px; font-weight:700; color:#4c80b8;">Consistency: <span id="consistency-value">75</span>/100</div>
+                            <div style="font-size:11px; color:#999; text-align:center;">High = Similar across sections | Low = Erratic performance</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 9: FATIGUE ANALYSIS -->
+                <div id="section-fatigue" class="result-section">
+                    <div class="section-header">
+                        <h2>Fatigue Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="dumbbell"></i> FATIGUE ANALYSIS</div>
+                        <div class="half-comparison">
+                            <div class="half-box">
+                                <div style="font-weight:600; color:#4c80b8;">First Half Accuracy</div>
+                                <div style="font-size:24px; font-weight:800; color:#10b981; margin:10px 0;" id="first-half">0%</div>
+                            </div>
+                            <div class="half-box">
+                                <div style="font-weight:600; color:#4c80b8;">Second Half Accuracy</div>
+                                <div style="font-size:24px; font-weight:800; color:#ef4444; margin:10px 0;" id="second-half">0%</div>
+                            </div>
+                            <div class="half-box">
+                                <div style="font-weight:600; color:#4c80b8;">Fatigue Factor</div>
+                                <div style="font-size:20px; font-weight:800; color:#6f42c1; margin:10px 0;" id="fatigue-factor">0%</div>
+                                <div style="font-size:11px; color:#666; margin-top:8px; line-height:1.5;">
+                                    <strong>If for example:</strong><br>
+                                    <strong>+5%:</strong> First half 75%, Second half 70% = You got tired<br>
+                                    <strong>-5%:</strong> First half 70%, Second half 75% = Strong stamina<br>
+                                    <strong>0%:</strong> Both halves equal = Consistent performance
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 10: STREAK ANALYSIS -->
+                <div id="section-streaks" class="result-section">
+                    <div class="section-header">
+                        <h2>Streak Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="flame"></i> STREAK ANALYSIS</div>
+                        <div class="streak-container">
+                            <div class="streak-box">
+                                <div style="font-size:20px;"><i data-lucide="flame" style="color:#f97316;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Longest Correct Streak</div>
+                                <div style="font-size:24px; font-weight:800; color:#10b981; margin:5px 0;" id="best-streak">0</div>
+                                <div style="font-size:11px; color:#999;">consecutive correct</div>
+                            </div>
+                            <div class="streak-box">
+                                <div style="font-size:20px;"><i data-lucide="x-circle" style="color:#ef4444;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Longest Wrong Streak</div>
+                                <div style="font-size:24px; font-weight:800; color:#ef4444; margin:5px 0;" id="worst-streak">0</div>
+                                <div style="font-size:11px; color:#999;">consecutive incorrect</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 11: GOLDEN HOUR -->
+                <div id="section-golden" class="result-section">
+                    <div class="section-header">
+                        <h2>Golden Hour Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="trophy"></i> GOLDEN HOUR ANALYSIS</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Your most productive 30-minute blocks during the exam</div>
+                        <div id="golden-hour-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Golden hour analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 12: EGO TRAP -->
+                <div id="section-ego" class="result-section">
+                    <div class="section-header">
+                        <h2>Over-Investment Penalty</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="alert-triangle"></i> OVER-INVESTMENT PENALTY (EGO TRAP)</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Questions where you spent excessive time but got wrong</div>
+                        <div id="ego-metric-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Ego metric analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 13: BLIND SKIPPING -->
+                <div id="section-blind" class="result-section">
+                    <div class="section-header">
+                        <h2>Blind Skipping Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="eye"></i> BLIND SKIPPING ANALYSIS</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Questions visited <10 seconds but not attempted (potentially missed opportunities)</div>
+                        <div id="blind-skip-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Blind skip analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 14: PANIC MODE -->
+                <div id="section-panic" class="result-section">
+                    <div class="section-header">
+                        <h2>Panic Mode Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="alert-circle"></i> PANIC MODE ANALYSIS (Last 15 Minutes)</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">How your performance changed in the final 15 minutes vs baseline</div>
+                        <div id="panic-mode-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Panic mode analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 15: MARKED REVIEW -->
+                <div id="section-marked" class="result-section">
+                    <div class="section-header">
+                        <h2>Marked for Review Analysis</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="bookmark"></i> MARKED FOR REVIEW ANALYSIS</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">How many marked questions were actually attempted</div>
+                        <div id="marked-review-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">Marked review analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 16: ROI -->
+                <div id="section-roi" class="result-section">
+                    <div class="section-header">
+                        <h2>ROI per Subject</h2>
+                    </div>
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="dollar-sign"></i> ROI PER SUBJECT (Marks per Minute)</div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 10px;">Which subjects gave you the best return on time invested</div>
+                        <div id="roi-subject-container" style="padding: 10px;">
+                            <p style="text-align:center;color:#999;">ROI analysis will appear here after exam completion.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 17: SCORE PROJECTION -->
+                <div id="section-accuracy" class="result-section">
+                    <div class="section-header">
+                        <h2>Accuracy Analysis</h2>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="check-circle"></i> POSITIVE MARKS EARNED</div>
+                        <div class="marks-box">
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="heart" style="color:#22c55e;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Marks from Correct</div>
+                                <div style="font-size:28px; font-weight:800; color:#10b981; margin:8px 0;" id="positive-marks">0</div>
+                            </div>
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="star" style="color:#eab308;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Partial Marks Gained</div>
+                                <div style="font-size:28px; font-weight:800; color:#3b82f6; margin:8px 0;" id="partial-marks-positive">0</div>
+                            </div>
+                            <div class="mark-item positive">
+                                <div style="font-size:24px;"><i data-lucide="target" style="color:#06b6d4;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Total Positive Marks</div>
+                                <div style="font-size:28px; font-weight:800; color:#06b6d4; margin:8px 0;" id="total-positive">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="x-circle"></i> NEGATIVE MARKS LOST</div>
+                        <div class="marks-box">
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="heart-crack" style="color:#ef4444;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Marks from Wrong</div>
+                                <div style="font-size:28px; font-weight:800; color:#ef4444; margin:8px 0;" id="negative-marks">-0</div>
+                            </div>
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="alert-triangle" style="color:#f97316;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Risk Taken</div>
+                                <div style="font-size:20px; font-weight:800; color:#f97316; margin:8px 0;" id="risk-taken">0</div>
+                            </div>
+                            <div class="mark-item negative">
+                                <div style="font-size:24px;"><i data-lucide="ban" style="color:#dc2626;"></i></div>
+                                <div style="font-weight:600; margin-top:8px;">Total Negative Marks</div>
+                                <div style="font-size:28px; font-weight:800; color:#dc2626; margin:8px 0;" id="total-negative">-0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="trending-down"></i> NEGATIVE MARKING IMPACT</div>
+                        <div class="negative-impact-box">
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Wrong Answers Cost</div>
+                                <div style="font-size:20px; font-weight:800; color:#ef4444;" id="neg-cost">-0</div>
+                            </div>
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Risk-Reward Ratio</div>
+                                <div style="font-size:20px; font-weight:800; color:#4c80b8;" id="risk-ratio">0%</div>
+                            </div>
+                            <div class="impact-item">
+                                <div style="color:#999; font-size:12px;">Safe Attempts</div>
+                                <div style="font-size:20px; font-weight:800; color:#10b981;" id="safe-attempts">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="target"></i> CONFIDENCE CALIBRATION</div>
+                        <div class="calibration-grid">
+                            <div class="calibration-box correct-box">
+                                <div style="font-weight:600; color:#10b981;"><i data-lucide="check-circle"></i> Marked & Correct</div>
+                                <div style="font-size:20px; font-weight:800; margin-top:8px;" id="mark-correct-count">0</div>
+                                <div style="font-size:11px; color:#999;">Good judgment</div>
+                            </div>
+                            <div class="calibration-box wrong-box">
+                                <div style="font-weight:600; color:#ef4444;"><i data-lucide="x-circle"></i> Marked & Wrong</div>
+                                <div style="font-size:20px; font-weight:800; margin-top:8px;" id="mark-wrong-count">0</div>
+                                <div style="font-size:11px; color:#999;">Need confidence check</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 18: SCORE PROJECTION -->
+                <div id="section-projection" class="result-section">
+                    <div class="section-header">
+                        <h2>Score Projection</h2>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="trending-up"></i> SCORE TRAJECTORY PROJECTION</div>
+                        <div class="projection-grid">
+                            <div class="projection-box">
+                                <div style="font-size:12px; color:#999;">Current Score</div>
+                                <div style="font-size:24px; font-weight:800; color:#4c80b8; margin:8px 0;" id="current-score">0</div>
+                            </div>
+                            <div class="projection-box">
+                                <div style="font-size:12px; color:#999;">With 10% Improvement</div>
+                                <div style="font-size:24px; font-weight:800; color:#10b981; margin:8px 0;" id="projected-score">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="check-circle"></i> PARTIAL MARKS EFFICIENCY</div>
+                            <div style="text-align:center;">
+                                <div style="font-size:12px; color:#999; margin-bottom:8px;">Multi-Select Efficiency</div>
+                                <div style="font-size:24px; font-weight:800; color:#8b5cf6;" id="partial-score">0</div>
+                                <div style="font-size:12px; color:#666;">partial marks obtained</div>
+                            </div>
+                        </div>
+                    <!-- ERROR REDUCTION ANALYSIS -->
+                    <div class="analysis-section">
+                        <div class="analysis-section-title"><i data-lucide="shield-check"></i> ERROR REDUCTION ANALYSIS</div>
+                        <div style="font-size:12px; color:#999; margin-bottom:12px;">Potential score with reduced errors</div>
+                        <div class="error-reduction-container">
+                            <div class="error-bar-item">
+                                <div class="error-label">Current</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-current"></div>
+                                </div>
+                                <div class="error-score" id="score-current">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">10% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-10"></div>
+                                </div>
+                                <div class="error-score" id="score-10">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">30% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-30"></div>
+                                </div>
+                                <div class="error-score" id="score-30">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">50% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-50"></div>
+                                </div>
+                                <div class="error-score" id="score-50">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">70% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-70"></div>
+                                </div>
+                                <div class="error-score" id="score-70">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">90% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-90"></div>
+                                </div>
+                                <div class="error-score" id="score-90">0</div>
+                            </div>
+                            <div class="error-bar-item">
+                                <div class="error-label">100% less errors</div>
+                                <div class="error-bar-wrapper">
+                                    <div class="error-bar" id="bar-100"></div>
+                                </div>
+                                <div class="error-score" id="score-100">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+</div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="modal hidden" onclick="closeProfileModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h2>User Profile</h2>
+                <button class="modal-close" onclick="closeProfileModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-item">
+                    <label>Name:</label>
+                    <span id="profile-name">-</span>
+                </div>
+                <div class="profile-item">
+                    <label>Application ID:</label>
+                    <span id="profile-id">-</span>
+                </div>
+                <div class="profile-item">
+                    <label>Paper 1:</label>
+                    <span id="profile-p1">Not Attempted</span>
+                </div>
+                <div class="profile-item">
+                    <label>Paper 2:</label>
+                    <span id="profile-p2">Locked</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeProfileModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions Page (full white page, left content + right sidebar) -->
+    <div id="instr-modal" class="instr-modal hidden">
+        <div class="instr-panel">
+            <div class="instr-top">
+                <div class="instr-top-left">
+                    <div class="instr-title">Exam Instructions</div>
+                    <div class="instr-subtitle">Read carefully — exam will be monitored</div>
+                </div>
+                <div class="instr-lang">
+                    <label style="font-weight:600;margin-right:10px;">Language</label>
+                    <select id="lang-select">
+                        <option value="en" selected>English</option>
+                        <option value="hi">हिन्दी</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="instr-main">
+                <div class="instr-content">
+                    <p>Please read the instructions below carefully. You must agree before starting the exam.</p>
+                    <ol id="instr-list"></ol>
+
+                    <h3 style="margin-top:28px; font-size:20px; font-weight:700; color:#333;">Question Palette</h3>
+                    <div class="palette-legend" style="margin-top:16px; gap:24px;">
+                        <div class="pal-item"><span class="pal-box pal-gray"></span><span class="pal-label" style="font-size:15px;"><strong>"Not Visited"</strong> - You have not visited the question yet.</span></div>
+                        <div class="pal-item"><span class="pal-box pal-red"></span><span class="pal-label" style="font-size:15px;"><strong>"Not Answered"</strong> - You have not answered the question.</span></div>
+                        <div class="pal-item"><span class="pal-box pal-green"></span><span class="pal-label" style="font-size:15px;"><strong>"Answered"</strong> - You have answered the question.</span></div>
+                        <div class="pal-item"><span class="pal-box" style="background: #6f42c1; border-radius: 50%;"></span><span class="pal-label" style="font-size:15px;"><strong>"Marked"</strong> - Marked for review (no answer).</span></div>
+                        <div class="pal-item"><span class="pal-box" style="background: #6f42c1; border-radius: 50%; position: relative;"><span style="position: absolute; bottom: 0; right: 0; color: #0f0; font-size: 12px; background: rgba(0,0,0,0.2); border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center;">✓</span></span><span class="pal-label" style="font-size:15px;"><strong>"Marked & Answered"</strong> - Answered and marked for review.</span></div>
+                    </div>
+
+                    <div style="margin-top:28px; font-size:15px; color:#333; line-height:1.8;">
+                        <input type="checkbox" id="agree-check" style="width:18px; height:18px; cursor:pointer;"> <label for="agree-check" style="cursor:pointer; font-size:15px;"> I have read and understood the instructions. All computer hardware allotted to me are in proper working condition. I declare that I am not in possession of / not wearing / not carrying any prohibited gadget like mobile phone, bluetooth devices etc. I agree that in case of not adhering to the instructions, I shall be liable to be debarred from this Test and/or to disciplinary action.</label>
+                    </div>
+
+                    <div style="margin-top:36px; text-align:center;">
+                        <button id="start-exam-btn" class="btn btn-pri" style="padding:14px 40px; font-size:16px;" disabled>I am ready to begin</button>
+                    </div>
+                </div>
+            </div>
+            <div class="instr-footer">
+                <div style="width:100%; text-align:center; color:#999; font-size:12px;">Version : 17.02.00</div>
+            </div>
+        </div>
+    </div>
+
+    <template id="tpl-kp">
+        <div class="kp-box">
+            <div class="kp-screen" id="kp-val"></div>
+            <div class="kp-grid">
+                <div class="kp-btn" onclick="kp('7')">7</div>
+                <div class="kp-btn" onclick="kp('8')">8</div>
+                <div class="kp-btn" onclick="kp('9')">9</div>
+                <div class="kp-btn" onclick="kp('4')">4</div>
+                <div class="kp-btn" onclick="kp('5')">5</div>
+                <div class="kp-btn" onclick="kp('6')">6</div>
+                <div class="kp-btn" onclick="kp('1')">1</div>
+                <div class="kp-btn" onclick="kp('2')">2</div>
+                <div class="kp-btn" onclick="kp('3')">3</div>
+                <div class="kp-btn" onclick="kp('0')">0</div>
+                <div class="kp-btn" onclick="kp('.')">.</div>
+                <div class="kp-btn" onclick="kp('-')">-</div>
+                <div class="kp-btn kp-back" onclick="kp('bk')">BACKSPACE</div>
+            </div>
+        </div>
+    </template>
+
+    
+    
+    <!-- Global Error Handler -->
+    
+    <!-- Production-Grade Exam Engine Modules -->
+    <script src="assets/js/storage-manager.obf.js"></script>
+    <script src="assets/js/storage-helper.obf.js"></script>
+    <script src="assets/js/precision-timer.obf.js"></script>
+    <script src="assets/js/precision-integration.obf.js"></script>
+    <script src="assets/js/app.obf.js"></script>
+    <script src="assets/js/review-mode.obf.js"></script>
+    <script src="assets/js/error-handler.obf.js"></script>
+    <script>initFromFocusHub();</script>
+    <!-- Code Protection Script -->
+    <script>
+    (function() {
+      'use strict';
+      
+      // Disable right-click
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        return false;
+      });
+      
+      // Disable common dev tools shortcuts (including F12)
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+            (e.ctrlKey && e.key === 'U')) {
+          e.preventDefault();
+          return false;
+        }
+      });
+      
+      // Detect dev tools opening (disabled)
+      /*
+      let devToolsOpen = false;
+      const threshold = 160;
+      
+      setInterval(function() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+        
+        if (widthThreshold || heightThreshold) {
+          if (!devToolsOpen) {
+            devToolsOpen = true;
+            document.body.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#1a1a2e;color:#fff;font-family:sans-serif;"><h1>Developer tools are not allowed</h1></div>';
+          }
+        } else {
+          devToolsOpen = false;
+        }
+      }, 500);
+      */
+      
+      // Disable console methods (disabled)
+      /*
+      const consoleMethods = ['log', 'error', 'warn', 'info', 'debug', 'table', 'trace'];
+      consoleMethods.forEach(method => {
+        console[method] = function() {};
+      });
+      */
+      
+      // Anti-debugging with debugger statement (disabled)
+      /*
+      setInterval(function() {
+        const start = performance.now();
+        debugger;
+        const end = performance.now();
+        if (end - start > 100) {
+          location.reload();
+        }
+      }, 1000);
+      */
+    })();
+    </script>
+    <script>
+        if (window.lucide) { lucide.createIcons(); }
+        function showResultSection(sectionId) {
+            document.querySelectorAll('.result-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+            const section = document.getElementById('section-' + sectionId);
+            const item = document.querySelector('[data-section="' + sectionId + '"]');
+            if (section) section.classList.add('active');
+            if (item) item.classList.add('active');
+        }
+
+        // Policy Modal Functions
+        function openPolicyModal() {
+            const modal = document.getElementById('policy-modal');
+            if (modal) modal.classList.add('active');
+        }
+
+        function closePolicyModal() {
+            const modal = document.getElementById('policy-modal');
+            if (modal) modal.classList.remove('active');
+        }
+
+        function closePolicyModalOnBackdrop(event) {
+            if (event.target === event.currentTarget) {
+                closePolicyModal();
+            }
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                closePolicyModal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 const MARKED_KEY = 'impulse_marked';
 const LEGACY_MARKED_KEY = 'examforge_marked';
+const MARKED_UPDATED_EVENT = 'impulse:marked:updated';
 
 function migrateMarkedIfNeeded() {
   if (typeof window === 'undefined') return;
@@ -12,26 +13,41 @@ function migrateMarkedIfNeeded() {
   }
 }
 
+function readMarkedQuestions() {
+  if (typeof window === 'undefined') return [];
+  migrateMarkedIfNeeded();
+  const stored = window.localStorage.getItem(MARKED_KEY);
+  return stored ? JSON.parse(stored) : [];
+}
+
 export function useMarkedQuestions() {
-  const [markedQuestions, setMarkedQuestions] = useState([]);
+  const [markedQuestions, setMarkedQuestions] = useState(readMarkedQuestions);
 
   useEffect(() => {
-    migrateMarkedIfNeeded();
-    const stored = localStorage.getItem(MARKED_KEY);
-    if (stored) {
-      setMarkedQuestions(JSON.parse(stored));
-    }
+    const refresh = () => setMarkedQuestions(readMarkedQuestions());
+    const handleStorage = event => {
+      if (event.key === MARKED_KEY) refresh();
+    };
+
+    window.addEventListener(MARKED_UPDATED_EVENT, refresh);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener(MARKED_UPDATED_EVENT, refresh);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   const toggleMark = (questionId) => {
+    const current = readMarkedQuestions();
     let updated;
-    if (markedQuestions.includes(questionId)) {
-      updated = markedQuestions.filter(id => id !== questionId);
+    if (current.includes(questionId)) {
+      updated = current.filter(id => id !== questionId);
     } else {
-      updated = [...markedQuestions, questionId];
+      updated = [...current, questionId];
     }
     setMarkedQuestions(updated);
-    localStorage.setItem(MARKED_KEY, JSON.stringify(updated));
+    window.localStorage.setItem(MARKED_KEY, JSON.stringify(updated));
+    window.dispatchEvent(new Event(MARKED_UPDATED_EVENT));
   };
 
   const isMarked = (questionId) => {

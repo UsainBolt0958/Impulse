@@ -25,7 +25,7 @@ function TestSeriesPage() {
       try {
         const [series, tests] = await Promise.all([loadPublicSeries(), loadTests()]);
         const publishedSeries = series
-          .filter(s => s.published) // Only show published series
+          .filter(s => s.published && s.meta?.kind !== 'previous-papers') // Previous papers have their own library.
           .map((item) => ({
             ...item,
             tests: tests
@@ -36,7 +36,7 @@ function TestSeriesPage() {
                   ...test,
                   questions: (test.sections || []).reduce((count, section) => count + ((section.questions || []).length), 0),
                   duration: durationMinutes,
-                  subjects: Array.from(new Set((test.sections || []).map((section) => section.name).filter(Boolean))),
+                  subjects: Array.from(new Set((test.sections || []).map((section) => section.subject).filter(Boolean))),
                 };
               }),
           }));
@@ -53,8 +53,7 @@ function TestSeriesPage() {
   }, []);
 
   const handleStartTest = (testId, seriesId) => {
-    // Open the legacy exam engine via a neutral /exam/ entry point
-    const examUrl = `/exam/index.html?testId=${encodeURIComponent(testId)}&seriesId=${encodeURIComponent(seriesId)}`;
+    const examUrl = `/jee2025/exam/index.html?testId=${encodeURIComponent(testId)}&seriesId=${encodeURIComponent(seriesId)}&paper=1`;
     window.location.href = examUrl;
   };
 
@@ -72,7 +71,6 @@ function TestSeriesPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-12">
               <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Test Series</h1>
-              <p className="text-lg text-muted-foreground">Take full-length mock tests to assess your preparation</p>
             </div>
 
             {isLoading ? (

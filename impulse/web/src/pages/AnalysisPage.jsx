@@ -7,10 +7,13 @@ import StatsCard from '@/components/StatsCard.jsx';
 import { useMetrics } from '@/hooks/useMetrics';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
 import { useQuestions } from '@/hooks/useQuestions';
-import { TrendingUp, Target, Clock, Award, BarChart3, ChevronDown } from 'lucide-react';
+import { TrendingUp, Target, Clock, Award, BarChart3, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+const CHAPTERS_PER_PAGE = 10;
 
 const PERIOD_OPTIONS = [
   { id: 'daily', label: 'Daily' },
@@ -98,18 +101,25 @@ function groupByChapter(solvedQuestions, questions) {
       accuracy: data.attempts ? Number(((data.correct / data.attempts) * 100).toFixed(1)) : 0,
       avgTime: data.attempts ? Number((data.totalTime / data.attempts).toFixed(1)) : 0,
     }))
-    .sort((left, right) => right.solved - left.solved)
-    .slice(0, 12);
+    .sort((left, right) => right.solved - left.solved);
 }
 
 function AnalysisPage() {
   const { periodCounts, difficultyBreakdown, chapterMetrics, subjectMetrics, examMetrics, accuracyTrends } = useMetrics();
-  const { getTotalSolved, getAccuracy, solvedQuestions } = useSolvedQuestions();
+  const { getUniqueAttemptedCount, getAccuracy, solvedQuestions } = useSolvedQuestions();
   const { questions } = useQuestions();
   const [period, setPeriod] = React.useState('daily');
+  const [chapterPageIndex, setChapterPageIndex] = React.useState(0);
 
   const periodSeries = React.useMemo(() => buildPeriodSeries(solvedQuestions, period), [solvedQuestions, period]);
   const chapterSnapshot = React.useMemo(() => groupByChapter(solvedQuestions, questions || []), [solvedQuestions, questions]);
+  const chapterData = chapterSnapshot.length ? chapterSnapshot : chapterMetrics;
+  const chapterPageCount = Math.max(1, Math.ceil(chapterData.length / CHAPTERS_PER_PAGE));
+  const chapterPage = Math.min(chapterPageIndex, chapterPageCount - 1);
+  const visibleChapters = chapterData.slice(
+    chapterPage * CHAPTERS_PER_PAGE,
+    (chapterPage + 1) * CHAPTERS_PER_PAGE,
+  );
 
   const difficultyData = Object.entries(difficultyBreakdown).map(([name, value]) => ({
     name,
@@ -135,22 +145,22 @@ function AnalysisPage() {
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
               <StatsCard
-                label="Total Solved"
-                value={getTotalSolved()}
+                label="Unique Questions Attempted"
+                value={getUniqueAttemptedCount()}
                 icon={(props) => <ColoredIcon icon={Target} name="target" size={6} {...props} />}
               />
               <StatsCard
-                label="Overall Accuracy"
+                label="Attempt Accuracy"
                 value={`${getAccuracy()}%`}
                 icon={(props) => <ColoredIcon icon={TrendingUp} name="trendingup" size={6} {...props} />}
               />
               <StatsCard
-                label="This Week"
+                label="Unique Questions Attempted This Week"
                 value={periodCounts.weekly}
                 icon={(props) => <ColoredIcon icon={Clock} name="clock" size={6} {...props} />}
               />
               <StatsCard
-                label="This Year"
+                label="Unique Questions Attempted This Year"
                 value={periodCounts.yearly}
                 icon={(props) => <ColoredIcon icon={Award} name="award" size={6} {...props} />}
               />
@@ -186,15 +196,15 @@ function AnalysisPage() {
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-2xl border border-border bg-secondary/20 p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Current window</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Unique attempted in current window</p>
                   <p className="mt-1 text-3xl font-black uppercase">{periodCounts[period]}</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-secondary/20 p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Solved total</p>
-                  <p className="mt-1 text-3xl font-black uppercase">{getTotalSolved()}</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Unique questions attempted</p>
+                  <p className="mt-1 text-3xl font-black uppercase">{getUniqueAttemptedCount()}</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-secondary/20 p-4">
-                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Accuracy</p>
+                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Attempt accuracy</p>
                   <p className="mt-1 text-3xl font-black uppercase">{getAccuracy()}%</p>
                 </div>
               </CardContent>
@@ -227,23 +237,57 @@ function AnalysisPage() {
               </TabsContent>
 
               <TabsContent value="chapters" className="space-y-8">
+                {chapterData.length > CHAPTERS_PER_PAGE && (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      Chapters {chapterPage * CHAPTERS_PER_PAGE + 1}–{Math.min((chapterPage + 1) * CHAPTERS_PER_PAGE, chapterData.length)} of {chapterData.length}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setChapterPageIndex(chapterPage - 1)}
+                        disabled={chapterPage === 0}
+                        aria-label="Previous chapters"
+                      >
+                        <ChevronLeft className="mr-1 h-4 w-4" />
+                        Previous
+                      </Button>
+                      <span className="min-w-16 text-center font-mono text-sm text-muted-foreground" aria-live="polite">
+                        {chapterPage + 1} / {chapterPageCount}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setChapterPageIndex(chapterPage + 1)}
+                        disabled={chapterPage >= chapterPageCount - 1}
+                        aria-label="Next chapters"
+                      >
+                        Next
+                        <ChevronRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <PerformanceChart
                   type="bar"
-                  data={chapterSnapshot.length ? chapterSnapshot : chapterMetrics}
+                  data={visibleChapters}
                   title="Questions Solved by Chapter"
                   dataKey="solved"
                   xKey="chapter"
                 />
                 <PerformanceChart
                   type="bar"
-                  data={chapterSnapshot.length ? chapterSnapshot : chapterMetrics}
+                  data={visibleChapters}
                   title="Accuracy by Chapter (%)"
                   dataKey="accuracy"
                   xKey="chapter"
                 />
                 <PerformanceChart
                   type="bar"
-                  data={chapterSnapshot.length ? chapterSnapshot : chapterMetrics}
+                  data={visibleChapters}
                   title="Average Time by Chapter (seconds)"
                   dataKey="avgTime"
                   xKey="chapter"

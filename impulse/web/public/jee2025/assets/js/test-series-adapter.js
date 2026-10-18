@@ -59,8 +59,14 @@ class TestSeriesAdapter {
         document.documentElement.style.removeProperty('--series-background-image');
       }
 
-      const sourceSections = (series.sections && series.sections.length) ? series.sections : (template.sections || []);
-      const sourceSubjects = (series.subjects && series.subjects.length) ? series.subjects : this.inferSubjects(template);
+      const sourceSections = (template.sections && template.sections.length)
+        ? template.sections
+        : (series.sections || []);
+      const sourceSubjects = (test.subjects && test.subjects.length)
+        ? test.subjects
+        : (series.subjects && series.subjects.length)
+          ? series.subjects
+          : this.inferSubjects(template);
 
       // Build exam config
       this.config = {
@@ -122,7 +128,7 @@ class TestSeriesAdapter {
   buildSectionConfig(sections) {
     const config = {};
     sections.forEach((section) => {
-      const sectionKey = section.name || section.sectionName;
+      const sectionKey = section.sectionName || section.name;
       if (!sectionKey) return;
       config[sectionKey] = [
         section.questionCountPerSubject || section.questionCount || (section.questions ? section.questions.length : 0),
@@ -137,7 +143,7 @@ class TestSeriesAdapter {
   buildMarkingScheme(sections) {
     const scheme = {};
     sections.forEach((section) => {
-      const sectionKey = section.name || section.sectionName;
+      const sectionKey = section.sectionName || section.name;
       if (!sectionKey) return;
       scheme[sectionKey] = {
         type: section.type,
@@ -147,6 +153,52 @@ class TestSeriesAdapter {
       };
     });
     return scheme;
+  }
+
+  getMaximumScore() {
+    if (!this.config) return null;
+
+    const templateSections = this.template?.sections;
+    if (Array.isArray(templateSections) && templateSections.length) {
+      let total = 0;
+      for (const section of templateSections) {
+        const sectionKey = section.sectionName || section.name;
+        const marking = this.config.marking?.[sectionKey];
+        const questionCount = Array.isArray(section.questions)
+          ? section.questions.length
+          : Number(section.questionCountPerSubject || section.questionCount || marking?.questionCount);
+        const marksPerQuestion = Number(marking?.posMarks);
+
+        if (!sectionKey || !Number.isFinite(questionCount) || !Number.isFinite(marksPerQuestion)) {
+          return null;
+        }
+
+        total += questionCount * marksPerQuestion;
+      }
+      return total;
+    }
+
+    const subjectCount = this.config.subjects?.length || 0;
+    if (!subjectCount) return null;
+
+    let total = 0;
+    for (const marking of Object.values(this.config.marking || {})) {
+      const questionCount = Number(marking.questionCount);
+      const marksPerQuestion = Number(marking.posMarks);
+      if (!Number.isFinite(questionCount) || !Number.isFinite(marksPerQuestion)) {
+        return null;
+      }
+      total += questionCount * marksPerQuestion * subjectCount;
+    }
+    return total;
+  }
+
+  getPanicWindowSeconds(durationMinutes = this.config?.duration) {
+    const duration = Number(durationMinutes);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new Error('A positive exam duration is required for panic mode analysis');
+    }
+    return Math.min(15, duration) * 60;
   }
 
   /**
