@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import {
@@ -8,13 +8,18 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
+  Check,
+  Cloud,
   Crown,
+  Eye,
+  EyeOff,
   Flame,
   Medal,
   ShieldCheck,
   Sparkles,
   Target,
   Trophy,
+  UsersRound,
   Zap,
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -31,6 +36,13 @@ import {
   INITIAL_RATING,
 } from '@/lib/impulseRating';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  PROFILE_VISIBILITY_UPDATED_EVENT,
+  canShowProfileStatCard,
+  readProfileVisibility,
+  saveProfileVisibility,
+} from '@/lib/profileVisibility';
 
 const DIFFICULTIES = [
   { name: 'Easy', color: 'bg-emerald-500' },
@@ -40,6 +52,17 @@ const DIFFICULTIES = [
 
 const SUBJECTS = ['Biology', 'Chemistry', 'Physics', 'Math'];
 const MEDAL_ICONS = { Flame, Zap, ShieldCheck, Crown, Target, Trophy, Sparkles };
+const SYNCED_DATA_CATEGORIES = [
+  'Google sign-in identity plus profile name, photo, and username',
+  'Question attempts and the study calendar derived from them',
+  'Bookmarked questions and notebook content',
+  'Custom-test progress and results',
+  'Test-series and previous-paper progress and results',
+  'JEE exam sessions, saved recovery checkpoints, and exam analytics',
+  'Profile-stat visibility and appearance/reading preferences',
+  'Quiz-challenge player name and ID',
+  'Friend requests and accepted connections stored in Supabase',
+];
 
 function getDifficulty(question) {
   const difficulty = String(question?.difficulty || '').trim().toLowerCase();
@@ -173,12 +196,53 @@ function activityColor(solved) {
   return 'bg-emerald-300';
 }
 
-function ProfilePage() {
-  const { solvedQuestions } = useSolvedQuestions();
-  const { questions } = useQuestions();
+function ProfilePage({ profile = null }) {
+  const { user, profile: accountProfile, syncStatus, syncError } = useAuth();
+  const { solvedQuestions: ownSolvedQuestions } = useSolvedQuestions();
+  const { questions: ownQuestions } = useQuestions();
+  const solvedQuestions = profile?.solvedQuestions || ownSolvedQuestions;
+  const questions = profile?.questions || ownQuestions;
   const now = useMemo(() => new Date(), []);
   const [ratingPeriod, setRatingPeriod] = useState('today');
   const [selectedActivityDay, setSelectedActivityDay] = useState(null);
+  const [profileVisibility, setProfileVisibility] = useState(() => readProfileVisibility());
+  const isOwnProfile = !profile;
+  const visibleStats = profile?.visibleStats || profileVisibility;
+  const profileName = profile?.name || accountProfile?.display_name || user?.user_metadata?.full_name || 'You';
+
+  useEffect(() => {
+    if (!isOwnProfile) return undefined;
+    const refreshVisibility = () => setProfileVisibility(readProfileVisibility());
+    window.addEventListener(PROFILE_VISIBILITY_UPDATED_EVENT, refreshVisibility);
+    window.addEventListener('storage', refreshVisibility);
+    return () => {
+      window.removeEventListener(PROFILE_VISIBILITY_UPDATED_EVENT, refreshVisibility);
+      window.removeEventListener('storage', refreshVisibility);
+    };
+  }, [isOwnProfile]);
+
+  const toggleStatVisibility = (statId) => {
+    const updated = saveProfileVisibility({
+      ...profileVisibility,
+      [statId]: !profileVisibility[statId],
+    });
+    setProfileVisibility(updated);
+  };
+
+  const visibilityButton = (sectionId, label) => isOwnProfile && (
+    <button
+      type="button"
+      onClick={() => toggleStatVisibility(sectionId)}
+      aria-label={`${profileVisibility[sectionId] ? 'Hide' : 'Show'} ${label} ${profileVisibility[sectionId] ? 'from' : 'to'} friends`}
+      aria-pressed={profileVisibility[sectionId]}
+      title={`${profileVisibility[sectionId] ? 'Visible' : 'Hidden'} to friends`}
+      className="rounded-md p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+    >
+      {profileVisibility[sectionId]
+        ? <Eye className="h-4 w-4" aria-hidden="true" />
+        : <EyeOff className="h-4 w-4" aria-hidden="true" />}
+    </button>
+  );
 
   const questionById = useMemo(
     () => new Map(questions.map((question) => [question.id, question])),
@@ -267,8 +331,8 @@ function ProfilePage() {
   return (
     <>
       <Helmet>
-        <title>Profile - Impulse</title>
-        <meta name="description" content="Your Impulse rating, problem-solving history, and yearly activity." />
+        <title>{profile ? `${profileName} - Impulse` : 'Profile - Impulse'}</title>
+        <meta name="description" content={`${profileName}'s Impulse rating, problem-solving history, and yearly activity.`} />
       </Helmet>
 
       <div className="min-h-screen flex flex-col bg-background">
@@ -277,27 +341,84 @@ function ProfilePage() {
           <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
             <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-muted-foreground">Your progress, in focus</p>
-                <h1 className="text-5xl font-black uppercase tracking-tight">Profile</h1>
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-muted-foreground">
+                  {isOwnProfile ? 'Your progress, in focus' : `${profileName}'s progress`}
+                </p>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h1 className="text-5xl font-black uppercase tracking-tight">{isOwnProfile ? 'Profile' : profileName}</h1>
+                  {(profile?.username || accountProfile?.username) && (
+                    <span className="text-base font-semibold text-muted-foreground">
+                      @{profile?.username || accountProfile?.username}
+                    </span>
+                  )}
+                </div>
               </div>
-              <Link
-                to="/analysis"
-                className="inline-flex min-h-11 items-center justify-center gap-2 border border-border px-4 text-sm font-bold transition-colors hover:bg-secondary"
-              >
-                <BarChart3 className="h-4 w-4" />
-                Full analysis
-              </Link>
+              {isOwnProfile ? (
+                <Link
+                  to="/analysis"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 border border-border px-4 text-sm font-bold transition-colors hover:bg-secondary"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  Full analysis
+                </Link>
+              ) : (
+                <Link
+                  to="/friends"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 border border-border px-4 text-sm font-bold transition-colors hover:bg-secondary"
+                >
+                  <UsersRound className="h-4 w-4" />
+                  Back to friends
+                </Link>
+              )}
             </section>
+
+            {isOwnProfile && (
+              <Card className="border-border">
+                <CardHeader>
+                  <div className="flex items-start gap-3">
+                    <Cloud className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+                    <div>
+                      <CardTitle>Your data across devices</CardTitle>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {syncStatus === 'synced' && 'Your supported data has finished syncing to your account.'}
+                        {syncStatus === 'syncing' && 'Merging this browser’s saved data with your account…'}
+                        {syncStatus === 'error' && 'Some data could not sync. Your browser copy is still saved.'}
+                        {syncStatus === 'idle' && 'Sign in to sync your study data to your account.'}
+                      </p>
+                      {syncStatus === 'error' && syncError && (
+                        <p role="alert" className="mt-2 text-sm text-destructive">{syncError}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {SYNCED_DATA_CATEGORIES.map((category) => (
+                      <li key={category} className="flex items-start gap-2 text-sm">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <span>{category}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                    Full-screen exam progress syncs after you return to the main app. Shared question content,
+                    admin data, and private quiz-challenge access tokens are intentionally excluded.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.4fr)]">
               <Card className="overflow-hidden border-border">
                 <CardContent className="flex h-full min-h-[220px] flex-col justify-between p-6 sm:p-8">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center bg-foreground text-xl font-black text-background">I</div>
+                      <div className="flex h-14 w-14 items-center justify-center bg-foreground text-xl font-black text-background">
+                        {profileName.split(' ').map((part) => part[0]).join('')}
+                      </div>
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.22em] text-muted-foreground">
-                          Level {ratingLevel.level} · {ratingLevel.name}
+                          {profile?.username ? `${profile.username} · ` : ''}Level {ratingLevel.level} · {ratingLevel.name}
                         </p>
                       </div>
                     </div>
@@ -424,18 +545,41 @@ function ProfilePage() {
               </Card>
             </div>
 
+            {isOwnProfile && (
+              <p className="text-xs font-semibold text-muted-foreground">
+                Use the eye buttons to choose which stats and sections friends can see.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {[
-                { label: 'Problems solved', value: profileStats.solved, icon: Target, caption: 'Unique questions answered correctly' },
-                { label: 'Active days', value: activity.activeDays, icon: CalendarDays, caption: 'This year' },
-                { label: 'Longest streak', value: `${activity.longestStreak} ${activity.longestStreak === 1 ? 'day' : 'days'}`, icon: Flame, caption: 'This year' },
-                { label: 'Attempts this year', value: activity.attempts, icon: BookOpen, caption: `${activity.activeDays} days in the arena` },
-              ].map(({ label, value, icon: Icon, caption }) => (
-                <Card key={label} className="border-border">
+                { id: 'problemsSolved', label: 'Problems solved', value: profileStats.solved, icon: Target, caption: 'Unique questions answered correctly' },
+                { id: 'activeDays', label: 'Active days', value: activity.activeDays, icon: CalendarDays, caption: 'This year' },
+                { id: 'longestStreak', label: 'Longest streak', value: `${activity.longestStreak} ${activity.longestStreak === 1 ? 'day' : 'days'}`, icon: Flame, caption: 'This year' },
+                { id: 'attemptsThisYear', label: 'Attempts this year', value: activity.attempts, icon: BookOpen, caption: `${activity.activeDays} days in the arena` },
+              ]
+                .filter(({ id }) => canShowProfileStatCard(id, visibleStats, isOwnProfile))
+                .map(({ id, label, value, icon: Icon, caption }) => (
+                <Card key={id} className="border-border">
                   <CardContent className="p-5">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
-                      <Icon className="h-4 w-4 text-amber-500" />
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-amber-500" />
+                        {isOwnProfile && (
+                          <button
+                            type="button"
+                            onClick={() => toggleStatVisibility(id)}
+                            aria-label={`${profileVisibility[id] ? 'Hide' : 'Show'} ${label} ${profileVisibility[id] ? 'from' : 'to'} friends`}
+                            aria-pressed={profileVisibility[id]}
+                            title={`${profileVisibility[id] ? 'Visible' : 'Hidden'} to friends`}
+                            className="rounded-md p-1 text-muted-foreground transition hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
+                          >
+                            {profileVisibility[id]
+                              ? <Eye className="h-4 w-4" aria-hidden="true" />
+                              : <EyeOff className="h-4 w-4" aria-hidden="true" />}
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="mt-3 font-mono text-3xl font-bold">{value}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{caption}</p>
@@ -444,10 +588,14 @@ function ProfilePage() {
               ))}
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className={`grid gap-6 ${canShowProfileStatCard('difficultyStats', visibleStats, isOwnProfile) ? 'lg:grid-cols-2' : ''}`}>
+              {canShowProfileStatCard('difficultyStats', visibleStats, isOwnProfile) && (
               <Card className="border-border">
                 <CardHeader>
-                  <CardTitle className="text-lg font-black uppercase tracking-tight">Solved by difficulty</CardTitle>
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-lg font-black uppercase tracking-tight">Solved by difficulty</CardTitle>
+                    {visibilityButton('difficultyStats', 'Solved by difficulty')}
+                  </div>
                   <p className="text-sm text-muted-foreground">Unique questions answered correctly / unique questions attempted</p>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -467,6 +615,7 @@ function ProfilePage() {
                   </p>
                 </CardContent>
               </Card>
+              )}
 
               <Card className="border-border">
                 <CardHeader>
@@ -507,9 +656,13 @@ function ProfilePage() {
               </Card>
             </div>
 
+            {canShowProfileStatCard('subjectRating', visibleStats, isOwnProfile) && (
             <Card className="border-border">
               <CardHeader>
-                <CardTitle className="text-lg font-black uppercase tracking-tight">Rating by subject</CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-lg font-black uppercase tracking-tight">Rating by subject</CardTitle>
+                  {visibilityButton('subjectRating', 'Rating by subject')}
+                </div>
                 <p className="text-sm text-muted-foreground">Net Impulse rating points earned or lost</p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -530,11 +683,16 @@ function ProfilePage() {
                 <p className="border-t border-border pt-4 text-xs text-muted-foreground">Correct answers add fixed points; incorrect answers use your current rating in the penalty calculation.</p>
               </CardContent>
             </Card>
+            )}
 
+            {canShowProfileStatCard('yearlyActivity', visibleStats, isOwnProfile) && (
             <Card className="border-border">
               <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <CardTitle className="text-lg font-black uppercase tracking-tight">Problem solving this year</CardTitle>
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-lg font-black uppercase tracking-tight">Problem solving this year</CardTitle>
+                    {visibilityButton('yearlyActivity', 'Problem solving this year')}
+                  </div>
                   <p className="mt-1 text-sm text-muted-foreground">Every square is one day. More green means more questions solved.</p>
                 </div>
                 <p className="font-mono text-sm font-bold">{activity.attempts.toLocaleString()} <span className="font-sans font-medium text-muted-foreground">attempts</span></p>
@@ -606,6 +764,7 @@ function ProfilePage() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
         </main>
       </div>

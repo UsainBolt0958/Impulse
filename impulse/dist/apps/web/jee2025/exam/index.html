@@ -66,6 +66,12 @@
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #f1f5f9; }
         .section-header h2 { font-size: 24px; font-weight: 700; color: #1e293b; margin: 0; }
         .analysis-section { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px; margin-bottom: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        .subject-performance-section { min-width: 0; max-width: 100%; padding: 16px !important; overflow: hidden; }
+        #subject-section-table { width: 100%; max-width: 100%; table-layout: fixed; }
+        #subject-section-table th,
+        #subject-section-table td { min-width: 0; padding: 6px 3px; line-height: 1.25; overflow-wrap: anywhere; }
+        #subject-section-table td:first-child span { gap: 4px !important; flex-wrap: wrap; max-width: 100%; }
+        #subject-section-table td:first-child i { flex: 0 0 auto; width: 14px !important; height: 14px !important; }
         .analysis-section-title { font-size: 14px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; display: flex; align-items: center; gap: 10px; }
         .analysis-section-title i { color: #3b82f6; width: 20px; height: 20px; }
         .pattern-box { border-radius: 12px; padding: 24px; }
@@ -368,7 +374,7 @@
             <aside class="result-sidebar">
                 <div class="sidebar-header">
                     <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
-                        <i data-lucide="arrow-left" style="cursor: pointer; width: 20px; height: 20px;" onclick="goToPortalHome()"></i>
+                        <i data-lucide="arrow-left" style="cursor: pointer; width: 20px; height: 20px;" onclick="goToExamDashboard()"></i>
                         <h3>Test Analysis</h3>
                     </div>
                     <p id="res-subtitle">PAPER 1</p>
@@ -537,7 +543,7 @@
                     <div class="section-header">
                         <h2>Subject & Section Performance</h2>
                     </div>
-                    <div class="analysis-section">
+                    <div class="analysis-section subject-performance-section">
                         <table class="analysis-table" id="subject-section-table">
                             <thead>
                                 <tr>
@@ -1158,7 +1164,10 @@
     <script src="assets/js/review-mode.js"></script>
     <script src="assets/js/error-handler.js"></script>
     <script>
-        window.__EXAM_SERVER_URL__ = window.__EXAM_SERVER_URL__ || 'http://localhost:4001';
+        const localExamHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        window.__EXAM_SERVER_URL__ = window.__EXAM_SERVER_URL__
+            || window.sessionStorage.getItem('impulse_api_origin')
+            || (localExamHost ? 'http://localhost:4001' : '');
     </script>
 
     <script>
@@ -1257,17 +1266,36 @@
     </script>
     <script>
         if (window.lucide) { lucide.createIcons(); }
-        function goToPortalHome() {
+        function goToExamDashboard() {
             const params = new URLSearchParams(window.location.search);
+            const returnTo = params.get('returnTo');
+            if (returnTo && (returnTo.startsWith('/previous-papers/') || returnTo.startsWith('/test-series/'))) {
+                window.clearSavedExamPageState?.();
+                window.location.href = returnTo;
+                return;
+            }
             const testId = params.get('testId');
             const seriesId = params.get('seriesId');
-            if (testId || seriesId) {
-                let target = '/exam/index.html';
-                const parts = [];
-                if (testId) parts.push('testId=' + encodeURIComponent(testId));
-                if (seriesId) parts.push('seriesId=' + encodeURIComponent(seriesId));
-                if (parts.length) target += '?' + parts.join('&');
-                window.location.href = target;
+            if (testId && seriesId) {
+                window.clearSavedExamPageState?.();
+                window.location.href = `/test-series/${encodeURIComponent(seriesId)}/${encodeURIComponent(testId)}`;
+                return;
+            }
+            window.clearSavedExamPageState?.();
+            window.location.href = '/test-series';
+        }
+        function goToPortalHome() {
+            window.clearSavedExamPageState?.();
+            const params = new URLSearchParams(window.location.search);
+            const returnTo = params.get('returnTo');
+            if (returnTo && returnTo.startsWith('/previous-papers/')) {
+                window.location.href = returnTo;
+                return;
+            }
+            if (returnTo && returnTo.startsWith('/test-series/')) {
+                window.location.href = '/test-series';
+            } else if (params.has('testId') || params.has('seriesId')) {
+                window.location.href = '/test-series';
             } else {
                 window.location.href = '../index.html';
             }

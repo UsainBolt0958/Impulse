@@ -33,18 +33,29 @@ class TestSeriesAdapter {
 
     try {
       // Determine backend base URL (allow override via global)
-      const _base = (window.__EXAM_SERVER_URL__ || window.SERVER_URL || '').toString().replace(/\/$/, '');
+      const _base = (
+        window.__EXAM_SERVER_URL__
+        || window.SERVER_URL
+        || window.sessionStorage.getItem('impulse_api_origin')
+        || ''
+      ).toString().replace(/\/$/, '');
       const base = _base || '';
 
-      // Fetch series and test data using explicit backend base to avoid same-origin routing
-      const seriesResp = await fetch(`${base}/api/series/${seriesId}`);
-      const series = await seriesResp.json();
-
-      const testResp = await fetch(`${base}/api/tests/${testId}`);
-      const test = await testResp.json();
-
-      const templateResp = await fetch(`${base}/api/tests/${testId}/template`);
-      const template = await templateResp.json();
+      const loadJson = async (path) => {
+        const response = await fetch(`${base}/api${path}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (!response.ok) {
+          throw new Error(`The server denied access to this test (${response.status}).`);
+        }
+        return response.json();
+      };
+      const [series, test, template] = await Promise.all([
+        loadJson(`/series/${encodeURIComponent(seriesId)}`),
+        loadJson(`/tests/${encodeURIComponent(testId)}`),
+        loadJson(`/tests/${encodeURIComponent(testId)}/template`),
+      ]);
 
       this.series = series;
       this.test = test;
@@ -94,9 +105,7 @@ class TestSeriesAdapter {
       return this.config;
     } catch (error) {
       console.error('❌ [TestSeriesAdapter] Initialization failed:', error);
-      // Fall back to JEE 2025 defaults
-      console.log('⚠️ [TestSeriesAdapter] Using JEE 2025 defaults');
-      return this.getJEE2025Config();
+      throw error;
     }
   }
 

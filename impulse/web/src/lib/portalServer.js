@@ -1,5 +1,24 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
+async function getAccessToken() {
+  if (!supabase) throw new Error('Supabase is not configured for this website.');
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!data.session?.access_token) throw new Error('Sign in before starting checkout or a test.');
+  return data.session.access_token;
+}
+
+async function requestWithUserAuth(path, init = {}) {
+  const accessToken = await getAccessToken();
+  return requestJsonOrThrow(path, {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 async function requestJson(path, init = {}) {
   try {
     const response = await fetch(`${API_BASE}${path}`, {
@@ -75,21 +94,90 @@ export async function loadPublicQuestionsFromServer() {
   return Array.isArray(data?.questions) ? data.questions : [];
 }
 
+export async function loadQuizCatalog() {
+  const data = await requestJsonOrThrow('/quiz/catalog', { method: 'GET', cache: 'no-store' });
+  return Array.isArray(data?.subjects) ? data.subjects : [];
+}
+
+export async function createQuizChallenge(payload) {
+  return requestJsonOrThrow('/quiz/challenges', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function joinQuizChallenge(challengeId, payload) {
+  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}/join`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function loadQuizChallenge(challengeId, playerId, playerToken) {
+  const params = new URLSearchParams({ playerId, playerToken });
+  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}?${params}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+}
+
+export async function answerQuizChallenge(challengeId, payload) {
+  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}/answer`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function loadAdminSessionFromServer() {
   return requestJson('/admin-session', { method: 'GET' });
 }
 
-export async function loginToAdminServer(password) {
-  return requestJson('/admin-login', {
+export async function establishAdminServerSession(accessToken) {
+  return requestJsonOrThrow('/admin-login', {
     method: 'POST',
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ accessToken }),
   });
 }
 
 export async function logoutFromAdminServer() {
-  return requestJson('/admin-logout', {
+  return requestJsonOrThrow('/admin-logout', {
     method: 'POST',
   });
+}
+
+export async function createBillingOrder(payload) {
+  return requestWithUserAuth('/billing/orders', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getBillingOrderStatus(orderId) {
+  return requestWithUserAuth(`/billing/orders/${encodeURIComponent(orderId)}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+}
+
+export async function getSeriesBillingAccess(seriesId) {
+  const params = new URLSearchParams({ seriesId });
+  return requestWithUserAuth(`/billing/series-access?${params}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+}
+
+export async function establishExamSession(seriesId) {
+  const apiUrl = new URL(API_BASE, window.location.origin);
+  window.sessionStorage.setItem('impulse_api_origin', apiUrl.origin);
+  return requestWithUserAuth('/billing/exam-session', {
+    method: 'POST',
+    body: JSON.stringify({ seriesId }),
+  });
+}
+
+export async function clearExamSession() {
+  return requestJsonOrThrow('/billing/exam-session', { method: 'DELETE' });
 }
 
 export async function savePortalStateToServer(state) {

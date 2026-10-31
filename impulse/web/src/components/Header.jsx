@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Sun, Moon, UserRound } from 'lucide-react';
+import { Sun, Moon, UserRound, UsersRound } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
+import { useAuth } from '@/contexts/AuthContext';
 
 function Header() {
   const location = useLocation();
+  const { profile } = useAuth();
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -59,21 +61,57 @@ function Header() {
           </button>
 
           <Link
+            to="/friends"
+            aria-label="Friends"
+            title="Friends"
+            aria-current={location.pathname.startsWith('/friends') ? 'page' : undefined}
+            className={`ml-2 rounded-md p-2 transition ${
+              location.pathname.startsWith('/friends')
+                ? 'bg-secondary text-amber-500'
+                : 'text-amber-500 hover:bg-secondary'
+            }`}
+          >
+            <UsersRound className="h-5 w-5" />
+          </Link>
+
+          <Link
             to="/profile"
             aria-label="Profile"
             title="Profile"
             aria-current={location.pathname === '/profile' ? 'page' : undefined}
             className={`ml-2 rounded-md p-2 transition ${
               location.pathname === '/profile'
-                ? 'bg-secondary text-green-500'
-                : 'text-green-500 hover:bg-secondary'
+                ? 'bg-secondary text-violet-500'
+                : 'text-violet-500 hover:bg-secondary'
             }`}
           >
-            <UserRound className="h-5 w-5" />
+            <ProfileIcon avatarUrl={profile?.avatar_url} />
           </Link>
+
         </div>
       </div>
     </header>
+  );
+}
+
+function ProfileIcon({ avatarUrl }) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState(null);
+
+  useEffect(() => {
+    setFailedAvatarUrl(null);
+  }, [avatarUrl]);
+
+  if (!avatarUrl || failedAvatarUrl === avatarUrl) {
+    return <UserRound className="h-5 w-5" />;
+  }
+
+  return (
+    <img
+      src={avatarUrl}
+      alt=""
+      className="h-5 w-5 rounded-full object-cover"
+      onError={() => setFailedAvatarUrl(avatarUrl)}
+    />
   );
 }
 

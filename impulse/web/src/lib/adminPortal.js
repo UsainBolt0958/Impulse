@@ -1,5 +1,5 @@
 import { seedQuestionsToLocalStorage } from '@/data/seedQuestions';
-import { loadAdminSessionFromServer, loadPortalStateFromServer, loginToAdminServer, logoutFromAdminServer, savePortalStateToServer } from './portalServer';
+import { loadAdminSessionFromServer, loadPortalStateFromServer, savePortalStateToServer } from './portalServer';
 
 export const ADMIN_STORAGE_KEYS = {
   questions: 'impulse_questions',
@@ -269,14 +269,6 @@ export async function loadAdminPortalState() {
 
 export async function loadAdminSession() {
   return loadAdminSessionFromServer();
-}
-
-export async function loginAdmin(password) {
-  return loginToAdminServer(password);
-}
-
-export async function logoutAdmin() {
-  return logoutFromAdminServer();
 }
 
 export async function savePortalState(state) {

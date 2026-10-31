@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -9,13 +8,25 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Clock, Target } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { toast } from 'sonner';
-import { loadPublicSeries, loadTests } from '@/lib/portalServer';
+import {
+  establishExamSession,
+  getSeriesBillingAccess,
+  loadPublicSeries,
+  loadTests,
+} from '@/lib/portalServer';
+import { formatPriceInr, loadTestSeriesPriceMap } from '@/lib/premiumCatalog';
+import CheckoutControl from '@/components/CheckoutControl.jsx';
+
+export function getTestSeriesDashboardUrl(testId, seriesId) {
+  return `/test-series/${encodeURIComponent(seriesId)}/${encodeURIComponent(testId)}`;
+}
 
 function TestSeriesPage() {
-  const navigate = useNavigate();
   const [seriesList, setSeriesList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [priceLoadError, setPriceLoadError] = useState(false);
+  const [accessLoadError, setAccessLoadError] = useState(false);
 
   useEffect(() => {
     const fetchSeries = async () => {
@@ -24,17 +35,49 @@ function TestSeriesPage() {
 
       try {
         const [series, tests] = await Promise.all([loadPublicSeries(), loadTests()]);
+        let pricesBySeries = new Map();
+        let pricingFailed = false;
+        let accessFailed = false;
+        try {
+          pricesBySeries = await loadTestSeriesPriceMap();
+        } catch (priceError) {
+          console.error('Could not load test-series prices from Supabase.', priceError);
+          pricingFailed = true;
+        }
+        const accessBySeries = new Map();
+        if (!pricingFailed) {
+          const paidSeries = series.filter((item) => Number(pricesBySeries.get(item.id)?.price_inr) > 0);
+          const accessResults = await Promise.allSettled(
+            paidSeries.map((item) => getSeriesBillingAccess(item.id))
+          );
+          accessResults.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+              accessBySeries.set(paidSeries[index].id, result.value);
+            } else {
+              console.error(`Could not check access for test series ${paidSeries[index].id}.`, result.reason);
+              accessFailed = true;
+            }
+          });
+        }
+        setPriceLoadError(pricingFailed);
+        setAccessLoadError(accessFailed);
         const publishedSeries = series
           .filter(s => s.published && s.meta?.kind !== 'previous-papers') // Previous papers have their own library.
           .map((item) => ({
             ...item,
+            priceConfig: pricesBySeries.get(item.id) || null,
+            price: pricesBySeries.get(item.id)?.enabled ? pricesBySeries.get(item.id).price_inr : null,
+            access: accessBySeries.get(item.id) || null,
             tests: tests
               .filter((test) => test.seriesId === item.id && test.published) // Only published tests
               .map((test) => {
                 const durationMinutes = Number(test.durationMinutes) || Number(item.durationMinutes) || (Number(test.durationSec) ? Math.round(Number(test.durationSec) / 60) : 0);
                 return {
                   ...test,
-                  questions: (test.sections || []).reduce((count, section) => count + ((section.questions || []).length), 0),
+                  questions: Number(test.questionCount) || (test.sections || []).reduce(
+                    (count, section) => count + (section.questions || []).length,
+                    0
+                  ),
                   duration: durationMinutes,
                   subjects: Array.from(new Set((test.sections || []).map((section) => section.subject).filter(Boolean))),
                 };
@@ -52,9 +95,14 @@ function TestSeriesPage() {
     fetchSeries();
   }, []);
 
-  const handleStartTest = (testId, seriesId) => {
-    const examUrl = `/jee2025/exam/index.html?testId=${encodeURIComponent(testId)}&seriesId=${encodeURIComponent(seriesId)}&paper=1`;
-    window.location.href = examUrl;
+  const handleStartTest = async (testId, seriesId) => {
+    try {
+      await establishExamSession(seriesId);
+      window.location.assign(getTestSeriesDashboardUrl(testId, seriesId));
+    } catch (startError) {
+      console.error('Could not authorize starting this test.', startError);
+      toast.error(startError.message || 'This test is not available to your account.');
+    }
   };
 
   return (
@@ -93,6 +141,7 @@ function TestSeriesPage() {
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="default">{series.tests?.length ?? 0} tests</Badge>
                         <Badge variant="secondary">Published</Badge>
+                        {series.price !== null && <Badge variant="outline">{formatPriceInr(series.price)} · sold separately</Badge>}
                       </div>
                     </div>
 
@@ -132,9 +181,25 @@ function TestSeriesPage() {
                               )}
                             </div>
 
-                            <Button onClick={() => handleStartTest(test.id, series.id)} className="w-full font-bold">
-                              Start Test
-                            </Button>
+                            {priceLoadError || accessLoadError ? (
+                              <Button className="w-full font-bold" disabled>
+                                Access unavailable
+                              </Button>
+                            ) : series.access?.allowed || !series.priceConfig || Number(series.priceConfig.price_inr) === 0 ? (
+                              <Button onClick={() => handleStartTest(test.id, series.id)} className="w-full font-bold">
+                                Start Test
+                              </Button>
+                            ) : series.priceConfig.enabled && Number(series.priceConfig.price_inr) > 0 ? (
+                              <CheckoutControl
+                                productType="test_series"
+                                seriesId={series.id}
+                                priceInr={series.priceConfig.price_inr}
+                              />
+                            ) : (
+                              <Button className="w-full font-bold" disabled>
+                                Not available for purchase
+                              </Button>
+                            )}
                           </CardContent>
                         </Card>
                       ))}
@@ -143,6 +208,16 @@ function TestSeriesPage() {
                 ))}
               </div>
             )}
+            {priceLoadError && (
+              <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
+                Test-series pricing could not be verified. Test access is temporarily unavailable.
+              </p>
+            )}
+            {accessLoadError && !priceLoadError ? (
+              <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
+                Test-series access could not be verified. Please refresh and try again.
+              </p>
+            ) : null}
           </div>
         </main>
 

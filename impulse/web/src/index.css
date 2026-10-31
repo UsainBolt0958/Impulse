@@ -4,6 +4,82 @@
 @tailwind components;
 @tailwind utilities;
 
+.app-loading-screen {
+  background: #030208;
+}
+
+.app-loader {
+  --loader-tile: no-repeat linear-gradient(#8b5cf6 0 0);
+  width: 45px;
+  height: 45px;
+  background:
+    var(--loader-tile), var(--loader-tile), var(--loader-tile),
+    var(--loader-tile), var(--loader-tile), var(--loader-tile),
+    var(--loader-tile), var(--loader-tile), var(--loader-tile);
+  background-size: 16px 16px;
+  animation: app-loader-size 1s infinite, app-loader-pattern 1s infinite;
+}
+
+@keyframes app-loader-size {
+  0%, 100% {
+    width: 45px;
+    height: 45px;
+  }
+  35%, 65% {
+    width: 65px;
+    height: 65px;
+  }
+}
+
+@keyframes app-loader-pattern {
+  0%, 40% {
+    background-position:
+      0 0, 0 50%, 0 100%,
+      50% 100%, 100% 100%, 100% 50%,
+      100% 0, 50% 0, 50% 50%;
+  }
+  60%, 100% {
+    background-position:
+      0 50%, 0 100%, 50% 100%,
+      100% 100%, 100% 50%, 100% 0,
+      50% 0, 0 0, 50% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-loader {
+    width: 65px;
+    height: 65px;
+    animation: none;
+    background-position:
+      0 50%, 0 100%, 50% 100%,
+      100% 100%, 100% 50%, 100% 0,
+      50% 0, 0 0, 50% 50%;
+  }
+}
+
+.login-screen {
+  isolation: isolate;
+  background: #030208;
+}
+
+.login-grid-background {
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(167, 139, 250, 0.38) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(167, 139, 250, 0.38) 1px, transparent 1px);
+  background-size: 48px 48px;
+  filter: url(#login-ocean-grid);
+  mask-image: radial-gradient(ellipse at center, #000 12%, transparent 88%);
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-grid-background {
+    filter: none;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

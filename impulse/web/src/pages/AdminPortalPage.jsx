@@ -6,6 +6,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
   BadgePlus,
+  BadgeDollarSign,
   BarChart3,
   BookOpen,
   CalendarDays,
@@ -15,6 +16,7 @@ import {
   Eye,
   Edit3,
   Flame,
+  Gamepad2,
   LayoutDashboard,
   PencilLine,
   Plus,
@@ -51,6 +53,8 @@ import {
   uploadImage,
 } from '@/lib/portalServer';
 import TestSeriesManager from '@/admin/TestSeriesManager';
+import BillingAdminPanel from '@/admin/BillingAdminPanel';
+import QuizQuestionImporter from '@/admin/QuizQuestions/QuizQuestionImporter';
 import PYQImportDialog from '@/admin/PYQImport/PYQImportDialog';
 import PaperImportDialog from '@/admin/PYQImport/PaperImportDialog';
 import { buildDynamicPaperSections } from '@/admin/PYQImport/paperImportFormat';
@@ -71,8 +75,6 @@ import {
   normalizeExam,
   normalizeQuestion,
   readAdminPortalState,
-  loginAdmin,
-  logoutAdmin,
   savePortalState,
   slugify,
   titleCase,
@@ -328,8 +330,6 @@ function AdminPortalPage() {
   const [portal, setPortal] = React.useState(() => readAdminPortalState());
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [authReady, setAuthReady] = React.useState(false);
-  const [adminPassword, setAdminPassword] = React.useState('');
-  const [authError, setAuthError] = React.useState('');
   const [tab, setTab] = React.useState('overview');
   const [collapsed, setCollapsed] = React.useState(false);
   const [questionDraft, setQuestionDraft] = React.useState(() => createQuestionDraft());
@@ -517,34 +517,6 @@ function AdminPortalPage() {
       active = false;
     };
   }, []);
-
-  const handleAdminLogin = async (event) => {
-    event.preventDefault();
-    setAuthError('');
-
-    const result = await loginAdmin(adminPassword);
-
-    if (!result?.authenticated) {
-      setAuthError('Invalid password.');
-      return;
-    }
-
-    setIsAuthenticated(true);
-    setAuthReady(true);
-    const remote = await loadAdminPortalState();
-    if (remote) {
-      setPortal(remote);
-      setProfileDraft(remote.profile);
-    }
-    setAdminPassword('');
-  };
-
-  const handleAdminLogout = async () => {
-    await logoutAdmin();
-    setIsAuthenticated(false);
-    setAuthReady(true);
-    setAuthError('');
-  };
 
   const examCards = React.useMemo(() => buildExamCards(portal.questions, portal.exams), [portal.questions, portal.exams]);
   const examOptions = React.useMemo(() => examCards.map((exam) => exam.label), [examCards]);
@@ -775,6 +747,38 @@ function AdminPortalPage() {
     toast.success(`Added ${importedQuestions.length} PYQ question(s) to ${target.exam} / ${target.subject} / ${target.chapter}.`);
   };
 
+  const handleQuizQuestionImport = async (questions) => {
+    const timestamp = new Date().toISOString();
+    const importedQuestions = questions.map((question) => normalizeQuestion({
+      ...question,
+      id: generateId('quiz-question'),
+      exam: 'Quiz Challenge',
+      exam_slug: 'quiz-challenge',
+      year: new Date().getFullYear(),
+      shift: 'Quiz bank',
+      type: 'MCQ',
+      created_at: timestamp,
+      updated_at: timestamp,
+      contributed_by: portal.profile.name,
+    }));
+    const importedActivity = importedQuestions.map((question) => createActivityEntry({
+      type: 'question.created',
+      title: `Imported quiz question: ${question.chapter}`,
+      description: `${question.subject} / ${question.chapter}`,
+      exam: 'Quiz Challenge',
+      questionId: question.id,
+      source: 'quiz-json-import',
+    }));
+    const nextPortal = {
+      ...portal,
+      questions: [...importedQuestions, ...portal.questions],
+      activity: [...importedActivity, ...portal.activity],
+    };
+    const savedPortal = await savePortalState(nextPortal);
+    syncPortal(savedPortal);
+    toast.success(`Added ${importedQuestions.length} quiz question(s).`);
+  };
+
   const handlePaperImport = async (questions, paper) => {
     const timestamp = new Date().toISOString();
     const paperImportId = getPaperImportId(paper);
@@ -788,7 +792,7 @@ function AdminPortalPage() {
     }));
     const examKey = paper.exam === 'MHTCET' ? 'mht-cet' : slugify(paper.exam);
     const durationMinutes = paper.exam === 'NEET' && Number(paper.year) < 2025 ? 200 : 180;
-    const addToDynamicPreviousPapers = ['JEE MAINS', 'NEET'].includes(paper.exam);
+    const addToDynamicPreviousPapers = ['JEE MAINS', 'NEET', 'MHTCET'].includes(paper.exam);
     let series = null;
     let createdSeries = null;
     let importedTest = null;
@@ -796,20 +800,25 @@ function AdminPortalPage() {
 
     try {
       if (addToDynamicPreviousPapers) {
-        series = (await loadSeries()).find((item) => (
-          item.meta?.kind === 'previous-papers' && item.meta?.examKey === examKey
-        )) || null;
-        if (!series) {
-          createdSeries = await createSeries(`${paper.exam} Previous Papers`, `Imported ${paper.exam} papers.`);
-          if (!createdSeries?.id) throw new Error('Could not create the dynamic previous-papers series.');
-          series = await updateSeries(createdSeries.id, {
-            published: true,
-            publish_at: timestamp,
-            durationMinutes,
-            meta: { kind: 'previous-papers', examKey, exam: paper.exam },
-          });
-          if (!series?.id) throw new Error('Could not publish the dynamic previous-papers series.');
-        }
+        createdSeries = await createSeries(
+          `${paper.exam} ${paper.year} - ${paper.shiftName}`,
+          `Imported ${paper.exam} ${paper.year}, ${paper.shiftName}.`
+        );
+        if (!createdSeries?.id) throw new Error('Could not create the dynamic paper series.');
+        series = await updateSeries(createdSeries.id, {
+          published: true,
+          publish_at: timestamp,
+          durationMinutes,
+          meta: {
+            kind: 'previous-papers',
+            examKey,
+            exam: paper.exam,
+            year: paper.year,
+            shiftName: paper.shiftName,
+            paperImportId,
+          },
+        });
+        if (!series?.id) throw new Error('Could not publish the dynamic paper series.');
 
         importedTest = await createTest({
           title: `${paper.year} - ${paper.shiftName}`,
@@ -918,22 +927,61 @@ function AdminPortalPage() {
       const dynamicTests = (await loadTests()).filter((test) => (
         test.meta?.paperImportId === group.id
       ));
+      const dynamicSeries = (await loadSeries()).filter((series) => (
+        series.meta?.paperImportId === group.id
+      ));
       const removedTests = [];
+      const removedSeries = [];
       try {
         for (const test of dynamicTests) {
           await deleteTest(test.id);
           removedTests.push(test);
+        }
+        for (const series of dynamicSeries) {
+          await deleteSeries(series.id);
+          removedSeries.push(series);
         }
         portalSaveAttempted = true;
         const savedPortal = await savePortalState(nextPortal);
         syncPortal(savedPortal);
       } catch (error) {
         const restoreErrors = [];
+        const restoredSeriesIds = new Map(dynamicSeries.map((series) => [series.id, series.id]));
+        for (const series of removedSeries) {
+          restoredSeriesIds.delete(series.id);
+          let recreatedSeries = null;
+          try {
+            recreatedSeries = await createSeries(series.title, series.description || '');
+            if (!recreatedSeries?.id) throw new Error('Could not recreate the paper series.');
+            const restoredSeries = await updateSeries(recreatedSeries.id, {
+              published: series.published,
+              publish_at: series.publish_at,
+              durationMinutes: series.durationMinutes,
+              meta: series.meta,
+            });
+            if (!restoredSeries?.id) throw new Error('Could not republish the paper series.');
+            restoredSeriesIds.set(series.id, restoredSeries.id);
+          } catch (restoreError) {
+            restoreErrors.push(`Could not restore paper series "${series.title}": ${restoreError.message}`);
+            if (recreatedSeries?.id) {
+              try {
+                await deleteSeries(recreatedSeries.id);
+              } catch (cleanupError) {
+                restoreErrors.push(`Could not remove the incomplete replacement series: ${cleanupError.message}`);
+              }
+            }
+          }
+        }
         for (const test of removedTests) {
+          const seriesId = restoredSeriesIds.get(test.seriesId);
+          if (!seriesId) {
+            restoreErrors.push(`Could not restore test "${test.title}" because its paper series is unavailable.`);
+            continue;
+          }
           try {
             await createTest({
               title: test.title,
-              seriesId: test.seriesId,
+              seriesId,
               durationMinutes: test.durationMinutes,
               sections: test.sections,
               published: test.published,
@@ -1078,72 +1126,18 @@ function AdminPortalPage() {
 
   if (!authReady) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
-        <Card className="w-full max-w-md rounded-[2rem] border-border/80 shadow-xl">
-          <CardContent className="space-y-6 p-6 sm:p-8">
-            <div className="space-y-2 text-center">
-              <Badge className="rounded-full bg-foreground px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.24em] text-background">Admin access</Badge>
-              <h1 className="text-3xl font-black uppercase tracking-tight">Impulse admin login</h1>
-              <p className="text-sm text-muted-foreground">Enter the admin password to open the portal.</p>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleAdminLogin}>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Password</label>
-                <Input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(event) => setAdminPassword(event.target.value)}
-                  placeholder="Admin password"
-                  className="rounded-2xl border-border"
-                />
-              </div>
-
-              {authError ? <p className="text-sm font-medium text-destructive">{authError}</p> : null}
-
-              <Button type="submit" className="w-full rounded-full px-5 font-black uppercase tracking-[0.18em]">
-                <Shield className="mr-2 h-4 w-4" />
-                Open portal
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p role="status" className="text-sm text-muted-foreground">Checking admin session…</p>
       </div>
     );
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
-        <Card className="w-full max-w-md rounded-[2rem] border-border/80 shadow-xl">
-          <CardContent className="space-y-6 p-6 sm:p-8">
-            <div className="space-y-2 text-center">
-              <Badge variant="outline" className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.24em]">Locked</Badge>
-              <h1 className="text-3xl font-black uppercase tracking-tight">Admin portal locked</h1>
-              <p className="text-sm text-muted-foreground">This portal is protected. Sign in to manage questions, exams, and the profile tracker.</p>
-            </div>
-
-            <form className="space-y-4" onSubmit={handleAdminLogin}>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Password</label>
-                <Input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(event) => setAdminPassword(event.target.value)}
-                  placeholder="Admin password"
-                  className="rounded-2xl border-border"
-                />
-              </div>
-
-              {authError ? <p className="text-sm font-medium text-destructive">{authError}</p> : null}
-
-              <Button type="submit" className="w-full rounded-full px-5 font-black uppercase tracking-[0.18em]">
-                <Shield className="mr-2 h-4 w-4" />
-                Sign in
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-[50vh] items-center justify-center px-4">
+        <p role="alert" className="text-sm text-destructive">
+          The admin API session could not be established. Sign out and sign in again.
+        </p>
       </div>
     );
   }
@@ -1204,9 +1198,6 @@ function AdminPortalPage() {
               <Badge className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] ${statusTone}`}>
                 {summary.todayContributions > 0 ? 'Live today' : 'Idle today'}
               </Badge>
-              <Button variant="outline" onClick={handleAdminLogout} className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em]">
-                Logout
-              </Button>
             </div>
           </div>
         </header>
@@ -1239,6 +1230,10 @@ function AdminPortalPage() {
                           <PencilLine className="h-4 w-4" />
                           {!collapsed && 'Questions'}
                         </button>
+                        <button type="button" onClick={() => setTab('quiz')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'quiz' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
+                          <Gamepad2 className="h-4 w-4" />
+                          {!collapsed && 'Quiz questions'}
+                        </button>
                         <button type="button" onClick={() => setTab('papers')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'papers' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <ClipboardList className="h-4 w-4" />
                           {!collapsed && 'Imported papers'}
@@ -1254,6 +1249,10 @@ function AdminPortalPage() {
                         <button type="button" onClick={() => setTab('profile')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'profile' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <UserCircle2 className="h-4 w-4" />
                           {!collapsed && 'Profile'}
+                        </button>
+                        <button type="button" onClick={() => setTab('billing')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'billing' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
+                          <BadgeDollarSign className="h-4 w-4" />
+                          {!collapsed && 'Premium & billing'}
                         </button>
                       </div>
                     </div>
@@ -1353,6 +1352,8 @@ function AdminPortalPage() {
                 </div>
                   </div>
                   )}
+
+              {tab === 'billing' && <BillingAdminPanel />}
 
               {tab === 'questions' && (
                 <div className="space-y-6">
@@ -1793,12 +1794,16 @@ function AdminPortalPage() {
                 </div>
               )}
 
+              {tab === 'quiz' && (
+                <QuizQuestionImporter onImport={handleQuizQuestionImport} />
+              )}
+
               {tab === 'papers' && (
                 <div className="space-y-6">
                   <SectionHeading
                     eyebrow="Whole-paper imports"
                     title="Imported papers"
-                    description="Review and remove complete JEE Main, NEET, and MHT CET paper imports. Removing a paper deletes its imported questions and, for JEE Main or NEET, its dynamic exam-engine paper."
+                    description="Review and remove complete JEE Main, NEET, and MHT CET paper imports. Removing a paper deletes its imported questions and its dynamic exam-engine paper."
                   />
                   {paperImportGroups.length ? (
                     <div className="space-y-4">

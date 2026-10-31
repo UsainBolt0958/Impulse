@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 195" width="540" height="195">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <g transform="translate(270,98) scale(0.95) translate(-190,-35)" opacity="0.12" pointer-events="none">
+    <path d="M 18 5 L 55 5 L 30 42 L 50 42 L 22 82 L 30 52 L 10 52 Z" fill="#812FEF"/>
+    <path d="M 62 5 C 88 5 105 20 105 38 C 105 56 88 70 62 70 L 50 70 L 72 35 L 52 35 Z" fill="#812FEF"/>
+    <line x1="122" y1="8" x2="122" y2="68" stroke="#888888" stroke-width="3.5" stroke-linecap="round"/>
+    <text x="142" y="54" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="900" letter-spacing="8" fill="#111111">IMPULSE</text>
+  </g>
+  <g>
+    <!-- Input X -->
+    <text x="28" y="61" font-family="Times New Roman, serif" font-size="22" font-style="italic" fill="#111">X</text>
+    <circle cx="52" cy="54" r="3.8" fill="#111"/>
+    <line x1="52" y1="54" x2="86" y2="54" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="42" x2="86" y2="66" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="42" x2="128" y2="42" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="66" x2="128" y2="66" stroke="#111" stroke-width="2"/>
+    <path d="M 128 32 L 148 32 A 22 22 0 0 1 148 76 L 128 76 Z" fill="#ffffff" stroke="#111" stroke-width="2"/>
+    <circle cx="174" cy="54" r="4" fill="#ffffff" stroke="#111" stroke-width="2"/>
+
+    <!-- Input Y -->
+    <text x="28" y="147" font-family="Times New Roman, serif" font-size="22" font-style="italic" fill="#111">Y</text>
+    <circle cx="52" cy="140" r="3.8" fill="#111"/>
+    <line x1="52" y1="140" x2="86" y2="140" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="128" x2="86" y2="152" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="128" x2="128" y2="128" stroke="#111" stroke-width="2"/>
+    <line x1="86" y1="152" x2="128" y2="152" stroke="#111" stroke-width="2"/>
+    <path d="M 128 118 L 148 118 A 22 22 0 0 1 148 162 L 128 162 Z" fill="#ffffff" stroke="#111" stroke-width="2"/>
+    <circle cx="174" cy="140" r="4" fill="#ffffff" stroke="#111" stroke-width="2"/>
+
+    <!-- Connections to Gate 3 -->
+    <polyline points="178,54 208,54 208,85 240,85" fill="none" stroke="#111" stroke-width="2"/>
+    <polyline points="178,140 208,140 208,109 240,109" fill="none" stroke="#111" stroke-width="2"/>
+    <path d="M 240 75 L 260 75 A 22 22 0 0 1 260 119 L 240 119 Z" fill="#ffffff" stroke="#111" stroke-width="2"/>
+    <circle cx="286" cy="97" r="4" fill="#ffffff" stroke="#111" stroke-width="2"/>
+
+    <!-- Connections to Gate 4 -->
+    <line x1="290" y1="97" x2="322" y2="97" stroke="#111" stroke-width="2"/>
+    <line x1="322" y1="85" x2="322" y2="109" stroke="#111" stroke-width="2"/>
+    <line x1="322" y1="85" x2="356" y2="85" stroke="#111" stroke-width="2"/>
+    <line x1="322" y1="109" x2="356" y2="109" stroke="#111" stroke-width="2"/>
+    <path d="M 356 75 L 376 75 A 22 22 0 0 1 376 119 L 356 119 Z" fill="#ffffff" stroke="#111" stroke-width="2"/>
+    <circle cx="402" cy="97" r="4" fill="#ffffff" stroke="#111" stroke-width="2"/>
+
+    <!-- Output -->
+    <line x1="406" y1="97" x2="438" y2="97" stroke="#111" stroke-width="2"/>
+    <circle cx="438" cy="97" r="3.8" fill="#111"/>
+    <text x="448" y="103" font-family="Times New Roman, serif" font-size="22" fill="#111">Output</text>
+  </g>
+</svg>

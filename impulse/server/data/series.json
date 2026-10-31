@@ -1,5 +1,41 @@
 [
   {
+    "id": "series-1793346400667-bgxc6x",
+    "title": "JEE MAINS 2026 - 02 April (Evening Shift)",
+    "description": "Imported JEE MAINS 2026, 02 April (Evening Shift).",
+    "published": true,
+    "publish_at": "2026-10-30T07:46:40.663Z",
+    "created_at": "2026-10-30T07:46:40.667Z",
+    "updated_at": "2026-10-30T07:46:40.676Z",
+    "durationMinutes": 180,
+    "meta": {
+      "kind": "previous-papers",
+      "examKey": "jee-mains",
+      "exam": "JEE MAINS",
+      "year": 2026,
+      "shiftName": "02 April (Evening Shift)",
+      "paperImportId": "jee mains::2026::02 april (evening shift)"
+    }
+  },
+  {
+    "id": "series-1793346382663-ge9vil",
+    "title": "JEE MAINS 2026 - 02 April (Morning Shift)",
+    "description": "Imported JEE MAINS 2026, 02 April (Morning Shift).",
+    "published": true,
+    "publish_at": "2026-10-30T07:46:22.659Z",
+    "created_at": "2026-10-30T07:46:22.663Z",
+    "updated_at": "2026-10-30T07:46:22.674Z",
+    "durationMinutes": 180,
+    "meta": {
+      "kind": "previous-papers",
+      "examKey": "jee-mains",
+      "exam": "JEE MAINS",
+      "year": 2026,
+      "shiftName": "02 April (Morning Shift)",
+      "paperImportId": "jee mains::2026::02 april (morning shift)"
+    }
+  },
+  {
     "id": "series-1792316369979-qpms10",
     "title": "JEE MAINS Previous Papers",
     "description": "Imported JEE MAINS papers.",

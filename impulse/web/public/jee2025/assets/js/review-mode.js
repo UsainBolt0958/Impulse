@@ -6,6 +6,191 @@ window.isReviewMode = false;
 window.reviewModePaper = null;
 window.reviewModeResult = null;
 
+function getReviewStorageKey() {
+    const params = new URLSearchParams(window.location.search);
+    return `impulse-review-mode:${window.location.pathname}:${params.get('testId') || 'default'}:${params.get('seriesId') || 'default'}`;
+}
+
+function getLegacyReviewStorageKey() {
+    const params = new URLSearchParams(window.location.search);
+    return `impulse-review-mode:${params.get('testId') || 'default'}:${params.get('seriesId') || 'default'}`;
+}
+
+function getExamPageStateKey() {
+    const params = new URLSearchParams(window.location.search);
+    const testScope = params.get('testId') && params.get('seriesId')
+        ? `${params.get('testId')}:${params.get('seriesId')}`
+        : window.location.pathname;
+    return `impulse-exam-page:${testScope}`;
+}
+
+function getLegacyExamPageStateKey() {
+    const params = new URLSearchParams(window.location.search);
+    return `impulse-exam-page:${window.location.pathname}:${params.get('testId') || 'default'}:${params.get('seriesId') || 'default'}`;
+}
+
+function saveExamPageState(mode, paper, result, attempt) {
+    const fallbackAttempt = {
+        rawPaper1: paper === 1 ? result : null,
+        rawPaper2: paper === 2 ? result : null
+    };
+    const pageMode = mode === 'review' ? 'review' : 'analysis';
+    if (new URLSearchParams(window.location.search).get('view') !== pageMode) {
+        const params = new URLSearchParams(window.location.search);
+        params.set('view', pageMode);
+        window.history.replaceState(
+            {},
+            '',
+            `${window.location.pathname}?${params}${window.location.hash}`
+        );
+    }
+    window.localStorage.setItem(getExamPageStateKey(), JSON.stringify({
+        mode,
+        paper,
+        result,
+        attempt: attempt || fallbackAttempt
+    }));
+}
+
+function clearSavedReviewMode() {
+    const pageStateKey = getExamPageStateKey();
+    const pageStateRaw = window.localStorage.getItem(pageStateKey);
+    if (pageStateRaw) {
+        try {
+            if (JSON.parse(pageStateRaw).mode === 'review') {
+                window.localStorage.removeItem(pageStateKey);
+            }
+        } catch (error) {
+            console.error('Could not inspect saved exam page state:', error);
+            window.localStorage.removeItem(pageStateKey);
+        }
+    }
+    window.localStorage.removeItem(getLegacyExamPageStateKey());
+    window.localStorage.removeItem(getReviewStorageKey());
+    window.localStorage.removeItem(getLegacyReviewStorageKey());
+    window.sessionStorage.removeItem(getReviewStorageKey());
+    window.sessionStorage.removeItem(getLegacyReviewStorageKey());
+}
+
+function clearSavedExamPageState() {
+    window.localStorage.removeItem(getExamPageStateKey());
+    clearSavedReviewMode();
+}
+
+function saveReviewModeContext(paper, result, attempt) {
+    saveExamPageState('review', paper, result, attempt);
+}
+
+function activateReviewMode(paper, result, attempt) {
+    window.isReviewMode = true;
+    window.reviewModePaper = paper;
+    window.reviewModeResult = result;
+    const restoredCount = window.startReviewSession(paper, result);
+    window.setDisplayedReviewContext?.(paper, result, attempt);
+
+    document.body.setAttribute('data-review-mode', 'true');
+
+    const footBar = document.querySelector('.foot-bar');
+    if (footBar) {
+        footBar.querySelectorAll('button').forEach(btn => {
+            const text = btn.innerText.trim();
+            if (text === 'Save & Next' || text === 'Mark for Review & Next' || text === 'Clear Response') {
+                btn.style.display = 'none';
+            }
+            if (text === 'Previous') {
+                btn.innerText = 'NEXT QUESTION';
+                btn.style.order = '1';
+                btn.onclick = () => window.act('next');
+            }
+        });
+    }
+
+    const submitBtn = document.querySelector('.submit-area button');
+    if (submitBtn) {
+        submitBtn.innerText = 'EXIT REVIEW';
+        submitBtn.onclick = window.exitReviewMode;
+        submitBtn.style.background = '#ef4444';
+    }
+    return restoredCount;
+}
+
+function getReviewQuestionTimeSpent(result, subject, section, questionId, paper) {
+    if (typeof window.getHeatmapQuestionTimeSpent === 'function') {
+        return window.getHeatmapQuestionTimeSpent(
+            { sub: subject, sec: section, id: questionId, paper },
+            0,
+            result
+        );
+    }
+
+    const timePerQuestion = result?.analytics?.timePerQuestion || window.analyticsTracker?.timePerQuestion || {};
+    const compositeKey = `${subject}_${section}_${questionId}`;
+    return timePerQuestion[`paper${paper}_${compositeKey}`]
+        || timePerQuestion[compositeKey]
+        || timePerQuestion[questionId]
+        || 0;
+}
+
+window.getReviewQuestionTimeSpent = getReviewQuestionTimeSpent;
+
+function restoreReviewAnswers(reviewSession, result) {
+    let restoredQuestionCount = 0;
+    const markedReviewLog = result.analytics?.markedReviewLog || {};
+    result.solutions.forEach(solution => {
+        if (!solution) return;
+
+        const subjectName = solution.sub || solution.subject;
+        const subject = Object.keys(reviewSession.data || {}).find(name => (
+            name === subjectName || String(name).trim().toUpperCase() === String(subjectName || '').trim().toUpperCase()
+        ));
+        const sectionName = solution.sec || solution.section;
+        if (!subject || !sectionName) return;
+
+        const section = Object.keys(reviewSession.data[subject]).find(name => String(name) === String(sectionName));
+        if (!section) return;
+
+        const questions = reviewSession.data[subject][section];
+        const questionId = solution.id ?? solution.qid;
+        let question = questionId == null
+            ? null
+            : questions.find(item => String(item.id) === String(questionId));
+        if (!question && solution.qid != null) {
+            const legacyIndex = Number(solution.qid) - 1;
+            if (Number.isInteger(legacyIndex) && legacyIndex >= 0) {
+                question = questions[legacyIndex] || null;
+            }
+        }
+        if (!question && solution.id != null) {
+            const legacyIndex = Number(solution.id) - 1;
+            if (Number.isInteger(legacyIndex) && legacyIndex >= 0) {
+                question = questions[legacyIndex] || null;
+            }
+        }
+        if (!question) return;
+
+        question.reviewResultId = questionId ?? question.id;
+        question.reviewResultSubject = subjectName;
+        question.reviewResultSection = sectionName;
+        const selectedAnswer = solution.sel !== undefined ? solution.sel : solution.userAnswer;
+        question.sel = Array.isArray(selectedAnswer) ? selectedAnswer.slice() : (selectedAnswer ?? null);
+        question.st = question.sel !== null && question.sel !== ''
+            && (!Array.isArray(question.sel) || question.sel.length > 0)
+            ? 'answered'
+            : 'not-answered';
+        const markedReviewKey = `${question.reviewResultSubject}_${question.reviewResultSection}_${question.reviewResultId}`;
+        if (Object.prototype.hasOwnProperty.call(markedReviewLog, markedReviewKey)) {
+            question.st = question.sel !== null && question.sel !== ''
+                && (!Array.isArray(question.sel) || question.sel.length > 0)
+                ? 'mark-ans'
+                : 'marked';
+        }
+        restoredQuestionCount += 1;
+    });
+    return restoredQuestionCount;
+}
+
+window.restoreReviewAnswers = restoreReviewAnswers;
+
 function enterReviewMode() {
     try {
         console.log('🟢🟢🟢 enterReviewMode called 🟢🟢🟢');
@@ -21,155 +206,86 @@ function enterReviewMode() {
         }
         console.log('📄 Current paper:', currentPaper);
         
-        // Try to get userData from window or localStorage
-        let userData = window.userData;
-        if (!userData) {
-            try {
-                const savedData = localStorage.getItem('jee_adv_2025_data_v1');
-                if (savedData) {
-                    userData = JSON.parse(savedData);
-                    console.log('📦 Loaded userData from localStorage');
-                }
-            } catch(e) {
-                console.error('Error loading userData from localStorage:', e);
-            }
+        const displayedContext = window.getDisplayedReviewContext?.();
+        let r = displayedContext?.paper === currentPaper ? displayedContext.result : null;
+        if (!r && window.userData) {
+            r = currentPaper === 1 ? window.userData.p1_res : window.userData.p2_res;
         }
-        
-        if (!userData) {
-            alert('User data not found. Please try again.');
-            return;
-        }
-        
-        const r = currentPaper === 1 ? userData.p1_res : userData.p2_res;
         console.log('📊 Result data:', r ? 'found' : 'not found');
         
-        if (!r || !r.solutions) {
+        if (!r || !Array.isArray(r.solutions)) {
             alert('No result data available for review');
             return;
         }
 
-        // Save review mode state to window
-        window.isReviewMode = true;
-        window.reviewModePaper = currentPaper;
-        window.reviewModeResult = r;
-
-        // In review mode, always create fresh session (don't restore from localStorage to avoid cur override)
-        console.log('⏳ Creating fresh session for review mode');
-        window.sess = window.initExamDB(currentPaper);
-        const firstReviewSubject = Object.keys(window.sess.data || {}).filter(Boolean)[0] || '';
-        const firstReviewSection = firstReviewSubject && window.sess.data[firstReviewSubject] ? Object.keys(window.sess.data[firstReviewSubject]).filter(Boolean)[0] || '' : '';
-        window.sess.cur = { s: firstReviewSubject, sec: firstReviewSection, i: 0 };
-
-        // Restore question states from result solutions if available
-        if (r.solutions) {
-            r.solutions.forEach(sol => {
-                if (sol.subject && sol.section && sol.qid !== undefined) {
-                    const s = sol.subject;
-                    const sec = sol.section;
-                    const qid = Number(sol.qid);
-                    if (window.sess.data[s] && window.sess.data[s][sec]) {
-                        const questionIndex = Number.isInteger(qid) ? Math.max(0, qid - 1) : -1;
-                        const question = questionIndex >= 0 ? window.sess.data[s][sec][questionIndex] : null;
-                        if (question) {
-                            question.sel = sol.userAnswer;
-                            question.st = sol.userAnswer !== null && sol.userAnswer !== '' ? 'answered' : 'not-answered';
-                        } else {
-                            const found = window.sess.data[s][sec].find(q => q.id === qid);
-                            if (found) {
-                                found.sel = sol.userAnswer;
-                                found.st = sol.userAnswer !== null && sol.userAnswer !== '' ? 'answered' : 'not-answered';
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Update paper label
-        document.getElementById('paper-label').innerText = `Paper ${currentPaper} (Review Mode)`;
-
-        // Force set to first question AFTER all session restoration
-        const reviewSubject = Object.keys(window.sess.data || {}).filter(Boolean)[0] || '';
-        const reviewSection = reviewSubject && window.sess.data[reviewSubject] ? Object.keys(window.sess.data[reviewSubject]).filter(Boolean)[0] || '' : '';
-        window.sess.cur = { s: reviewSubject, sec: reviewSection, i: 0 };
-
-        // Switch to exam UI
-        window.navTo('exam');
-        
-        // Restore analytics data AFTER switching UI to prevent it from being cleared
-        console.log('📊 Analytics data available:', r.analytics ? 'yes' : 'no');
-        console.log('📊 Analytics tracker available:', window.analyticsTracker ? 'yes' : 'no');
-        
-        // Initialize analytics tracker if not available
-        if (!window.analyticsTracker) {
-            console.log('📊 Creating analytics tracker object');
-            window.analyticsTracker = {
-                timePerQuestion: {},
-                goldenHourLog: [],
-                markedReviewLog: {},
-                quickVisitLog: [],
-                panicPhaseLog: [],
-                subjectTimeLog: {}
-            };
-        }
-        
-        if (r.analytics && window.analyticsTracker) {
-            window.analyticsTracker.timePerQuestion = r.analytics.timePerQuestion || {};
-            window.analyticsTracker.goldenHourLog = r.analytics.goldenHourLog || [];
-            window.analyticsTracker.markedReviewLog = r.analytics.markedReviewLog || {};
-            window.analyticsTracker.quickVisitLog = r.analytics.quickVisitLog || [];
-            window.analyticsTracker.panicPhaseLog = r.analytics.panicPhaseLog || [];
-            window.analyticsTracker.subjectTimeLog = r.analytics.subjectTimeLog || {};
-            console.log('📊 Time per question entries:', Object.keys(window.analyticsTracker.timePerQuestion).length);
-        }
-        
-        // Initialize navigation
-        if (typeof window.renderSubjectNav === 'function') window.renderSubjectNav();
-        if (typeof window.renderSectionNav === 'function') window.renderSectionNav();
-        
-        // Delay renderQ() slightly to ensure analytics data is fully loaded
-        setTimeout(() => {
-            if (typeof window.renderQ === 'function') window.renderQ();
-        }, 100);
-
-        // Disable timer in review mode
-        if (window.timerInterval) {
-            clearInterval(window.timerInterval);
-            window.timerInterval = null;
-        }
-        document.getElementById('time-disp').innerText = 'Review Mode';
-
-        // Set data attribute for CSS styling
-        document.body.setAttribute('data-review-mode', 'true');
-
-        // Hide action buttons and swap Previous/Next handlers
-        const footBar = document.querySelector('.foot-bar');
-        if (footBar) {
-            footBar.querySelectorAll('button').forEach(btn => {
-                const text = btn.innerText.trim();
-                if (text === 'Save & Next' || text === 'Mark for Review & Next' || text === 'Clear Response') {
-                    btn.style.display = 'none';
-                }
-                if (text === 'Previous') {
-                    btn.innerText = 'NEXT QUESTION';
-                    btn.style.order = '1';
-                    btn.onclick = () => window.act('next');
-                }
-            });
-        }
-
-        // Change Submit Test button to Exit Review
-        const submitBtn = document.querySelector('.submit-area button');
-        if (submitBtn) {
-            submitBtn.innerText = 'EXIT REVIEW';
-            submitBtn.onclick = window.exitReviewMode;
-            submitBtn.style.background = '#ef4444';
-        }
+        saveReviewModeContext(currentPaper, r, displayedContext?.attempt);
+        const restoredCount = activateReviewMode(currentPaper, r, displayedContext?.attempt);
+        console.log('✅ Restored questions for review:', restoredCount);
 
         console.log('✅ Entered review mode for Paper', currentPaper);
     } catch(e) {
         console.error('Error entering review mode:', e);
+        window.isReviewMode = false;
+        window.reviewModePaper = null;
+        window.reviewModeResult = null;
+        clearSavedReviewMode();
+        document.body.removeAttribute('data-review-mode');
         alert('Error entering review mode. Please try again.');
+    }
+}
+
+function restoreSavedReviewMode() {
+    const pageMode = new URLSearchParams(window.location.search).get('view');
+    const params = new URLSearchParams(window.location.search);
+
+    const key = getReviewStorageKey();
+    const pageStateRaw = window.localStorage.getItem(getExamPageStateKey())
+        || window.localStorage.getItem(getLegacyExamPageStateKey())
+        || window.localStorage.getItem(getReviewStorageKey())
+        || window.localStorage.getItem(getLegacyReviewStorageKey());
+    const raw = pageStateRaw
+        || window.sessionStorage.getItem(key)
+        || window.sessionStorage.getItem(getLegacyReviewStorageKey());
+    if (!raw) return false;
+
+    try {
+        const context = JSON.parse(raw);
+        const mode = context.mode || 'review';
+        const selectedAttemptId = params.get('attemptId');
+        const isSelectedLegacyReview = pageMode == null
+            && mode === 'review'
+            && selectedAttemptId
+            && context.attempt?.attemptId === selectedAttemptId;
+        if (pageMode !== 'review' && pageMode !== 'analysis' && !isSelectedLegacyReview) return false;
+
+        if ((context.paper !== 1 && context.paper !== 2)
+            || !context.result
+            || !Array.isArray(context.result.solutions)) {
+            throw new Error('Saved review context is invalid.');
+        }
+        const attempt = context.attempt || {
+            rawPaper1: context.paper === 1 ? context.result : null,
+            rawPaper2: context.paper === 2 ? context.result : null
+        };
+        if (mode === 'review') {
+            saveExamPageState('review', context.paper, context.result, attempt);
+            activateReviewMode(context.paper, context.result, attempt);
+        } else if (mode === 'analysis') {
+            window.setDisplayedReviewContext?.(context.paper, context.result, attempt);
+            window.restoreDisplayedResult();
+        } else {
+            throw new Error(`Unsupported saved exam page mode: ${mode}`);
+        }
+        return true;
+    } catch (error) {
+        console.error('Could not restore saved review mode:', error);
+        window.isReviewMode = false;
+        window.reviewModePaper = null;
+        window.reviewModeResult = null;
+        document.body.removeAttribute('data-review-mode');
+        clearSavedReviewMode();
+        alert('The saved review could not be restored. Return to the attempt analysis and open Review Questions again.');
+        return true;
     }
 }
 
@@ -177,11 +293,19 @@ function exitReviewMode() {
     try {
         // Save paper number BEFORE clearing state
         const paperNum = window.reviewModePaper || 1;
+        const displayedContext = window.getDisplayedReviewContext?.();
+        saveExamPageState(
+            'analysis',
+            paperNum,
+            window.reviewModeResult,
+            displayedContext?.attempt
+        );
 
         // Clear review mode state
         window.isReviewMode = false;
         window.reviewModePaper = null;
         window.reviewModeResult = null;
+        clearSavedReviewMode();
 
         // Remove data attribute for CSS styling
         document.body.removeAttribute('data-review-mode');
@@ -218,8 +342,8 @@ function exitReviewMode() {
             });
         }
 
-        // Switch back to results (using saved paper number)
-        window.showResult(paperNum);
+        // Return to the exact result that was open before review mode.
+        window.restoreDisplayedResult();
 
         console.log('✅ Exited review mode for Paper', paperNum);
     } catch(e) {
@@ -231,5 +355,18 @@ function exitReviewMode() {
 // Make functions globally available
 window.enterReviewMode = enterReviewMode;
 window.exitReviewMode = exitReviewMode;
+window.restoreSavedReviewMode = restoreSavedReviewMode;
+window.hasSavedReviewMode = () => (
+    window.localStorage.getItem(getExamPageStateKey()) !== null
+    || window.localStorage.getItem(getLegacyExamPageStateKey()) !== null
+    || window.localStorage.getItem(getReviewStorageKey()) !== null
+    || window.localStorage.getItem(getLegacyReviewStorageKey()) !== null
+    || window.sessionStorage.getItem(getReviewStorageKey()) !== null
+    || window.sessionStorage.getItem(getLegacyReviewStorageKey()) !== null
+);
+window.saveAnalysisPageState = (paper, result, attempt) => (
+    saveExamPageState('analysis', paper, result, attempt)
+);
+window.clearSavedExamPageState = clearSavedExamPageState;
 
 console.log('✅ Review mode module loaded');

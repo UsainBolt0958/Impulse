@@ -1,11 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { spawn } from 'child_process';
 import net from 'net';
 
 let apiServerProcess;
-function startApiServer() {
+function startApiServer(viteEnv) {
   if (apiServerProcess) return;
 
   // Check whether port 4001 is already in use; if so, skip spawning.
@@ -22,7 +22,11 @@ function startApiServer() {
     apiServerProcess = spawn('node', [path.resolve(__dirname, '../server/index.js')], {
       stdio: 'inherit',
       shell: false,
-      env: process.env,
+      env: {
+        ...process.env,
+        SUPABASE_URL: process.env.SUPABASE_URL || viteEnv.VITE_SUPABASE_URL || '',
+        SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || viteEnv.VITE_SUPABASE_ANON_KEY || '',
+      },
     });
 
     const cleanup = () => {
@@ -39,31 +43,36 @@ function startApiServer() {
   sock.connect(4001, '127.0.0.1');
 }
 
-export default defineConfig({
-  plugins: [
-    react(),
-    {
-      name: 'start-api-server',
-      configureServer() {
-        startApiServer();
+export default defineConfig(({ mode }) => {
+  const viteEnv = loadEnv(mode, __dirname, '');
+  return {
+    envDir: __dirname,
+    cacheDir: path.resolve(__dirname, 'node_modules/.vite-admin'),
+    plugins: [
+      react(),
+      {
+        name: 'start-api-server',
+        configureServer() {
+          startApiServer(viteEnv);
+        },
+      },
+    ],
+    server: {
+      port: 4000,
+      proxy: {
+        '/api': 'http://localhost:4001',
+        '/uploads': 'http://localhost:4001',
       },
     },
-  ],
-  server: {
-    port: 4000,
-    proxy: {
-      '/api': 'http://localhost:4001',
-      '/uploads': 'http://localhost:4001',
+    root: path.resolve(__dirname, 'admin'),
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, 'src'),
+      },
     },
-  },
-  root: path.resolve(__dirname, 'admin'),
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
+    build: {
+      outDir: path.resolve(__dirname, '../dist/apps/admin'),
+      emptyOutDir: false,
     },
-  },
-  build: {
-    outDir: path.resolve(__dirname, '../dist/apps/admin'),
-    emptyOutDir: false,
-  },
+  };
 });

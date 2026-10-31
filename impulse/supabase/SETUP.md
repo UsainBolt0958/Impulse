@@ -1,0 +1,90 @@
+# Supabase setup
+
+## 1. Create a Supabase project
+
+Create a project in the Supabase dashboard and keep the database password private.
+
+## 2. Create the app tables
+
+Open **SQL Editor**, paste the contents of [`schema.sql`](./schema.sql), and run it. The policies allow signed-in users to read and change only their own profile and saved data.
+
+To enable username search and friend requests, also run [`friends.sql`](./friends.sql) in the SQL Editor. This is an additive migration and is safe to run for a project where you already ran `schema.sql`.
+
+To configure the Free, Lite, Gold, and Ultimate catalog, subscription term prices, per-series prices, referral discount settings, and billing tables, also run [`premium.sql`](./premium.sql). It seeds the current plan catalog and prices; later edits made in the billing admin panel are stored in Supabase. It does not create purchases or charge users.
+
+Run [`admin_access.sql`](./admin_access.sql) after `premium.sql`. It restricts the admin role to the verified Google accounts `yashbharati81@gmail.com` and `impulsepreps@gmail.com`. No account UUID needs to be inserted manually. The same role gates the full admin portal and billing controls; other signed-in accounts see **No admin access**.
+
+Run [`upi_payments.sql`](./upi_payments.sql) after `premium.sql` and `admin_access.sql`. It creates server-managed UPI orders and purchased test-series records, and service-role-only database functions that verify the configured price and apply a confirmed payment once. Never expose the Supabase service-role key to the browser or a user.
+
+## 3. Enable Google sign-in
+
+In Supabase, open **Authentication → Providers → Google** and configure the Google OAuth client ID and secret. In the Google Cloud OAuth client, add the Supabase callback URL shown by the provider setup. In **Authentication → URL Configuration**, set the local and production site URLs and add these redirect URLs:
+
+- `http://localhost:3000/account`
+- `http://localhost:4000`
+- `http://localhost:4000/billing`
+- `http://localhost:4000/`
+- `https://YOUR_DOMAIN/account`
+- `https://admin.YOUR_DOMAIN`
+- `https://admin.YOUR_DOMAIN/billing`
+- `https://admin.YOUR_DOMAIN/`
+
+Replace `YOUR_DOMAIN` with the actual domain where the app will run. Do not put the Google client secret or a Supabase service-role key in the browser app.
+
+## 4. Configure the local app
+
+Copy `web/.env.example` to `web/.env.local`, then fill in the project URL and the public publishable/anon key from **Project Settings → API**:
+
+```text
+VITE_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY
+```
+
+Restart the Vite development server after saving the file. The `.env.local` file is ignored by Git.
+
+The API must be hosted separately from the static website/admin pages (Cloudflare Pages only hosts the static frontends). Configure these environment variables on a private Node API host:
+
+```text
+SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_PRIVATE_SERVICE_ROLE_KEY
+ADMIN_ALLOWED_ORIGINS=https://YOUR_DOMAIN,https://admin.YOUR_DOMAIN
+NODE_ENV=production
+ADMIN_COOKIE_SAMESITE=None
+UPIGATEWAY_USER_TOKEN=YOUR_PRIVATE_MERCHANT_TOKEN
+PAYMENT_RETURN_URL=https://YOUR_DOMAIN/payments/return
+```
+
+Set `VITE_API_BASE_URL=https://YOUR_API_HOST/api` for both frontend builds so their requests reach this API. Include every website origin that calls the API in `ADMIN_ALLOWED_ORIGINS`, including the main site and admin site. `UPIGATEWAY_API_BASE` is optional and defaults to `https://free.upigateway.dev/api`.
+
+In the UPIGateway merchant dashboard, configure the webhook URL as:
+
+```text
+https://YOUR_API_HOST/api/billing/webhook
+```
+
+The webhook is only a notification: this API re-queries UPIGateway's order-status endpoint and only grants access after the returned order ID, success status, amount, and UTR match the server's pending order. The browser redirect alone never grants access. Configure a real HTTPS production domain and test a pending payment, a failed payment, a successful payment, and repeated webhook delivery before enabling purchases for customers. If a merchant token has ever been exposed, revoke it and configure a newly generated token only in the API host's private environment settings.
+
+The API also uses Supabase Auth to validate customer sessions. For local `npm run dev:admin`, the Vite config passes `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to its local API process. The API independently validates Google admin access and creates random HTTP-only sessions. Admin and exam sessions are kept in API memory and lost on restart; run a single API instance for now. Payment orders and entitlements are stored in Supabase, but the current API still stores test content and uploads in local files. Before using a host that restarts or scales API instances, move that content/uploads to durable shared storage and move sessions to a shared store.
+
+## What syncs
+
+After sign-in, the app imports applicable study data already in that browser and syncs solved-question attempts (which drive the study calendar and analysis), bookmarks, notebooks, profile visibility, custom-test results/progress, test-series sessions, and exam analytics. The Google account name/avatar and the editable profile name are stored in `profiles`. Public question content, admin content, theme preferences, and quiz invitation tokens are not copied as user data.
+
+Data remains in the browser while signed out. On sign-out, the account-linked browser keys are cleared to avoid showing one user's records to another person using the same browser; the cloud copy is retained.
+
+## Find and add friends
+
+After running `friends.sql`, signed-in users can choose a unique username in **Account** and search for other usernames from **Friends**. Search results show usernames and display names, never account emails. Friend requests and accepted connections are stored in Supabase with row-level security and database functions.
+
+The app now starts with Google sign-in. New accounts must choose a username before entering the study dashboard. `friends.sql` enforces username uniqueness in the database, case-insensitively, so two accounts cannot claim the same username even if they submit at the same time.
+
+## Admin access, premium catalog, and payment status
+
+The standalone admin site starts with Google sign-in. Only the two allowlisted Google accounts can access the content-management portal or `/billing`. The website API validates each sign-in before creating its admin session; client-side checks alone do not grant API access. Set exact production admin origin(s) in `ADMIN_ALLOWED_ORIGINS`.
+
+The `/premium` page reads plan descriptions, features, and term prices from Supabase. The Test Series page displays an admin-set price for each series. Open `/billing` on the separate admin site to manage subscription prices, published test-series prices, and referral discount settings.
+
+The customer checkout now creates orders from the Supabase catalog on the API, uses the private merchant token only on the API, and confirms payments through the provider status endpoint before creating subscription or test-series entitlements. Test-series questions are returned only after the API authorizes the user's paid series. Referral rewards are not yet applied to checkout, and subscription feature quotas (such as daily test limits and friend caps) are still catalog information, not server-enforced access controls. Do not launch those subscription features as secure until their usage is enforced by trusted server/database logic.
+
+The UPI integration is not ready to accept live payments until you have run the SQL migration, configured all private production environment variables, deployed the Node API, set the provider webhook, tested real provider responses in a controlled environment, and verified the refund/support process. Do not put either private key in `web/.env.local`, any `VITE_*` setting, GitHub, or a chat message.

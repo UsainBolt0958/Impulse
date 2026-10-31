@@ -30,7 +30,8 @@ function PreviousPapersPage() {
                 { key: 'neet', label: 'NEET', desc: 'National Eligibility cum Entrance Test' },
                 { key: 'jee-mains', label: 'JEE Main', desc: 'Joint Entrance Examination - Main' },
                 { key: 'jee-advanced', label: 'JEE Advanced', desc: 'Joint Entrance Examination - Advanced' },
-                { key: 'mht-cet', label: 'MHT CET', desc: 'Maharashtra Common Entrance Test' }
+                { key: 'mht-cet', label: 'MHT CET', desc: 'Maharashtra Common Entrance Test' },
+                { key: 'comedk', label: 'COMEDK', desc: 'Consortium of Medical, Engineering and Dental Colleges of Karnataka' }
               ].map((exam) => (
                 <Link key={exam.key} to={`/previous-papers/${exam.key}`} className="block group no-underline">
                   <Card className="h-full border-border transition-all duration-200 group-hover:border-primary group-hover:shadow-md group-hover:-translate-y-0.5">

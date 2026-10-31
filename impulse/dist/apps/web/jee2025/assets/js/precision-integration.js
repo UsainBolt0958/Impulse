@@ -129,6 +129,7 @@
         const originalSaveSess = window.saveSess;
         
         window.saveSess = function(immediate = false) {
+            if (window.isReviewMode || window.sess?.reviewModeSession) return false;
             // Call original localStorage save as backup
             const result = originalSaveSess ? originalSaveSess(immediate) : null;
             
@@ -335,6 +336,10 @@
     
     // Add emergency save function
     window.emergencySave = function() {
+        if (window.isReviewMode) {
+            console.log('Review mode is not an active exam session; skipping emergency save');
+            return false;
+        }
         console.log('🚨 Emergency save triggered');
         
         try {
@@ -378,7 +383,7 @@
     
     // Auto-save on page unload
     window.addEventListener('beforeunload', function(e) {
-        if (window.sess && !window.sess.sub) {
+        if (window.sess && !window.sess.sub && !window.isReviewMode) {
             // Exam in progress - emergency save
             window.emergencySave();
             
@@ -391,14 +396,14 @@
     
     // Auto-save on visibility change
     document.addEventListener('visibilitychange', function() {
-        if (document.hidden && window.sess && !window.sess.sub) {
+        if (document.hidden && window.sess && !window.sess.sub && !window.isReviewMode) {
             window.emergencySave();
         }
     });
     
     // Periodic health check
     setInterval(function() {
-        if (window.sess && !window.sess.sub) {
+        if (window.sess && !window.sess.sub && !window.isReviewMode) {
             // Verify timer is still running
             if (window.PrecisionTimer) {
                 window.PrecisionTimer.getState().then(function(state) {

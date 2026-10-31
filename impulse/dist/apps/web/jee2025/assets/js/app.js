@@ -17,6 +17,7 @@ try{
         let sess = null;
         let timerInterval = null;
         let renderedPalKey = ''; // Tracks 'PHYSICS-A' etc for smart palette reuse
+        let displayedReviewContext = null;
 
         // DOM Element Cache - reduces repeated DOM queries for performance
         const domCache = new Map();
@@ -150,8 +151,168 @@ try{
         }
 
         /* DIRECT ENTRY FROM FOCUSHUB */
+        function restoreAnalysisOrReturn(urlParams) {
+            if (window.restoreSavedReviewMode?.()) return true;
+            if (urlParams.get('view') !== 'analysis') return false;
+
+            const selectedAttempt = getSelectedHistoryAttempt();
+            if (selectedAttempt) {
+                const requestedPaper = urlParams.get('paper');
+                if (requestedPaper === 'combined' && selectedAttempt.rawPaper1 && selectedAttempt.rawPaper2) {
+                    showCombinedResult(selectedAttempt);
+                    return true;
+                }
+                const paper = requestedPaper === '2' && selectedAttempt.rawPaper2
+                    ? 2
+                    : selectedAttempt.rawPaper1
+                        ? 1
+                        : selectedAttempt.rawPaper2
+                            ? 2
+                            : null;
+                if (paper) {
+                    showResult(paper, selectedAttempt);
+                    return true;
+                }
+            }
+            if (userData) {
+                const paper = urlParams.get('paper') === '2' ? 2 : 1;
+                const result = paper === 1 ? userData.p1_res : userData.p2_res;
+                if (result?.solutions) {
+                    showResult(paper);
+                    return true;
+                }
+            }
+
+            console.error('[Exam] Analysis page state is unavailable; returning to the test dashboard instead of starting a new paper.');
+            const returnTo = urlParams.get('returnTo');
+            if (returnTo && (returnTo.startsWith('/previous-papers/') || returnTo.startsWith('/test-series/'))) {
+                window.location.replace(returnTo);
+            } else if (urlParams.get('testId') && urlParams.get('seriesId')) {
+                window.location.replace('/test-series');
+            } else {
+                window.location.replace('../index.html');
+            }
+            return true;
+        }
+
+        function initializeTestSeriesUserData(testId, seriesId, forceNewAttempt) {
+            let savedUserData = null;
+            try {
+                const raw = localStorage.getItem(KEY_DATA);
+                if (raw) savedUserData = JSON.parse(raw);
+            } catch (error) {
+                console.error('[TestSeries] Could not restore saved user data:', error);
+            }
+
+            const matchesTest = savedUserData?.testId === testId
+                && savedUserData?.seriesId === seriesId;
+            let savedSessionUid = null;
+            try {
+                const rawSession = localStorage.getItem(KEY_SESS);
+                if (rawSession) savedSessionUid = JSON.parse(rawSession)?.uid || null;
+            } catch (error) {
+                console.error('[TestSeries] Could not restore the saved session identity:', error);
+            }
+            const guestId = matchesTest && savedUserData.uid
+                ? savedUserData.uid
+                : (savedSessionUid || 'GUEST_' + Math.random().toString(36).substring(2, 8).toUpperCase());
+            userData = matchesTest && !forceNewAttempt
+                ? savedUserData
+                : {
+                    uid: guestId,
+                    uname: 'GUEST',
+                    testId,
+                    seriesId,
+                    p1_done: false,
+                    p1_res: null,
+                    p2_done: false,
+                    p2_res: null,
+                    p2_locked: false
+                };
+            userData.testId = testId;
+            userData.seriesId = seriesId;
+            localStorage.setItem(KEY_DATA, JSON.stringify(userData));
+            window.userData = userData;
+        }
+
+        function openPaperOrResume(paperNum, urlParams) {
+            const launch = () => {
+                const rawSession = localStorage.getItem(KEY_SESS);
+                let sessionCandidate = null;
+                if (rawSession) {
+                    try {
+                        sessionCandidate = JSON.parse(rawSession);
+                    } catch (error) {
+                        console.error('[Exam] Saved exam session could not be parsed:', error);
+                        alert('Your unfinished exam session could not be read. It was not replaced with a new attempt.');
+                        return;
+                    }
+                }
+
+                const isReviewSession = sessionCandidate && (
+                    sessionCandidate.reviewModeSession === true
+                    || Object.values(sessionCandidate.data || {}).some(sections => (
+                        Object.values(sections || {}).some(questions => (
+                            Array.isArray(questions) && questions.some(question => (
+                                Object.prototype.hasOwnProperty.call(question || {}, 'reviewResultId')
+                            ))
+                        ))
+                    ))
+                );
+                if (isReviewSession) {
+                    console.warn('[Exam] Removing a saved review-mode session; it is not an unfinished attempt.');
+                    localStorage.removeItem(KEY_SESS);
+                    localStorage.removeItem(KEY_SESS_HASH);
+                    sessionCandidate = null;
+                }
+
+                if (sessionCandidate && sessionCandidate.sub !== true) {
+                    const savedSession = loadSession();
+                    if (!savedSession || !validateSessionIntegrity(savedSession)) {
+                        console.error('[Exam] Unsubmitted session is missing a valid checksum or failed integrity validation.');
+                        alert('Your unfinished exam session could not be verified. It was not replaced with a new attempt.');
+                        return;
+                    }
+                    if (savedSession.paper !== 1 && savedSession.paper !== 2) {
+                        console.error('[Exam] Unsubmitted session has an invalid paper number:', savedSession.paper);
+                        alert('Your unfinished exam session has an invalid paper number. It was not replaced with a new attempt.');
+                        return;
+                    }
+                    sess = savedSession;
+                    window.sess = sess;
+                    proceedStartExam(savedSession.paper, true);
+                    return;
+                }
+
+                if (urlParams.get('resume') === 'true' || urlParams.get('view') === 'exam') {
+                    const returnTo = urlParams.get('returnTo');
+                    if (returnTo && (returnTo.startsWith('/previous-papers/') || returnTo.startsWith('/test-series/'))) {
+                        window.location.replace(returnTo);
+                    } else if (urlParams.get('testId') && urlParams.get('seriesId')) {
+                        window.location.replace('/test-series');
+                    } else {
+                        window.location.replace('../index.html');
+                    }
+                    return;
+                }
+                showInstructionsModal(paperNum, false);
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', launch, { once: true });
+            } else {
+                launch();
+            }
+        }
+
         function initFromFocusHub() {
             const urlParams = new URLSearchParams(window.location.search);
+            let forceNewAttempt = urlParams.get('forceNewAttempt') === 'true';
+            if (forceNewAttempt) {
+                window.clearSavedExamPageState?.();
+                urlParams.delete('forceNewAttempt');
+                urlParams.delete('view');
+                window.history.replaceState({}, '', `${window.location.pathname}${urlParams.toString() ? `?${urlParams}` : ''}${window.location.hash}`);
+            }
             const testId = urlParams.get('testId');
             const seriesId = urlParams.get('seriesId');
             const paperParam = urlParams.get('paper');
@@ -179,21 +340,28 @@ try{
                         localStorage.removeItem('jee_adv_2025_sess_v1');
                         localStorage.removeItem('jee_adv_2025_sess_v1_hash');
                         
-                        // Store test info in userData for later use
-                        const guestId = 'GUEST_' + Math.random().toString(36).substring(2, 8).toUpperCase();
-                        userData = {
-                            uid: guestId,
-                            uname: 'GUEST',
-                            testId: testId,
-                            seriesId: seriesId,
-                            p1_done: false,
-                            p1_res: null,
-                            p2_done: false,
-                            p2_res: null,
-                            p2_locked: false
-                        };
-                        localStorage.setItem(KEY_DATA, JSON.stringify(userData));
-                        window.userData = userData;
+                        if (forceNewAttempt) {
+                            const rawSession = localStorage.getItem(KEY_SESS);
+                            let hasUnsubmittedSession = false;
+                            if (rawSession) {
+                                try {
+                                    hasUnsubmittedSession = JSON.parse(rawSession)?.sub !== true;
+                                } catch (error) {
+                                    console.error('[TestSeries] Could not inspect session before requested fresh start:', error);
+                                    hasUnsubmittedSession = true;
+                                }
+                            }
+                            if (hasUnsubmittedSession) {
+                                console.warn('[TestSeries] Preserving unsubmitted exam session instead of starting fresh.');
+                                forceNewAttempt = false;
+                            } else {
+                                localStorage.removeItem(KEY_SESS);
+                                localStorage.removeItem(KEY_SESS_HASH);
+                            }
+                        }
+                        initializeTestSeriesUserData(testId, seriesId, forceNewAttempt);
+
+                        if (restoreAnalysisOrReturn(urlParams)) return;
                         
                         if (attemptId || attemptIndex) {
                             const launchAttempt = () => {
@@ -217,73 +385,23 @@ try{
                             } else {
                                 launchAttempt();
                             }
-                        } else if (paperParam === '1' || paperParam === '2') {
-                            const paperNum = parseInt(paperParam, 10);
-                            const launch = () => showInstructionsModal(paperNum, false);
-                            if (document.readyState === 'loading') {
-                                document.addEventListener('DOMContentLoaded', launch);
-                            } else {
-                                launch();
-                            }
+                        } else {
+                            const paperNum = paperParam === '2' ? 2 : 1;
+                            openPaperOrResume(paperNum, urlParams);
                         }
                     }).catch(error => {
                         console.error('[TestSeries] Initialization failed:', error);
-                        // Fall back to paper entry if provided
-                        if (paperParam) {
-                            const paperNum = parseInt(paperParam);
-                            console.log('[FocusHub] Falling back to Paper', paperNum);
-                            showInstructionsModal(paperNum, false);
-                            return true;
+                        alert('Could not load this test configuration. Your saved attempt has not been replaced.');
+                        const returnTo = urlParams.get('returnTo');
+                        if (returnTo && (returnTo.startsWith('/previous-papers/') || returnTo.startsWith('/test-series/'))) {
+                            window.location.replace(returnTo);
+                        } else {
+                            window.location.replace('/test-series');
                         }
                     });
                 } else {
-                    // Fallback for neutral direct entry when adapter is not available
-                    const guestId = 'GUEST_' + Math.random().toString(36).substring(2, 8).toUpperCase();
-                    userData = {
-                        uid: guestId,
-                        uname: 'GUEST',
-                        testId: testId,
-                        seriesId: seriesId,
-                        p1_done: false,
-                        p1_res: null,
-                        p2_done: false,
-                        p2_res: null,
-                        p2_locked: false
-                    };
-                    localStorage.setItem(KEY_DATA, JSON.stringify(userData));
-                    window.userData = userData;
-                    
-                    if (attemptId || attemptIndex) {
-                        const launchAttempt = () => {
-                            const selectedAttempt = getSelectedHistoryAttempt();
-                            if (!selectedAttempt) {
-                                console.error('[TestSeries] Saved attempt was not found:', { attemptId, attemptIndex });
-                                return;
-                            }
-                            const requestedPaper = getQueryValue('paper');
-                            if (requestedPaper === 'combined' && selectedAttempt.rawPaper1 && selectedAttempt.rawPaper2) {
-                                showCombinedResult(selectedAttempt);
-                                return;
-                            }
-                            const targetPaper = requestedPaper === '2' && selectedAttempt.rawPaper2 ? 2 : 1;
-                            if (targetPaper === 1 && selectedAttempt.rawPaper1) showResult(1, selectedAttempt);
-                            else if (selectedAttempt.rawPaper2) showResult(2, selectedAttempt);
-                            else console.error('[TestSeries] Saved attempt has no result data:', selectedAttempt.attemptId);
-                        };
-                        if (document.readyState === 'loading') {
-                            document.addEventListener('DOMContentLoaded', launchAttempt);
-                        } else {
-                            launchAttempt();
-                        }
-                    } else if (paperParam === '1' || paperParam === '2') {
-                        const paperNum = parseInt(paperParam, 10);
-                        const launch = () => showInstructionsModal(paperNum, false);
-                        if (document.readyState === 'loading') {
-                            document.addEventListener('DOMContentLoaded', launch);
-                        } else {
-                            launch();
-                        }
-                    }
+                    alert('This test requires a verified server connection. Please return to the test library and try again.');
+                    window.location.replace('/test-series');
                 }
                 return true; // Test series entry handled
             }
@@ -293,29 +411,16 @@ try{
                 const paperNum = parseInt(paperParam);
                 console.log('[FocusHub] Direct entry for Paper', paperNum);
                 
-                // Create guest user
-                const guestId = 'GUEST_' + Math.random().toString(36).substring(2, 8).toUpperCase();
-                userData = {
-                    uid: guestId,
-                    uname: 'GUEST',
-                    p1_done: false,
-                    p1_res: null,
-                    p2_done: false,
-                    p2_res: null,
-                    p2_locked: false
-                };
-                localStorage.setItem(KEY_DATA, JSON.stringify(userData));
-                window.userData = userData;
-                
-                // Wait for DOM ready then show instructions
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', () => {
-                        showInstructionsModal(paperNum, false);
-                    });
-                } else {
-                    showInstructionsModal(paperNum, false);
-                }
+                ensureGuestUser();
+
+                if (restoreAnalysisOrReturn(urlParams)) return true;
+                openPaperOrResume(paperNum, urlParams);
                 return true; // Direct entry handled
+            }
+
+            if (window.hasSavedReviewMode?.() || urlParams.get('view') === 'analysis') {
+                ensureGuestUser();
+                if (restoreAnalysisOrReturn(urlParams)) return true;
             }
             return false; // No direct entry
         }
@@ -1701,6 +1806,67 @@ try{
             };
         }
 
+        window.startReviewSession = function(paper, result) {
+            if (!result || !Array.isArray(result.solutions)) {
+                throw new Error('The selected attempt has no question solutions to review.');
+            }
+
+            const reviewSession = initExamDB(paper);
+            if (typeof window.restoreReviewAnswers !== 'function') {
+                throw new Error('Review answer restoration is unavailable.');
+            }
+            const restoredQuestionCount = window.restoreReviewAnswers(reviewSession, result);
+
+            if (!restoredQuestionCount) {
+                throw new Error('No questions in this attempt could be matched to the current paper.');
+            }
+
+            sess = reviewSession;
+            sess.reviewModeSession = true;
+            window.sess = sess;
+            const firstSubject = Object.keys(sess.data).find(name => Object.keys(sess.data[name] || {}).length) || '';
+            const firstSection = firstSubject ? Object.keys(sess.data[firstSubject])[0] || '' : '';
+            sess.cur = { s: firstSubject, sec: firstSection, i: 0 };
+
+            if (result.analytics) {
+                analyticsTracker.timePerQuestion = result.analytics.timePerQuestion || {};
+                analyticsTracker.goldenHourLog = result.analytics.goldenHourLog || [];
+                analyticsTracker.markedReviewLog = result.analytics.markedReviewLog || {};
+                analyticsTracker.quickVisitLog = result.analytics.quickVisitLog || [];
+                analyticsTracker.panicPhaseLog = result.analytics.panicPhaseLog || [];
+                analyticsTracker.subjectTimeLog = result.analytics.subjectTimeLog || {};
+                analyticsTracker.marksEarnedLog = result.analytics.marksEarnedLog || {};
+            }
+
+            const paperLabel = document.getElementById('paper-label');
+            if (paperLabel) paperLabel.innerText = `Paper ${paper} (Review Mode)`;
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+
+            navTo('exam');
+            renderSubjectNav();
+            renderSectionNav();
+            updateActiveNav();
+            renderedPalKey = '';
+            renderQ();
+            const timeDisplay = document.getElementById('time-disp');
+            if (timeDisplay) timeDisplay.innerText = 'Review Mode';
+            return restoredQuestionCount;
+        };
+
+        window.getDisplayedReviewContext = () => displayedReviewContext;
+        window.setDisplayedReviewContext = (paper, result, attempt) => {
+            displayedReviewContext = { paper, result, attempt };
+        };
+        window.restoreDisplayedResult = () => {
+            if (!displayedReviewContext) {
+                throw new Error('There is no displayed result to return to.');
+            }
+            showResult(displayedReviewContext.paper, displayedReviewContext.attempt);
+        };
+
         function goToExam(paper) {
             // Show instructions and agreement before starting exam
             showInstructionsModal(paper, false); // false = new exam, not resume
@@ -1856,10 +2022,12 @@ try{
             }
             if(qImg) {
                 const imageUrl = typeof q.img === 'string' ? q.img.trim() : q.img;
-                qImg.src = imageUrl || '';
-                qImg.loading = 'lazy'; // Lazy load question images
-                qImg.style.display = imageUrl ? '' : 'none';
-                if (qImgBox) qImgBox.style.display = imageUrl ? '' : 'none';
+                qImg.onload = function(){
+                    if (this.naturalWidth > 0 && this.getBoundingClientRect().width === 0) {
+                        this.style.width = `${this.naturalWidth}px`;
+                        this.style.height = `${this.naturalHeight}px`;
+                    }
+                };
                 qImg.onerror = function(){
                     if (qImgBox) qImgBox.style.display = 'none';
                     try {
@@ -1867,6 +2035,15 @@ try{
                         this.alt = 'Image not available';
                     } catch(e) { this.alt = 'Image Not Found (Ensure i[x].png assets exist)'; }
                 };
+                delete qImg.dataset._placeholder;
+                qImg.alt = 'Question';
+                qImg.style.width = '';
+                qImg.style.height = '';
+                qImg.loading = 'lazy'; // Lazy load question images
+                qImg.style.display = imageUrl ? '' : 'none';
+                if (qImgBox) qImgBox.style.display = imageUrl ? '' : 'none';
+                if (imageUrl) qImg.src = imageUrl;
+                else qImg.removeAttribute('src');
             }
            
             const inp = document.getElementById('inp-area');
@@ -1921,6 +2098,7 @@ try{
                         const btn = buttons[x];
                         if(btn) {
                             btn.className = `q-btn ${m[cl]||''} ${x===i?'active':''}`;
+                            btn.textContent = x + 1;
                         }
                     });
                 } else {
@@ -1928,7 +2106,7 @@ try{
                     p.innerHTML = sess.data[s][sec].map((qu, x) => {
                         let cl = qu.st;
                         if(qu.st === 'marked' && qu.sel !== null && qu.sel !== '') cl = 'mark-ans';
-                        return `<button class="q-btn ${m[cl]||''} ${x===i?'active':''}" onclick="jump(${x})">${qu.id}</button>`;
+                        return `<button class="q-btn ${m[cl]||''} ${x===i?'active':''}" onclick="jump(${x})">${x + 1}</button>`;
                     }).join('');
                     renderedPalKey = palKey;
                 }
@@ -1949,12 +2127,15 @@ try{
                     }
                 }
 
-                // Get time spent from result analytics
-                let timeSpent = 0;
-                if (window.reviewModeResult && window.reviewModeResult.analytics && window.reviewModeResult.analytics.timePerQuestion) {
-                    const compositeKey = `${s}_${sec}_${q.id}`;
-                    timeSpent = window.reviewModeResult.analytics.timePerQuestion[compositeKey] || window.reviewModeResult.analytics.timePerQuestion[q.id] || 0;
-                }
+                const timeSpent = window.getReviewQuestionTimeSpent
+                    ? window.getReviewQuestionTimeSpent(
+                        window.reviewModeResult,
+                        s,
+                        sec,
+                        q.reviewResultId ?? q.id,
+                        sess.paper
+                    )
+                    : 0;
 
                 const options = inp.querySelectorAll('.opt-label');
                 
@@ -2027,7 +2208,7 @@ try{
                 }
 
                 // Add time spent badge if question was visited
-                if (timeSpent > 0 && q.st !== 'not-visited') {
+                if (timeSpent > 0) {
                     let timeText = timeSpent < 60 ? `${Math.round(timeSpent)}s` : `${Math.floor(timeSpent/60)}m ${Math.round(timeSpent%60)}s`;
                     const timeBadge = document.createElement('div');
                     timeBadge.className = 'time-spent-badge';
@@ -2433,6 +2614,8 @@ try{
             checkStorageStatus();
             
             if(!isResume) {
+                window.clearSavedExamPageState?.();
+                removeQueryParam('view');
                 // Clear old result for this paper (fresh start)
                 if (paper === 1) {
                     userData.p1_res = null;
@@ -2505,6 +2688,14 @@ try{
             await preloadExamImages();
             hideImageLoadingOverlay();
             
+            const examParams = new URLSearchParams(window.location.search);
+            examParams.set('view', 'exam');
+            window.history.replaceState(
+                {},
+                '',
+                `${window.location.pathname}?${examParams}${window.location.hash}`
+            );
+            window.sess = sess;
             saveSess(true); // Immediate save
             navTo('exam');
             initExamUI();
@@ -2891,6 +3082,7 @@ try{
                 }
                 return;
             }
+            window.saveAnalysisPageState?.(paper, r, attempt);
             // Restore analytics data from the saved result
             if (r && r.analytics) {
                 analyticsTracker.timePerQuestion = r.analytics.timePerQuestion || {};
@@ -2902,7 +3094,7 @@ try{
                 analyticsTracker.marksEarnedLog = r.analytics.marksEarnedLog || {};
                 console.log('📊 Restored analytics data from saved result');
             }
-            renderResult(r, paper);
+            renderResult(r, paper, attempt);
             // No saveAnalyticsToFocusHub here (already saved when exam finishes) to avoid duplicate history entries
         }
 
@@ -3482,7 +3674,8 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
             }
         }
 
-        function renderResult(res, paperNum) {
+        function renderResult(res, paperNum, attempt = null) {
+            displayedReviewContext = { paper: paperNum, result: res, attempt };
             document.getElementById('res-subtitle').innerText = paperNum ? `PAPER ${paperNum}` : 'COMBINED RESULT';
 
             // Show/hide review mode button
@@ -3734,6 +3927,24 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                     subjects.flatMap(sub => Object.keys(data[sub]).filter(key => key !== 'attempted' && key !== 'correct'))
                 ));
                 const columnCount = sections.length + 4;
+                const subjectColumnWidth = Math.max(12, Math.min(28, (100 / columnCount) * 1.8));
+                const dataColumnWidth = (100 - subjectColumnWidth) / (columnCount - 1);
+                const compactness = Math.max(0, columnCount - 8);
+                const fontSize = Math.max(8, 14 - compactness * 0.5);
+                const cellPadding = Math.max(2, 8 - compactness * 0.6);
+                table.style.width = '100%';
+                table.style.maxWidth = '100%';
+                table.style.tableLayout = 'fixed';
+                table.style.fontSize = `${fontSize}px`;
+
+                const columnGroup = document.createElement('colgroup');
+                [subjectColumnWidth, ...Array(columnCount - 1).fill(dataColumnWidth)].forEach(width => {
+                    const column = document.createElement('col');
+                    column.style.width = `${width}%`;
+                    columnGroup.appendChild(column);
+                });
+                table.querySelector('colgroup')?.remove();
+                table.insertBefore(columnGroup, table.querySelector('thead'));
 
                 const headerRow = table.querySelector('thead tr');
                 if (headerRow) {
@@ -3774,6 +3985,12 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 });
 
                 tbody.innerHTML = html || `<tr><td colspan="${columnCount}" style="text-align:center;color:#999;">No data</td></tr>`;
+                table.querySelectorAll('th, td').forEach(cell => {
+                    cell.style.padding = `${Math.max(4, cellPadding)}px ${cellPadding}px`;
+                    cell.style.minWidth = '0';
+                    cell.style.overflowWrap = 'anywhere';
+                    cell.style.lineHeight = '1.2';
+                });
                 if (window.lucide) lucide.createIcons();
             } catch(e) {
                 console.error('Populate table error:', e);
@@ -4261,6 +4478,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 || analyticsTracker.timePerQuestion[compositeKey]
                 || 0;
         }
+        window.getHeatmapQuestionTimeSpent = getQuestionTimeSpent;
 
         // 2. PACE ANALYSIS TIMELINE - DISABLED (Analytics tracking preserved)
         // This visualization has been removed to optimize performance.
@@ -5391,6 +5609,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
 
         // Define saveSess with built-in protection and debouncing
         window.saveSess = function(immediate = false) {
+            if (window.isReviewMode || sess?.reviewModeSession) return;
             try {
                 // Verify session exists before saving
                 if (!sess || !sess.data) {
@@ -5826,7 +6045,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
 
         // Auto-save: If exam is active and last save was >15 seconds ago, force save
         setInterval(() => {
-            if (sess && !sess.sub && (Date.now() - lastSaveTime > 15000)) {
+            if (sess && !sess.sub && !window.isReviewMode && (Date.now() - lastSaveTime > 15000)) {
                 console.log('🔄 Auto-save triggered (fallback protection)');
                 saveSess();
             }
@@ -5840,7 +6059,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                 saveAnalyticsToFocusHub();
             }
             
-            if (sess && !sess.sub) {
+            if (sess && !sess.sub && !window.isReviewMode) {
                 saveSess();
                 // Optional: Warn user about leaving during exam
                 e.preventDefault();
@@ -5850,7 +6069,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
 
         // Save when user switches tabs or minimizes window
         document.addEventListener('visibilitychange', function() {
-            if (sess && !sess.sub && document.hidden) {
+            if (sess && !sess.sub && !window.isReviewMode && document.hidden) {
                 console.log('💾 Tab hidden - saving session');
                 saveSess();
             }
@@ -5863,7 +6082,7 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
 
         // Save when window loses focus
         window.addEventListener('blur', function() {
-            if (sess && !sess.sub) {
+            if (sess && !sess.sub && !window.isReviewMode) {
                 console.log('💾 Window blur - saving session');
                 saveSess();
             }
@@ -6085,6 +6304,7 @@ window.act = a => {
         const originalSaveSess = window.saveSess;
 
         window.saveSess = function(immediate = false) {
+            if (window.isReviewMode || sess?.reviewModeSession) return;
             // Clear any pending save
             if (saveDebounceTimer) {
                 clearTimeout(saveDebounceTimer);

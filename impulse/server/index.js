@@ -1,18 +1,43 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  createBillingOrder,
+  getSeriesAccess,
+  handleGatewayWebhook,
+  refreshBillingOrder,
+  verifyCustomerAccessToken,
+} from './billing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PORT = Number(process.env.PORT || 4001);
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_SESSION_COOKIE = 'impulse_admin_session';
+const ADMIN_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+const ADMIN_SESSIONS = new Map();
+const EXAM_SESSION_COOKIE = 'impulse_exam_session';
+const EXAM_SESSION_MAX_AGE_SECONDS = 6 * 60 * 60;
+const EXAM_SESSIONS = new Map();
+const APPROVED_ADMIN_EMAILS = new Set([
+  'yashbharati81@gmail.com',
+  'impulsepreps@gmail.com',
+]);
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const ADMIN_ALLOWED_ORIGINS = new Set(
+  (process.env.ADMIN_ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:4000,http://127.0.0.1:3000,http://127.0.0.1:4000')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
 const DATA_DIR = resolve(__dirname, 'data');
 const STATE_FILE = resolve(DATA_DIR, 'admin-state.json');
 const SERIES_FILE = resolve(DATA_DIR, 'series.json');
 const TESTS_FILE = resolve(DATA_DIR, 'tests.json');
 const QUESTIONS_FILE = resolve(DATA_DIR, 'engine-questions.json');
+const QUIZ_CHALLENGES_FILE = resolve(DATA_DIR, 'quiz-challenges.json');
 const UPLOADS_DIR = resolve(DATA_DIR, 'uploads');
 
 const DEFAULT_STATE = {
@@ -82,6 +107,186 @@ async function writeJsonFile(filePath, data) {
   await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+let quizChallenges = [];
+let quizChallengesLoaded = false;
+let quizChallengeOperations = Promise.resolve();
+
+function updateQuizChallenges(operation) {
+  const result = quizChallengeOperations.then(async () => {
+    if (!quizChallengesLoaded) {
+      await mkdir(DATA_DIR, { recursive: true });
+      const saved = await readJsonFile(QUIZ_CHALLENGES_FILE, []);
+      quizChallenges = Array.isArray(saved) ? saved : [];
+      quizChallengesLoaded = true;
+    }
+
+    const previousState = JSON.stringify(quizChallenges);
+    const value = await operation(quizChallenges);
+    if (JSON.stringify(quizChallenges) !== previousState) {
+      await writeJsonFile(QUIZ_CHALLENGES_FILE, quizChallenges);
+    }
+    return value;
+  });
+  quizChallengeOperations = result.then(() => undefined, () => undefined);
+  return result;
+}
+
+function getQuizQuestion(question) {
+  if (!question || typeof question !== 'object') return null;
+  const options = question.options || {};
+  const normalizedOptions = {};
+  for (const key of ['A', 'B', 'C', 'D']) {
+    const option = options[key] ?? question[`option${key}`];
+    const text = typeof option === 'string' ? option : option?.text;
+    if (typeof text !== 'string' || !text.trim()) return null;
+    normalizedOptions[key] = {
+      text: text.trim(),
+      image: typeof option === 'object' && typeof option.image === 'string'
+        ? option.image
+        : String(question.option_images?.[key] || question[`option${key}Image`] || ''),
+    };
+  }
+
+  const questionText = question.question_text || question.question || '';
+  const correctAnswer = String(question.correct_answer || question.correctAnswer || '').toUpperCase();
+  if (
+    typeof questionText !== 'string'
+    || !questionText.trim()
+    || !['A', 'B', 'C', 'D'].includes(correctAnswer)
+  ) {
+    return null;
+  }
+
+  return {
+    id: String(question.id || randomUUID()),
+    question: questionText.trim(),
+    image: typeof question.image === 'string' ? question.image : '',
+    options: normalizedOptions,
+    correctAnswer,
+    explanation: String(question.explanation || question.solution || ''),
+  };
+}
+
+function buildQuizCatalog(questions) {
+  const subjects = new Map();
+  (Array.isArray(questions) ? questions : []).forEach((question) => {
+    if (!getQuizQuestion(question)) return;
+    const subject = String(question.subject || '').trim();
+    const chapter = String(question.chapter || '').trim();
+    if (!subject || !chapter) return;
+    if (!subjects.has(subject)) subjects.set(subject, new Map());
+    const chapters = subjects.get(subject);
+    chapters.set(chapter, (chapters.get(chapter) || 0) + 1);
+  });
+
+  return [...subjects.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, chapters]) => ({
+      name,
+      chapters: [...chapters.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([chapter, questionCount]) => ({ name: chapter, questionCount })),
+    }));
+}
+
+function advanceQuizQuestion(challenge, now = Date.now()) {
+  if (challenge.status !== 'playing') return false;
+  const answers = challenge.answers[challenge.questionIndex] || {};
+  const allAnswered = challenge.players.every((player) => Boolean(answers[player.id]));
+  const timedOut = now >= challenge.questionStartedAt + challenge.secondsPerQuestion * 1000;
+  if (!allAnswered && !timedOut) return false;
+
+  if (challenge.questionIndex + 1 >= challenge.questions.length) {
+    challenge.status = 'completed';
+    challenge.completedAt = now;
+  } else {
+    challenge.questionIndex += 1;
+    challenge.questionStartedAt = now;
+  }
+  return true;
+}
+
+function serializeQuizChallenge(challenge, playerId, now = Date.now()) {
+  const currentQuestion = challenge.status === 'playing'
+    ? challenge.questions[challenge.questionIndex]
+    : null;
+  const answers = challenge.answers[challenge.questionIndex] || {};
+  const currentPlayer = challenge.players.find((player) => player.id === playerId);
+
+  return {
+    id: challenge.id,
+    playerToken: currentPlayer?.token || null,
+    status: challenge.status,
+    subject: challenge.subject,
+    chapter: challenge.chapter,
+    questionCount: challenge.questions.length,
+    secondsPerQuestion: challenge.secondsPerQuestion,
+    questionIndex: challenge.questionIndex,
+    questionStartedAt: challenge.questionStartedAt,
+    serverTime: now,
+    inviteeName: challenge.inviteeName,
+    players: challenge.players.map((player) => ({
+      id: player.id,
+      name: player.name,
+      score: player.score,
+      correctAnswers: player.correctAnswers,
+      answered: Boolean(answers[player.id]),
+      isCurrentPlayer: player.id === playerId,
+    })),
+    currentQuestion: currentQuestion ? {
+      id: currentQuestion.id,
+      question: currentQuestion.question,
+      image: currentQuestion.image,
+      options: currentQuestion.options,
+    } : null,
+    completedAt: challenge.completedAt || null,
+  };
+}
+
+function findQuizChallenge(challenges, id) {
+  return challenges.find((challenge) => challenge.id === id);
+}
+
+function shuffle(items) {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+async function readRequestBody(request, maxBytes = Infinity) {
+  const chunks = [];
+  let bytesRead = 0;
+  for await (const chunk of request) {
+    bytesRead += chunk.length;
+    if (bytesRead > maxBytes) {
+      const error = new Error('Request body is too large.');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  const rawBody = Buffer.concat(chunks).toString('utf8');
+  try {
+    return rawBody ? JSON.parse(rawBody) : {};
+  } catch {
+    const error = new Error('Invalid JSON body.');
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function sendQuizRequestError(response, error, message) {
+  if (error?.statusCode === 400) {
+    sendJson(response, 400, { error: error.message });
+    return;
+  }
+  console.error(message, error);
+  sendJson(response, 500, { error: message });
+}
+
 function sendFile(response, filePath, contentType = 'application/octet-stream') {
   readFile(filePath).then((buf) => {
     response.writeHead(200, {
@@ -127,11 +332,20 @@ function isSafeSvg(buffer) {
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
   });
   response.end(JSON.stringify(payload));
+}
+
+function applyCorsHeaders(request, response) {
+  const origin = request.headers.origin;
+  if (!origin || !ADMIN_ALLOWED_ORIGINS.has(origin)) return false;
+
+  response.setHeader('Access-Control-Allow-Origin', origin);
+  response.setHeader('Access-Control-Allow-Credentials', 'true');
+  response.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader('Vary', 'Origin');
+  return true;
 }
 
 function parseCookies(cookieHeader = '') {
@@ -143,23 +357,211 @@ function parseCookies(cookieHeader = '') {
   }, {});
 }
 
-function isAdminRequest(request) {
-  const cookies = parseCookies(request.headers.cookie || '');
-  return cookies[ADMIN_SESSION_COOKIE] === ADMIN_PASSWORD;
+function createAdminSession(email) {
+  const token = randomBytes(32).toString('base64url');
+  ADMIN_SESSIONS.set(token, {
+    email,
+    expiresAt: Date.now() + ADMIN_SESSION_MAX_AGE_SECONDS * 1000,
+  });
+  return token;
 }
 
-function setAdminCookie(response, value) {
-  response.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax`);
+function getAdminSession(request) {
+  const cookies = parseCookies(request.headers.cookie || '');
+  const token = cookies[ADMIN_SESSION_COOKIE];
+  if (!token) return null;
+  const session = ADMIN_SESSIONS.get(token);
+  if (!session) return null;
+  if (session.expiresAt <= Date.now()) {
+    ADMIN_SESSIONS.delete(token);
+    return null;
+  }
+  return session;
+}
+
+function isAdminRequest(request) {
+  return Boolean(getAdminSession(request));
+}
+
+function createExamSession(userId) {
+  const now = Date.now();
+  for (const [token, session] of EXAM_SESSIONS) {
+    if (session.expiresAt <= now) EXAM_SESSIONS.delete(token);
+  }
+  const token = randomBytes(32).toString('base64url');
+  EXAM_SESSIONS.set(token, {
+    userId,
+    expiresAt: now + EXAM_SESSION_MAX_AGE_SECONDS * 1000,
+  });
+  return token;
+}
+
+function getExamSession(request) {
+  const token = parseCookies(request.headers.cookie || '')[EXAM_SESSION_COOKIE];
+  if (!token) return null;
+  const session = EXAM_SESSIONS.get(token);
+  if (!session) return null;
+  if (session.expiresAt <= Date.now()) {
+    EXAM_SESSIONS.delete(token);
+    return null;
+  }
+  return { token, ...session };
+}
+
+function setExamCookie(response, token) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.ADMIN_COOKIE_SAMESITE || (secure ? 'None' : 'Lax');
+  response.setHeader(
+    'Set-Cookie',
+    `${EXAM_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${EXAM_SESSION_MAX_AGE_SECONDS}; HttpOnly; SameSite=${sameSite}${secure}`
+  );
+}
+
+function clearExamCookie(response) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.ADMIN_COOKIE_SAMESITE || (secure ? 'None' : 'Lax');
+  response.setHeader(
+    'Set-Cookie',
+    `${EXAM_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=${sameSite}${secure}`
+  );
+}
+
+function publicSeriesSummary(series) {
+  const sections = Array.isArray(series.sections) ? series.sections : [];
+  return {
+    id: series.id,
+    title: series.title,
+    description: series.description || '',
+    published: Boolean(series.published),
+    publish_at: series.publish_at || null,
+    durationMinutes: series.durationMinutes,
+    subjects: Array.isArray(series.subjects) ? series.subjects : [],
+    rankMapping: series.rankMapping,
+    backgroundImage: series.backgroundImage,
+    meta: series.meta || {},
+    sections: sections.map((section) => ({
+      subject: section.subject,
+      sectionName: section.sectionName,
+      name: section.name,
+      type: section.type,
+      posMarks: section.posMarks,
+      negMarks: section.negMarks,
+      questionCountPerSubject: section.questionCountPerSubject,
+      questionCount: section.questionCount,
+    })),
+  };
+}
+
+function publicTestSummary(test) {
+  const sections = Array.isArray(test.sections) ? test.sections : [];
+  const subjects = Array.isArray(test.subjects)
+    ? test.subjects
+    : [...new Set(sections.map((section) => section.subject).filter(Boolean))];
+  return {
+    id: test.id,
+    title: test.title,
+    name: test.name,
+    seriesId: test.seriesId,
+    published: Boolean(test.published),
+    publish_at: test.publish_at || null,
+    durationMinutes: test.durationMinutes,
+    durationSec: test.durationSec,
+    questionCount: sections.reduce((total, section) => (
+      total + (Array.isArray(section.questions)
+        ? section.questions.length
+        : Number(section.questionCountPerSubject || section.questionCount || 0))
+    ), 0),
+    subjects,
+    sections: sections.map((section) => ({
+      subject: section.subject,
+      sectionName: section.sectionName,
+      name: section.name,
+      type: section.type,
+      posMarks: section.posMarks,
+      negMarks: section.negMarks,
+      questionCountPerSubject: section.questionCountPerSubject,
+      questionCount: section.questionCount,
+    })),
+    meta: test.meta || {},
+  };
+}
+
+async function requestHasSeriesAccess(request, seriesId) {
+  if (isAdminRequest(request)) return true;
+  const session = getExamSession(request);
+  if (!session) return false;
+  const access = await getSeriesAccess(session.userId, seriesId);
+  return access.allowed;
+}
+
+function sendBillingError(response, error, defaultMessage) {
+  const statusCode = Number.isInteger(error?.statusCode)
+    ? error.statusCode
+    : /^(Enter a valid|Choose a valid|This subscription|This test series|Unsupported product|You already own)/i.test(error?.message || '')
+      ? 400
+      : 503;
+  if (statusCode >= 500) console.error(defaultMessage, error);
+  sendJson(response, statusCode, {
+    error: statusCode < 500 ? error.message : defaultMessage,
+  });
+}
+
+function setAdminCookie(response, token) {
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.ADMIN_COOKIE_SAMESITE || (secure ? 'None' : 'Lax');
+  response.setHeader(
+    'Set-Cookie',
+    `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${ADMIN_SESSION_MAX_AGE_SECONDS}; HttpOnly; SameSite=${sameSite}${secure}`
+  );
 }
 
 function clearAdminCookie(response) {
-  response.setHeader('Set-Cookie', `${ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`);
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.ADMIN_COOKIE_SAMESITE || (secure ? 'None' : 'Lax');
+  response.setHeader(
+    'Set-Cookie',
+    `${ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=${sameSite}${secure}`
+  );
+}
+
+async function authenticateAdminAccessToken(accessToken) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Supabase authentication is not configured on the admin API.');
+  }
+  if (typeof accessToken !== 'string' || !accessToken.trim()) return null;
+
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!response.ok) return null;
+
+  const user = await response.json();
+  const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
+  const hasGoogleIdentity = Array.isArray(user.identities)
+    && user.identities.some((identity) => identity?.provider === 'google');
+  if (
+    !email
+    || !APPROVED_ADMIN_EMAILS.has(email)
+    || !user.email_confirmed_at
+    || !hasGoogleIdentity
+  ) {
+    return null;
+  }
+  return email;
 }
 
 const server = createServer(async (request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+  const originAllowed = applyCorsHeaders(request, response);
 
   if (request.method === 'OPTIONS') {
+    if (request.headers.origin && !originAllowed) {
+      sendJson(response, 403, { error: 'Origin is not allowed.' });
+      return;
+    }
     sendJson(response, 204, {});
     return;
   }
@@ -169,36 +571,197 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (url.pathname === '/api/billing/webhook' && request.method === 'POST') {
+    try {
+      const payload = await readRequestBody(request, 16 * 1024);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        sendJson(response, 400, { error: 'The webhook body must be a JSON object.' });
+        return;
+      }
+      await handleGatewayWebhook(payload);
+      sendJson(response, 200, { received: true });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not verify the payment notification.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/orders' && request.method === 'POST') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to continue to checkout.' });
+        return;
+      }
+
+      const body = await readRequestBody(request, 16 * 1024);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(response, 400, { error: 'The request body must be a JSON object.' });
+        return;
+      }
+      if (body.productType === 'test_series') {
+        const seriesId = typeof body.seriesId === 'string' ? body.seriesId.trim() : '';
+        const series = await readJsonFile(SERIES_FILE, []);
+        if (!seriesId || !series.some((item) => item.id === seriesId && item.published)) {
+          sendJson(response, 400, { error: 'Choose a published test series.' });
+          return;
+        }
+      }
+      const order = await createBillingOrder({
+        userId: user.id,
+        productType: body.productType,
+        planCode: body.planCode,
+        durationMonths: body.durationMonths,
+        seriesId: body.seriesId,
+        mobile: body.mobile,
+      });
+      sendJson(response, 201, order);
+    } catch (error) {
+      sendBillingError(response, error, 'Could not create a payment order.');
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/billing/orders/') && request.method === 'GET') {
+    const orderId = url.pathname.slice('/api/billing/orders/'.length);
+    if (!/^[A-Za-z0-9_-]{10,64}$/.test(orderId)) {
+      sendJson(response, 400, { error: 'Invalid payment order id.' });
+      return;
+    }
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to check your payment.' });
+        return;
+      }
+      const order = await refreshBillingOrder(orderId, user.id);
+      if (!order) {
+        sendJson(response, 404, { error: 'Payment order not found.' });
+        return;
+      }
+      sendJson(response, 200, {
+        orderId: order.order_id,
+        productType: order.product_type,
+        planCode: order.plan_code,
+        durationMonths: order.duration_months,
+        seriesId: order.series_id,
+        amountInr: order.amount_inr,
+        status: order.status,
+        createdAt: order.created_at,
+        expiresAt: order.expires_at,
+        paidAt: order.paid_at,
+      });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check the payment status.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/exam-session' && request.method === 'POST') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to access this test.' });
+        return;
+      }
+      const body = await readRequestBody(request, 16 * 1024);
+      const seriesId = typeof body?.seriesId === 'string' ? body.seriesId.trim() : '';
+      if (!seriesId || seriesId.length > 200) {
+        sendJson(response, 400, { error: 'A valid test series id is required.' });
+        return;
+      }
+      const series = await readJsonFile(SERIES_FILE, []);
+      if (!series.some((item) => item.id === seriesId && item.published)) {
+        sendJson(response, 404, { error: 'This test series is not available.' });
+        return;
+      }
+      const access = await getSeriesAccess(user.id, seriesId);
+      if (!access.allowed) {
+        sendJson(response, 403, {
+          error: 'Purchase this test series before opening its tests.',
+          reason: access.reason,
+          priceInr: access.price_inr,
+        });
+        return;
+      }
+      const previousSession = getExamSession(request);
+      if (previousSession) EXAM_SESSIONS.delete(previousSession.token);
+      setExamCookie(response, createExamSession(user.id));
+      sendJson(response, 200, { authorized: true });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not authorize this test session.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/series-access' && request.method === 'GET') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to check test-series access.' });
+        return;
+      }
+      const seriesId = url.searchParams.get('seriesId') || '';
+      if (!seriesId || seriesId.length > 200) {
+        sendJson(response, 400, { error: 'A valid test series id is required.' });
+        return;
+      }
+      const access = await getSeriesAccess(user.id, seriesId);
+      sendJson(response, 200, access);
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check test-series access.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/exam-session' && request.method === 'DELETE') {
+    const session = getExamSession(request);
+    if (session) EXAM_SESSIONS.delete(session.token);
+    clearExamCookie(response);
+    sendJson(response, 200, { authorized: false });
+    return;
+  }
+
   if (url.pathname === '/api/admin-session' && request.method === 'GET') {
-    sendJson(response, 200, { authenticated: isAdminRequest(request) });
+    const session = getAdminSession(request);
+    sendJson(response, 200, { authenticated: Boolean(session), email: session?.email || null });
     return;
   }
 
   if (url.pathname === '/api/admin-login' && request.method === 'POST') {
     try {
-      const chunks = [];
-      for await (const chunk of request) {
-        chunks.push(chunk);
+      const body = await readRequestBody(request);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(response, 400, { authenticated: false, error: 'The request body must be a JSON object.' });
+        return;
       }
-
-      const rawBody = Buffer.concat(chunks).toString('utf8');
-      const body = rawBody ? JSON.parse(rawBody) : {};
-
-      if (body.password !== ADMIN_PASSWORD) {
-        sendJson(response, 401, { authenticated: false, error: 'Invalid password' });
+      const email = await authenticateAdminAccessToken(body.accessToken);
+      if (!email) {
+        sendJson(response, 403, { authenticated: false, error: 'No admin access.' });
         return;
       }
 
-      setAdminCookie(response, ADMIN_PASSWORD);
-      sendJson(response, 200, { authenticated: true });
-    } catch {
-      sendJson(response, 400, { authenticated: false, error: 'Invalid JSON body' });
+      setAdminCookie(response, createAdminSession(email));
+      sendJson(response, 200, { authenticated: true, email });
+    } catch (error) {
+      const status = error?.statusCode === 400 ? 400 : 503;
+      console.error('Could not establish an admin session.', error);
+      sendJson(response, status, {
+        authenticated: false,
+        error: status === 400 ? error.message : 'Admin sign-in verification is unavailable.',
+      });
     }
 
     return;
   }
 
   if (url.pathname === '/api/admin-logout' && request.method === 'POST') {
+    const token = parseCookies(request.headers.cookie || '')[ADMIN_SESSION_COOKIE];
+    if (token) ADMIN_SESSIONS.delete(token);
     clearAdminCookie(response);
     sendJson(response, 200, { authenticated: false });
     return;
@@ -208,6 +771,234 @@ const server = createServer(async (request, response) => {
     const state = await readState();
     sendJson(response, 200, { questions: state.questions || [] });
     return;
+  }
+
+  if (url.pathname === '/api/quiz/catalog' && request.method === 'GET') {
+    const state = await readState();
+    sendJson(response, 200, { subjects: buildQuizCatalog(state.questions || []) });
+    return;
+  }
+
+  if (url.pathname === '/api/quiz/challenges' && request.method === 'POST') {
+    try {
+      const body = await readRequestBody(request);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(response, 400, { error: 'The request body must be a JSON object.' });
+        return;
+      }
+
+      const {
+        hostId,
+        hostName,
+        inviteeName,
+        subject,
+        chapter,
+        questionCount,
+        secondsPerQuestion,
+      } = body;
+
+      if (
+        typeof hostId !== 'string' || !hostId.trim()
+        || typeof hostName !== 'string' || !hostName.trim()
+        || typeof inviteeName !== 'string' || !inviteeName.trim()
+        || typeof subject !== 'string' || !subject.trim()
+        || typeof chapter !== 'string' || !chapter.trim()
+        || !Number.isInteger(questionCount) || questionCount < 1 || questionCount > 50
+        || !Number.isInteger(secondsPerQuestion) || secondsPerQuestion < 10 || secondsPerQuestion > 120
+      ) {
+        sendJson(response, 400, { error: 'Provide valid players, subject, chapter, question count, and timer settings.' });
+        return;
+      }
+
+      const state = await readState();
+      const availableQuestions = (state.questions || [])
+        .filter((question) => (
+          String(question?.subject || '').trim() === subject.trim()
+          && String(question?.chapter || '').trim() === chapter.trim()
+        ))
+        .map(getQuizQuestion)
+        .filter(Boolean);
+      if (availableQuestions.length < questionCount) {
+        sendJson(response, 400, { error: `Only ${availableQuestions.length} playable question(s) are available for this chapter.` });
+        return;
+      }
+
+      const selectedQuestions = shuffle(availableQuestions).slice(0, questionCount);
+      const challenge = {
+        id: randomUUID(),
+        status: 'waiting',
+        subject: subject.trim(),
+        chapter: chapter.trim(),
+        inviteeName: inviteeName.trim().slice(0, 60),
+        secondsPerQuestion,
+        questionIndex: 0,
+        questionStartedAt: null,
+        questions: selectedQuestions,
+        answers: [],
+        players: [{
+          id: hostId.trim().slice(0, 100),
+          token: randomUUID(),
+          name: hostName.trim().slice(0, 60),
+          score: 0,
+          correctAnswers: 0,
+        }],
+        createdAt: Date.now(),
+      };
+
+      await updateQuizChallenges((challenges) => {
+        challenges.push(challenge);
+      });
+      sendJson(response, 201, serializeQuizChallenge(challenge, challenge.players[0].id));
+    } catch (error) {
+      sendQuizRequestError(response, error, 'The quiz challenge could not be created.');
+    }
+    return;
+  }
+
+  const quizChallengeRoute = url.pathname.match(/^\/api\/quiz\/challenges\/([^/]+)(?:\/(join|answer))?$/);
+  if (quizChallengeRoute) {
+    let challengeId;
+    try {
+      challengeId = decodeURIComponent(quizChallengeRoute[1]);
+    } catch {
+      sendJson(response, 400, { error: 'Invalid challenge id.' });
+      return;
+    }
+    const action = quizChallengeRoute[2];
+
+    if (action === 'join' && request.method === 'POST') {
+      try {
+        const body = await readRequestBody(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+          sendJson(response, 400, { error: 'The request body must be a JSON object.' });
+          return;
+        }
+        if (typeof body.playerId !== 'string' || !body.playerId.trim()) {
+          sendJson(response, 400, { error: 'A player id is required to join the challenge.' });
+          return;
+        }
+        const result = await updateQuizChallenges((challenges) => {
+          const challenge = findQuizChallenge(challenges, challengeId);
+          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
+          const existingPlayer = challenge.players.find((player) => player.id === body.playerId.trim());
+          if (existingPlayer) {
+            if (existingPlayer.token !== body.playerToken) {
+              return { statusCode: 403, error: 'This player session is not authorized for the challenge.' };
+            }
+            return { challenge };
+          }
+          if (challenge.status !== 'waiting' || challenge.players.length >= 2) {
+            return { statusCode: 409, error: 'This challenge is no longer waiting for a player.' };
+          }
+          if (typeof body.playerToken !== 'string' || !body.playerToken.trim()) {
+            return { statusCode: 400, error: 'A private player token is required to join the challenge.' };
+          }
+
+          challenge.players.push({
+            id: body.playerId.trim().slice(0, 100),
+            token: body.playerToken.trim().slice(0, 100),
+            name: String(body.name || challenge.inviteeName).trim().slice(0, 60) || challenge.inviteeName,
+            score: 0,
+            correctAnswers: 0,
+          });
+          challenge.status = 'playing';
+          challenge.questionStartedAt = Date.now();
+          return { challenge };
+        });
+        if (result.statusCode) {
+          sendJson(response, result.statusCode, { error: result.error });
+          return;
+        }
+        sendJson(response, 200, serializeQuizChallenge(result.challenge, body.playerId.trim()));
+      } catch (error) {
+        sendQuizRequestError(response, error, 'The quiz challenge could not be joined.');
+      }
+      return;
+    }
+
+    if (action === 'answer' && request.method === 'POST') {
+      try {
+        const body = await readRequestBody(request);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+          sendJson(response, 400, { error: 'The request body must be a JSON object.' });
+          return;
+        }
+        const result = await updateQuizChallenges((challenges) => {
+          const challenge = findQuizChallenge(challenges, challengeId);
+          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
+          const player = challenge.players.find((item) => (
+            item.id === body.playerId && item.token === body.playerToken
+          ));
+          if (!player) return { statusCode: 403, error: 'You are not a player in this challenge.' };
+          advanceQuizQuestion(challenge);
+          if (challenge.status !== 'playing' || body.questionIndex !== challenge.questionIndex) {
+            return { statusCode: 409, error: 'This question is no longer active.' };
+          }
+          if (!['A', 'B', 'C', 'D'].includes(body.answer)) {
+            return { statusCode: 400, error: 'Choose one of the four answer options.' };
+          }
+
+          const now = Date.now();
+          if (now >= challenge.questionStartedAt + challenge.secondsPerQuestion * 1000) {
+            advanceQuizQuestion(challenge, now);
+            return { statusCode: 409, error: 'The time for this question has expired.' };
+          }
+
+          const answers = challenge.answers[challenge.questionIndex] || {};
+          if (answers[player.id]) return { statusCode: 409, error: 'You have already answered this question.' };
+          const question = challenge.questions[challenge.questionIndex];
+          const isCorrect = body.answer === question.correctAnswer;
+          const elapsed = Math.max(0, now - challenge.questionStartedAt);
+          const points = isCorrect
+            ? Math.max(1, Math.ceil(1000 * (1 - elapsed / (challenge.secondsPerQuestion * 1000))))
+            : 0;
+          answers[player.id] = {
+            answer: body.answer,
+            isCorrect,
+            points,
+            answeredAt: now,
+          };
+          challenge.answers[challenge.questionIndex] = answers;
+          player.score += points;
+          if (isCorrect) player.correctAnswers += 1;
+          advanceQuizQuestion(challenge, now);
+          return { challenge };
+        });
+
+        if (result.statusCode) {
+          sendJson(response, result.statusCode, { error: result.error });
+          return;
+        }
+        sendJson(response, 200, serializeQuizChallenge(result.challenge, body.playerId));
+      } catch (error) {
+        sendQuizRequestError(response, error, 'Your answer could not be submitted.');
+      }
+      return;
+    }
+
+    if (!action && request.method === 'GET') {
+      const playerId = url.searchParams.get('playerId') || '';
+      const playerToken = url.searchParams.get('playerToken') || '';
+      try {
+        const result = await updateQuizChallenges((challenges) => {
+          const challenge = findQuizChallenge(challenges, challengeId);
+          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
+          if (!challenge.players.some((player) => player.id === playerId && player.token === playerToken)) {
+            return { statusCode: 403, error: 'You are not a player in this challenge.' };
+          }
+          advanceQuizQuestion(challenge);
+          return { challenge };
+        });
+        if (result.statusCode) {
+          sendJson(response, result.statusCode, { error: result.error });
+          return;
+        }
+        sendJson(response, 200, serializeQuizChallenge(result.challenge, playerId));
+      } catch (error) {
+        sendQuizRequestError(response, error, 'The quiz challenge could not be loaded.');
+      }
+      return;
+    }
   }
 
   // Serve uploaded files
@@ -233,14 +1024,23 @@ const server = createServer(async (request, response) => {
 
   // Engine: list public series
   if (url.pathname === '/api/series' && request.method === 'GET') {
+    const includeAll = url.searchParams.get('all') === 'true';
+    const isAdmin = isAdminRequest(request);
+    if (includeAll && !isAdmin) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
     const series = await readJsonFile(SERIES_FILE, []);
     const tests = await readJsonFile(TESTS_FILE, []);
     const enriched = series.map((item) => ({
       ...item,
       testCount: tests.filter((t) => t.seriesId === item.id).length,
     }));
-    const includeAll = url.searchParams.get('all') === 'true';
-    sendJson(response, 200, { series: includeAll ? enriched : enriched.filter((item) => item.published) });
+    sendJson(response, 200, {
+      series: includeAll
+        ? enriched
+        : enriched.filter((item) => item.published).map(publicSeriesSummary),
+    });
     return;
   }
 
@@ -255,12 +1055,20 @@ const server = createServer(async (request, response) => {
     const tests = await readJsonFile(TESTS_FILE, []);
     const item = series.find(s => s.id === seriesId);
     if (!item) { sendJson(response, 404, { error: 'Series not found' }); return; }
+    if (!item.published && !isAdminRequest(request)) {
+      sendJson(response, 404, { error: 'Series not found' });
+      return;
+    }
+    if (!await requestHasSeriesAccess(request, seriesId)) {
+      sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
+      return;
+    }
     
     const enriched = {
       ...item,
       testCount: tests.filter((t) => t.seriesId === item.id).length,
     };
-    sendJson(response, 200, enriched);
+    sendJson(response, 200, isAdminRequest(request) ? enriched : publicSeriesSummary(enriched));
     return;
   }
 
@@ -395,6 +1203,14 @@ const server = createServer(async (request, response) => {
     const tests = await readJsonFile(TESTS_FILE, []);
     const test = tests.find(t => t.id === id);
     if (!test) { sendJson(response, 404, { error: 'Not found' }); return; }
+    if (!test.published && !isAdminRequest(request)) {
+      sendJson(response, 404, { error: 'Not found' });
+      return;
+    }
+    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId))) {
+      sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
+      return;
+    }
     sendJson(response, 200, test);
     return;
   }
@@ -428,6 +1244,7 @@ const server = createServer(async (request, response) => {
   }
 
   if (url.pathname === '/api/engine/questions' && request.method === 'GET') {
+    if (!isAdminRequest(request)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
     const list = await readJsonFile(QUESTIONS_FILE, []);
     sendJson(response, 200, { questions: list });
     return;
@@ -537,11 +1354,17 @@ const server = createServer(async (request, response) => {
 
   // NEW: Get all tests (admin)
   if (url.pathname === '/api/tests' && request.method === 'GET') {
-    const tests = await readJsonFile(TESTS_FILE, []);
     const includeAll = url.searchParams.get('all') === 'true';
     const isAdmin = isAdminRequest(request);
-    // For public requests (students), only return published tests
-    const filtered = (includeAll || isAdmin) ? tests : tests.filter(t => t.published);
+    if (includeAll && !isAdmin) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
+    const tests = await readJsonFile(TESTS_FILE, []);
+    // Keep answer keys and question text out of the public catalogue response.
+    const filtered = (includeAll || isAdmin)
+      ? tests
+      : tests.filter((test) => test.published).map(publicTestSummary);
     sendJson(response, 200, { tests: filtered });
     return;
   }
@@ -556,6 +1379,14 @@ const server = createServer(async (request, response) => {
     const tests = await readJsonFile(TESTS_FILE, []);
     const test = tests.find(t => t.id === id);
     if (!test) { sendJson(response, 404, { error: 'Test not found' }); return; }
+    if (!test.published && !isAdminRequest(request)) {
+      sendJson(response, 404, { error: 'Test not found' });
+      return;
+    }
+    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId))) {
+      sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
+      return;
+    }
     sendJson(response, 200, test);
     return;
   }
@@ -611,6 +1442,7 @@ const server = createServer(async (request, response) => {
 
   // NEW: Get tests for a specific series (admin)
   if (url.pathname.startsWith('/api/series/') && url.pathname.includes('/tests')) {
+    if (!isAdminRequest(request)) { sendJson(response, 401, { error: 'Unauthorized' }); return; }
     const seriesId = url.pathname.split('/api/series/')[1].split('/')[0];
     if (!seriesId) { sendJson(response, 400, { error: 'Invalid series id' }); return; }
 

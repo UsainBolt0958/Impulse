@@ -128,9 +128,7 @@ export default function PaperImportDialog({
           <DialogTitle>Import complete {exam} paper</DialogTitle>
           <DialogDescription>
             Upload one {exam} paper JSON and its referenced images. Each question is placed in the PYQ library under its JSON subject and chapter.
-            {['JEE MAINS', 'NEET'].includes(exam)
-              ? ' The complete paper is also added to Previous Papers as a playable dynamic-engine exam.'
-              : ' The paper keeps one shared year and shift or paper identifier.'}
+            The complete paper is also added to Previous Papers as its own playable dynamic-engine exam.
           </DialogDescription>
         </DialogHeader>
 
