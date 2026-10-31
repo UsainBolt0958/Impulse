@@ -3,11 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { Sun, Moon, UserRound, UsersRound } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFreeAccessActive } from '@/lib/freeAccess';
 
 function Header() {
   const location = useLocation();
   const { profile } = useAuth();
   const [isDark, setIsDark] = useState(false);
+  const freeAccessActive = useFreeAccessActive();
 
   useEffect(() => {
     // Initialize theme from localStorage or OS preference
@@ -40,57 +42,64 @@ function Header() {
   };
 
   return (
-    <header className="border-b border-border bg-background sticky top-0 z-50 flex-shrink-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center h-20">
-          <Link to="/" className="flex items-center group">
-            <span className="text-2xl md:text-3xl font-black tracking-[0.28em] uppercase group-hover:opacity-80 transition-opacity duration-200">
-              Impulse
-            </span>
-          </Link>
-
-          <div className="flex-1" />
-
-          <button
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            className="p-2 rounded-md hover:bg-secondary transition"
-            title={isDark ? 'Switch to light' : 'Switch to dark'}
-          >
-            {isDark ? <ColoredIcon icon={Sun} name="sun" size={5} /> : <ColoredIcon icon={Moon} name="moon" size={5} />}
-          </button>
-
-          <Link
-            to="/friends"
-            aria-label="Friends"
-            title="Friends"
-            aria-current={location.pathname.startsWith('/friends') ? 'page' : undefined}
-            className={`ml-2 rounded-md p-2 transition ${
-              location.pathname.startsWith('/friends')
-                ? 'bg-secondary text-amber-500'
-                : 'text-amber-500 hover:bg-secondary'
-            }`}
-          >
-            <UsersRound className="h-5 w-5" />
-          </Link>
-
-          <Link
-            to="/profile"
-            aria-label="Profile"
-            title="Profile"
-            aria-current={location.pathname === '/profile' ? 'page' : undefined}
-            className={`ml-2 rounded-md p-2 transition ${
-              location.pathname === '/profile'
-                ? 'bg-secondary text-violet-500'
-                : 'text-violet-500 hover:bg-secondary'
-            }`}
-          >
-            <ProfileIcon avatarUrl={profile?.avatar_url} />
-          </Link>
-
+    <>
+      {freeAccessActive ? (
+        <div className="bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">
+          All premium plans and test series are free through January 1, 2027. Listed prices are unchanged.
         </div>
-      </div>
-    </header>
+      ) : null}
+      <header className="border-b border-border bg-background sticky top-0 z-50 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center h-20">
+            <Link to="/" className="flex items-center group">
+              <span className="text-2xl md:text-3xl font-black tracking-[0.28em] uppercase group-hover:opacity-80 transition-opacity duration-200">
+                Impulse
+              </span>
+            </Link>
+
+            <div className="flex-1" />
+
+            <button
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              className="p-2 rounded-md hover:bg-secondary transition"
+              title={isDark ? 'Switch to light' : 'Switch to dark'}
+            >
+              {isDark ? <ColoredIcon icon={Sun} name="sun" size={5} /> : <ColoredIcon icon={Moon} name="moon" size={5} />}
+            </button>
+
+            <Link
+              to="/friends"
+              aria-label="Friends"
+              title="Friends"
+              aria-current={location.pathname.startsWith('/friends') ? 'page' : undefined}
+              className={`ml-2 rounded-md p-2 transition ${
+                location.pathname.startsWith('/friends')
+                  ? 'bg-secondary text-amber-500'
+                  : 'text-amber-500 hover:bg-secondary'
+              }`}
+            >
+              <UsersRound className="h-5 w-5" />
+            </Link>
+
+            <Link
+              to="/profile"
+              aria-label="Profile"
+              title="Profile"
+              aria-current={location.pathname === '/profile' ? 'page' : undefined}
+              className={`ml-2 rounded-md p-2 transition ${
+                location.pathname === '/profile'
+                  ? 'bg-secondary text-violet-500'
+                  : 'text-violet-500 hover:bg-secondary'
+              }`}
+            >
+              <ProfileIcon avatarUrl={profile?.avatar_url} />
+            </Link>
+
+          </div>
+        </div>
+      </header>
+    </>
   );
 }
 

@@ -16,12 +16,14 @@ import {
 } from '@/lib/portalServer';
 import { formatPriceInr, loadTestSeriesPriceMap } from '@/lib/premiumCatalog';
 import CheckoutControl from '@/components/CheckoutControl.jsx';
+import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
 
 export function getTestSeriesDashboardUrl(testId, seriesId) {
   return `/test-series/${encodeURIComponent(seriesId)}/${encodeURIComponent(testId)}`;
 }
 
 function TestSeriesPage() {
+  const freeAccessActive = useFreeAccessActive();
   const [seriesList, setSeriesList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,7 +47,7 @@ function TestSeriesPage() {
           pricingFailed = true;
         }
         const accessBySeries = new Map();
-        if (!pricingFailed) {
+        if (!pricingFailed && !freeAccessActive) {
           const paidSeries = series.filter((item) => Number(pricesBySeries.get(item.id)?.price_inr) > 0);
           const accessResults = await Promise.allSettled(
             paidSeries.map((item) => getSeriesBillingAccess(item.id))
@@ -93,7 +95,7 @@ function TestSeriesPage() {
     };
 
     fetchSeries();
-  }, []);
+  }, [freeAccessActive]);
 
   const handleStartTest = async (testId, seriesId) => {
     try {
@@ -141,7 +143,12 @@ function TestSeriesPage() {
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="default">{series.tests?.length ?? 0} tests</Badge>
                         <Badge variant="secondary">Published</Badge>
-                        {series.price !== null && <Badge variant="outline">{formatPriceInr(series.price)} · sold separately</Badge>}
+                        {series.price !== null && (
+                          <Badge variant="outline">
+                            {formatPriceInr(series.price)}
+                            {freeAccessActive ? ` · free through ${FREE_ACCESS_END_LABEL}` : ' · sold separately'}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -181,11 +188,11 @@ function TestSeriesPage() {
                               )}
                             </div>
 
-                            {priceLoadError || accessLoadError ? (
+                            {!freeAccessActive && (priceLoadError || accessLoadError) ? (
                               <Button className="w-full font-bold" disabled>
                                 Access unavailable
                               </Button>
-                            ) : series.access?.allowed || !series.priceConfig || Number(series.priceConfig.price_inr) === 0 ? (
+                            ) : freeAccessActive || series.access?.allowed || !series.priceConfig || Number(series.priceConfig.price_inr) === 0 ? (
                               <Button onClick={() => handleStartTest(test.id, series.id)} className="w-full font-bold">
                                 Start Test
                               </Button>
@@ -210,7 +217,9 @@ function TestSeriesPage() {
             )}
             {priceLoadError && (
               <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
-                Test-series pricing could not be verified. Test access is temporarily unavailable.
+                {freeAccessActive
+                  ? 'Test-series prices could not be loaded. Free test access remains available during this offer.'
+                  : 'Test-series pricing could not be verified. Test access is temporarily unavailable.'}
               </p>
             )}
             {accessLoadError && !priceLoadError ? (

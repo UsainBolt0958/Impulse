@@ -8,8 +8,6 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
-  Check,
-  Cloud,
   Crown,
   Eye,
   EyeOff,
@@ -52,17 +50,6 @@ const DIFFICULTIES = [
 
 const SUBJECTS = ['Biology', 'Chemistry', 'Physics', 'Math'];
 const MEDAL_ICONS = { Flame, Zap, ShieldCheck, Crown, Target, Trophy, Sparkles };
-const SYNCED_DATA_CATEGORIES = [
-  'Google sign-in identity plus profile name, photo, and username',
-  'Question attempts and the study calendar derived from them',
-  'Bookmarked questions and notebook content',
-  'Custom-test progress and results',
-  'Test-series and previous-paper progress and results',
-  'JEE exam sessions, saved recovery checkpoints, and exam analytics',
-  'Profile-stat visibility and appearance/reading preferences',
-  'Quiz-challenge player name and ID',
-  'Friend requests and accepted connections stored in Supabase',
-];
 
 function getDifficulty(question) {
   const difficulty = String(question?.difficulty || '').trim().toLowerCase();
@@ -197,7 +184,7 @@ function activityColor(solved) {
 }
 
 function ProfilePage({ profile = null }) {
-  const { user, profile: accountProfile, syncStatus, syncError } = useAuth();
+  const { user, profile: accountProfile } = useAuth();
   const { solvedQuestions: ownSolvedQuestions } = useSolvedQuestions();
   const { questions: ownQuestions } = useQuestions();
   const solvedQuestions = profile?.solvedQuestions || ownSolvedQuestions;
@@ -371,42 +358,6 @@ function ProfilePage({ profile = null }) {
                 </Link>
               )}
             </section>
-
-            {isOwnProfile && (
-              <Card className="border-border">
-                <CardHeader>
-                  <div className="flex items-start gap-3">
-                    <Cloud className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-                    <div>
-                      <CardTitle>Your data across devices</CardTitle>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {syncStatus === 'synced' && 'Your supported data has finished syncing to your account.'}
-                        {syncStatus === 'syncing' && 'Merging this browser’s saved data with your account…'}
-                        {syncStatus === 'error' && 'Some data could not sync. Your browser copy is still saved.'}
-                        {syncStatus === 'idle' && 'Sign in to sync your study data to your account.'}
-                      </p>
-                      {syncStatus === 'error' && syncError && (
-                        <p role="alert" className="mt-2 text-sm text-destructive">{syncError}</p>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <ul className="grid gap-3 sm:grid-cols-2">
-                    {SYNCED_DATA_CATEGORIES.map((category) => (
-                      <li key={category} className="flex items-start gap-2 text-sm">
-                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                        <span>{category}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
-                    Full-screen exam progress syncs after you return to the main app. Shared question content,
-                    admin data, and private quiz-challenge access tokens are intentionally excluded.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.4fr)]">
               <Card className="overflow-hidden border-border">

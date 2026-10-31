@@ -7,8 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import CheckoutControl from '@/components/CheckoutControl.jsx';
 import { loadPremiumCatalog, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
+import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
 
 function PremiumPage() {
+  const freeAccessActive = useFreeAccessActive();
   const [plans, setPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -46,7 +48,9 @@ function PremiumPage() {
               </Badge>
               <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Choose your pace</h1>
               <p className="mt-4 text-muted-foreground">
-                PYQ practice is available on every plan. Test series are separate purchases and are not included.
+                {freeAccessActive
+                  ? `All subscription plans and test series are free through ${FREE_ACCESS_END_LABEL}. Listed prices are unchanged.`
+                  : 'PYQ practice is available on every plan. Test series are separate purchases and are not included.'}
               </p>
             </div>
 
@@ -86,15 +90,24 @@ function PremiumPage() {
                           <div key={price.duration_months} className="space-y-2 rounded-md border border-border p-3">
                             <div className="flex items-center justify-between gap-3 text-sm">
                               <span>{price.duration_months === 0 ? 'Free' : `${price.duration_months} months`}</span>
-                              <span className="font-bold">{formatPriceInr(price.price_inr)}</span>
+                              <span className={freeAccessActive && price.price_inr > 0 ? 'font-bold line-through text-muted-foreground' : 'font-bold'}>
+                                {formatPriceInr(price.price_inr)}
+                              </span>
                             </div>
+                            {freeAccessActive && plan.plan_code !== 'free' && price.price_inr > 0 ? (
+                              <p className="text-right text-xs font-semibold text-primary">
+                                Free through {FREE_ACCESS_END_LABEL}
+                              </p>
+                            ) : null}
                             {plan.plan_code !== 'free' && price.price_inr > 0 ? (
-                              <CheckoutControl
-                                productType="subscription"
-                                planCode={plan.plan_code}
-                                durationMonths={price.duration_months}
-                                priceInr={price.price_inr}
-                              />
+                              freeAccessActive ? null : (
+                                <CheckoutControl
+                                  productType="subscription"
+                                  planCode={plan.plan_code}
+                                  durationMonths={price.duration_months}
+                                  priceInr={price.price_inr}
+                                />
+                              )
                             ) : null}
                           </div>
                         ))}
@@ -105,7 +118,9 @@ function PremiumPage() {
               </div>
             )}
             <p className="mt-8 text-center text-xs text-muted-foreground">
-              Checkout uses the current server-side catalog price. Enter your Indian mobile number to continue with UPI.
+              {freeAccessActive
+                ? `No payment is required through ${FREE_ACCESS_END_LABEL}; listed prices are retained for reference.`
+                : 'Checkout uses the current server-side catalog price. Enter your Indian mobile number to continue with UPI.'}
             </p>
           </div>
         </main>
