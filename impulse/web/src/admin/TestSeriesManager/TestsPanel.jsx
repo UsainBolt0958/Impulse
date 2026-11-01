@@ -13,6 +13,87 @@ const PERCENTILE_ANCHORS = [
   98.5, 98, 97.5, 97, 96.5, 96, 95.5, 95, 94, 93, 92, 91, 90,
 ];
 
+const PERCENTILE_JSON_EXAMPLE = `{
+  "99.9": 230,
+  "99.8": 225,
+  "99.7": 220,
+  "99.6": 215,
+  "99.5": 210,
+  "99.4": 205,
+  "99.3": 200,
+  "99.2": 195,
+  "99.1": 190,
+  "99": 185,
+  "98.5": 180,
+  "98": 175,
+  "97.5": 170,
+  "97": 165,
+  "96.5": 160,
+  "96": 155,
+  "95.5": 150,
+  "95": 145,
+  "94": 140,
+  "93": 135,
+  "92": 130,
+  "91": 125,
+  "90": 120
+}`;
+
+const buildPercentileMarks = (values) => {
+  const marks = PERCENTILE_ANCHORS
+    .map((percentile) => {
+      const value = values[String(percentile)];
+      const rawValue = typeof value === 'string' ? value.trim() : value;
+      return rawValue === '' || rawValue == null
+        ? null
+        : { percentile, marks: Number(rawValue) };
+    })
+    .filter(Boolean);
+
+  if (
+    marks.length < 2
+    || !marks.some((entry) => entry.percentile === 90)
+    || marks.some((entry) => !Number.isFinite(entry.marks))
+  ) {
+    throw new Error('Enter the score in marks for the 90th-percentile cutoff and at least one other cutoff.');
+  }
+
+  if (marks.some((entry, index) => index > 0 && marks[index - 1].marks <= entry.marks)) {
+    throw new Error('Marks must decrease as the percentile cutoffs decrease.');
+  }
+
+  return Object.fromEntries(
+    marks.map(({ percentile, marks: score }) => [String(percentile), score])
+  );
+};
+
+const parsePercentileMarksImport = (text) => {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Invalid JSON: ${error.message}`);
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('The JSON file must contain an object of percentile-to-marks values.');
+  }
+
+  const importedValues = {};
+  for (const [percentileKey, marks] of Object.entries(parsed)) {
+    const percentile = Number(percentileKey);
+    if (!PERCENTILE_ANCHORS.includes(percentile)) {
+      throw new Error(`Unsupported percentile "${percentileKey}". Use one of the displayed percentile values.`);
+    }
+    if (typeof marks !== 'number' || !Number.isFinite(marks)) {
+      throw new Error(`Marks for percentile ${percentile} must be a finite JSON number.`);
+    }
+    importedValues[String(percentile)] = marks;
+  }
+
+  return importedValues;
+};
+
 export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack }) {
   const [tests, setTests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,44 +215,49 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
   };
 
   const handleSavePercentiles = async (testId) => {
-    const marks = PERCENTILE_ANCHORS
-      .map((percentile) => {
-        const rawValue = percentileValues[String(percentile)]?.trim();
-        return rawValue === '' || rawValue == null
-          ? null
-          : { percentile, marks: Number(rawValue) };
-      })
-      .filter(Boolean);
-
-    if (
-      marks.length < 2
-      || !marks.some((entry) => entry.percentile === 90)
-      || marks.some((entry) => !Number.isFinite(entry.marks))
-    ) {
-      toast.error('Enter the score in marks for the 90th-percentile cutoff and at least one other cutoff.');
+    let percentileMarks;
+    try {
+      percentileMarks = buildPercentileMarks(percentileValues);
+    } catch (error) {
+      toast.error(error.message);
       return;
     }
 
-    if (marks.some((entry, index) => index > 0 && marks[index - 1].marks <= entry.marks)) {
-      toast.error('Marks must decrease as the percentile cutoffs decrease.');
-      return;
-    }
+    await savePercentileMarks(testId, percentileMarks);
+  };
 
+  const savePercentileMarks = async (testId, percentileMarks) => {
     setIsSavingPercentiles(true);
     try {
-      const percentileMarks = Object.fromEntries(
-        marks.map(({ percentile, marks: score }) => [String(percentile), score])
-      );
       const updated = await updateTest(testId, { percentileMarks });
+      if (!updated) throw new Error('The percentile marks could not be saved.');
       setTests((currentTests) => currentTests.map((test) => (
         test.id === testId ? updated : test
       )));
       setEditingPercentiles(null);
       toast.success('Percentile marks saved');
     } catch (err) {
-      toast.error('Failed to save percentile marks');
+      toast.error(err?.message || 'Failed to save percentile marks');
     } finally {
       setIsSavingPercentiles(false);
+    }
+  };
+
+  const handleImportPercentiles = async (testId, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (file.size > 1024 * 1024) {
+      toast.error('The percentile JSON file must be smaller than 1 MB.');
+      return;
+    }
+
+    try {
+      const importedValues = parsePercentileMarksImport(await file.text());
+      const percentileMarks = buildPercentileMarks(importedValues);
+      await savePercentileMarks(testId, percentileMarks);
+    } catch (err) {
+      toast.error(err?.message || 'The percentile JSON file could not be read.');
     }
   };
 
@@ -332,6 +418,25 @@ export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack 
                         Enter the test score in marks that corresponds to each percentile, not a percentage of total marks. The 90th-percentile score and at least one other cutoff are required.
                       </p>
                     </div>
+                    <label className="block space-y-1 text-xs font-medium text-muted-foreground">
+                      Upload percentile marks JSON (saves directly to this test)
+                      <Input
+                        type="file"
+                        accept=".json,application/json"
+                        disabled={isSavingPercentiles}
+                        aria-label="Upload marks-vs-percentile JSON"
+                        onChange={(event) => handleImportPercentiles(test.id, event)}
+                      />
+                    </label>
+                    <details className="rounded-md border border-border p-2 text-xs">
+                      <summary className="cursor-pointer font-medium">JSON format and example</summary>
+                      <p className="mt-2 text-muted-foreground">
+                        Use percentile values as keys and numeric test marks as values. Include 90 and at least one other displayed percentile; marks must decrease as percentiles decrease.
+                      </p>
+                      <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-foreground">
+                        {PERCENTILE_JSON_EXAMPLE}
+                      </pre>
+                    </details>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {PERCENTILE_ANCHORS.map((percentile) => (
                         <label key={percentile} className="space-y-1 text-xs font-medium text-muted-foreground">

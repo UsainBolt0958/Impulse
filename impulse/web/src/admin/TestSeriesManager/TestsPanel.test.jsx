@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { updateTest } from '@/lib/portalServer';
+import { toast } from 'sonner';
 import TestsPanel from './TestsPanel';
 
 afterEach(() => {
@@ -25,6 +26,13 @@ vi.mock('@/lib/portalServer', () => ({
   createTest: vi.fn(),
   deleteTest: vi.fn(),
   updateTest: vi.fn(),
+}));
+
+vi.mock('sonner', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
 }));
 
 describe('TestsPanel', () => {
@@ -122,6 +130,83 @@ describe('TestsPanel', () => {
       expect(updateTest).toHaveBeenCalledWith('test-1', {
         percentileMarks: { '99.9': 100, '99.6': 90, '90': 50 },
       });
+    });
+  });
+
+  it('reads and saves percentile marks from a JSON file for the selected test', async () => {
+    updateTest.mockResolvedValue({
+      id: 'test-1',
+      percentileMarks: { '99.9': 100, '99.6': 90, '90': 50 },
+    });
+    const file = new File([
+      JSON.stringify({ '99.9': 100, '99.6': 90, '90': 50 }),
+    ], 'percentile-marks.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue(JSON.stringify({ '99.9': 100, '99.6': 90, '90': 50 })),
+    });
+
+    render(
+      <TestsPanel
+        series={{ id: 'series-1', title: 'Series 1' }}
+        onSelectTest={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /set percentile marks/i }));
+    fireEvent.change(screen.getByLabelText('Upload marks-vs-percentile JSON'), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(updateTest).toHaveBeenCalledWith('test-1', {
+        percentileMarks: { '99.9': 100, '99.6': 90, '90': 50 },
+      });
+    });
+  });
+
+  it('shows the JSON format example in the percentile editor', async () => {
+    render(
+      <TestsPanel
+        series={{ id: 'series-1', title: 'Series 1' }}
+        onSelectTest={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /set percentile marks/i }));
+    fireEvent.click(screen.getByText('JSON format and example'));
+
+    expect(screen.getByText(/"99.9": 230/)).toBeInTheDocument();
+    expect(screen.getByText(/"90": 120/)).toBeInTheDocument();
+  });
+
+  it('rejects percentile JSON with invalid marks without saving', async () => {
+    updateTest.mockClear();
+    toast.error.mockClear();
+    const file = new File(['{}'], 'percentile-marks.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue(JSON.stringify({ '99.9': 100, '99.6': 90 })),
+    });
+
+    render(
+      <TestsPanel
+        series={{ id: 'series-1', title: 'Series 1' }}
+        onSelectTest={vi.fn()}
+        onBack={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /set percentile marks/i }));
+    fireEvent.change(screen.getByLabelText('Upload marks-vs-percentile JSON'), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(updateTest).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith(
+        'Enter the score in marks for the 90th-percentile cutoff and at least one other cutoff.'
+      );
     });
   });
 
