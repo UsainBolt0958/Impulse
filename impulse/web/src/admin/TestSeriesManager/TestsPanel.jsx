@@ -9,9 +9,8 @@ import { toast } from 'sonner';
 import TestImportDialog from './TestImportDialog';
 
 const PERCENTILE_ANCHORS = [
-  99.9, 99.6, 99.4, 99.2, 99, 98.5, 98, 97.5,
-  97, 96.5, 96, 95.5, 95, 94.5, 94, 93.5,
-  93, 92.5, 92, 91.5, 91, 90.5, 90,
+  99.9, 99.8, 99.7, 99.6, 99.5, 99.4, 99.3, 99.2, 99.1, 99,
+  98.5, 98, 97.5, 97, 96.5, 96, 95.5, 95, 94, 93, 92, 91, 90,
 ];
 
 export default function TestsPanel({ series, onSelectTest, onEditSeries, onBack }) {
