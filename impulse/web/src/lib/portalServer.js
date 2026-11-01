@@ -134,6 +134,10 @@ export async function loadAdminSessionFromServer() {
   return requestJson('/admin-session', { method: 'GET' });
 }
 
+export async function loadAdminStorageUsage() {
+  return requestJsonOrThrow('/admin/storage-usage', { method: 'GET', cache: 'no-store' });
+}
+
 export async function establishAdminServerSession(accessToken) {
   return requestJsonOrThrow('/admin-login', {
     method: 'POST',

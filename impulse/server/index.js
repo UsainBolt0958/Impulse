@@ -10,7 +10,12 @@ import {
   refreshBillingOrder,
   verifyCustomerAccessToken,
 } from './billing.js';
-import { readPersistentJson, storeUploadedImage, writePersistentJson } from './persistence.js';
+import {
+  getPersistentStorageUsage,
+  readPersistentJson,
+  storeUploadedImage,
+  writePersistentJson,
+} from './persistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -737,6 +742,22 @@ async function handleRequest(request, response) {
   if (url.pathname === '/api/admin-session' && request.method === 'GET') {
     const session = getAdminSession(request);
     sendJson(response, 200, { authenticated: Boolean(session), email: session?.email || null });
+    return;
+  }
+
+  if (url.pathname === '/api/admin/storage-usage' && request.method === 'GET') {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
+    try {
+      sendJson(response, 200, await getPersistentStorageUsage());
+    } catch (error) {
+      console.error('Could not load admin storage usage.', error);
+      sendJson(response, error?.statusCode || 503, {
+        error: error?.statusCode ? error.message : 'Could not load storage usage.',
+      });
+    }
     return;
   }
 

@@ -25,9 +25,10 @@ export function AuthProvider({ children }) {
     }
 
     let active = true;
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const applySession = (nextSession) => {
       const nextUserId = nextSession?.user.id || null;
-      if (activeUserId.current && activeUserId.current !== nextUserId) {
+      const userChanged = activeUserId.current !== nextUserId;
+      if (activeUserId.current && userChanged) {
         localDataCleanup.current = clearLocalUserData();
         localDataCleanup.current.catch((error) => {
           console.error('Could not securely clear the previous account’s local data.', error);
@@ -41,22 +42,24 @@ export function AuthProvider({ children }) {
       }
       activeUserId.current = nextUserId;
       setSession(nextSession);
-      setProfileLoading(Boolean(nextSession?.user));
       setAuthError('');
       setAuthLoading(false);
-      setSyncStatus(nextSession ? 'syncing' : 'idle');
+      if (userChanged) {
+        setProfileLoading(Boolean(nextUserId));
+        setProfileError('');
+        setSyncStatus(nextSession ? 'syncing' : 'idle');
+        if (!nextUserId) setProfile(null);
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      applySession(nextSession);
     });
 
     supabase.auth.getSession()
       .then(({ data, error }) => {
         if (error) throw error;
-        if (active) {
-          activeUserId.current = data.session?.user.id || null;
-          setSession(data.session);
-          setProfileLoading(Boolean(data.session?.user));
-          setAuthLoading(false);
-          setSyncStatus(data.session ? 'syncing' : 'idle');
-        }
+        if (active) applySession(data.session);
       })
       .catch((error) => {
         console.error('Could not read the Supabase session.', error);

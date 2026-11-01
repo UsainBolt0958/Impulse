@@ -98,3 +98,58 @@ export async function storeUploadedImage(filename, contentType, buffer, writeLoc
 
   return `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${encodeURIComponent(objectName)}`;
 }
+
+export async function getPersistentStorageUsage() {
+  requireSupabaseConfig();
+
+  const contentQuery = new URLSearchParams({ select: 'key,content' });
+  const contentResponse = await fetch(`${SUPABASE_URL}/rest/v1/admin_content?${contentQuery}`, {
+    headers: getHeaders(),
+  });
+  if (!contentResponse.ok) throw await getResponseError(contentResponse);
+  const documents = await contentResponse.json();
+  const adminContentBytes = documents.reduce(
+    (total, document) => total + Buffer.byteLength(JSON.stringify(document.content), 'utf8'),
+    0
+  );
+
+  const pageSize = 1000;
+  let offset = 0;
+  let uploadCount = 0;
+  let uploadBytes = 0;
+  while (true) {
+    const response = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${STORAGE_BUCKET}`, {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        prefix: '',
+        limit: pageSize,
+        offset,
+        sortBy: { column: 'name', order: 'asc' },
+      }),
+    });
+    if (!response.ok) throw await getResponseError(response);
+
+    const objects = await response.json();
+    if (!Array.isArray(objects)) {
+      const error = new Error('Supabase Storage returned an invalid object listing.');
+      error.statusCode = 503;
+      throw error;
+    }
+
+    uploadCount += objects.length;
+    uploadBytes += objects.reduce((total, object) => total + Number(object.metadata?.size || 0), 0);
+    if (objects.length < pageSize) break;
+    offset += objects.length;
+  }
+
+  return {
+    bucket: STORAGE_BUCKET,
+    uploadCount,
+    uploadBytes,
+    adminDocumentCount: documents.length,
+    adminContentBytes,
+    trackedBytes: uploadBytes + adminContentBytes,
+    measuredAt: new Date().toISOString(),
+  };
+}

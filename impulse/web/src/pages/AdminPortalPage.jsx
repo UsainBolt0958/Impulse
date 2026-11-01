@@ -17,10 +17,12 @@ import {
   Edit3,
   Flame,
   Gamepad2,
+  HardDrive,
   LayoutDashboard,
   PencilLine,
   Plus,
   Moon,
+  RefreshCw,
   Shield,
   Sparkles,
   Star,
@@ -50,6 +52,7 @@ import {
   createTest,
   deleteTest,
   loadTests,
+  loadAdminStorageUsage,
   uploadImage,
 } from '@/lib/portalServer';
 import TestSeriesManager from '@/admin/TestSeriesManager';
@@ -323,6 +326,113 @@ function getStoredTheme() {
 
   const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   return prefersDark ? 'dark' : 'light';
+}
+
+function formatStorageSize(bytes) {
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return '0 bytes';
+  if (size < 1024) return `${size} bytes`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = size / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function StorageManagementSection() {
+  const [usage, setUsage] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
+
+  const refreshUsage = React.useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      setUsage(await loadAdminStorageUsage());
+    } catch (loadError) {
+      console.error('Could not load storage usage.', loadError);
+      setError(loadError.message || 'Storage usage could not be loaded.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshUsage();
+  }, [refreshUsage]);
+
+  const metrics = usage ? [
+    { label: 'Imported images', value: formatStorageSize(usage.uploadBytes), detail: `${usage.uploadCount} stored file(s)` },
+    { label: 'Admin content estimate', value: formatStorageSize(usage.adminContentBytes), detail: `${usage.adminDocumentCount} content document(s)` },
+    { label: 'Tracked total', value: formatStorageSize(usage.trackedBytes), detail: 'Images plus admin-content JSON' },
+  ] : [];
+
+  return (
+    <div className="space-y-6">
+      <SectionHeading
+        eyebrow="Supabase Storage"
+        title="Storage management"
+        description="Monitor uploaded question images and the admin content saved for your imports."
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          {usage?.measuredAt
+            ? `Last checked ${formatDistanceToNow(new Date(usage.measuredAt), { addSuffix: true })}.`
+            : 'Storage usage is checked directly from Supabase.'}
+        </p>
+        <Button type="button" variant="outline" onClick={refreshUsage} disabled={loading}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Checking…' : 'Refresh usage'}
+        </Button>
+      </div>
+      {error ? (
+        <Card className="rounded-[1.75rem] border-destructive/40">
+          <CardContent className="p-5 text-sm text-destructive" role="alert">{error}</CardContent>
+        </Card>
+      ) : loading && !usage ? (
+        <Card className="rounded-[1.75rem] border-border/80">
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading storage usage…</CardContent>
+        </Card>
+      ) : usage ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            {metrics.map((metric) => (
+              <Card key={metric.label} className="rounded-[1.75rem] border-border/80">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
+                    {metric.label}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-black">{metric.value}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{metric.detail}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card className="rounded-[1.75rem] border-border/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-black">
+                <HardDrive className="h-5 w-5 text-primary" />
+                What this number includes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Tracked total is the size of files in the <code>{usage.bucket}</code> image bucket plus the JSON content documents used by the admin panel.
+              </p>
+              <p>
+                Supabase project quotas can include other database and storage usage. Compare this tracked total with the usage/limits shown in your Supabase dashboard; database indexes and overhead are not included in this estimate.
+              </p>
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
+    </div>
+  );
 }
 
 function AdminPortalPage() {
@@ -1254,6 +1364,10 @@ function AdminPortalPage() {
                           <BadgeDollarSign className="h-4 w-4" />
                           {!collapsed && 'Premium & billing'}
                         </button>
+                        <button type="button" onClick={() => setTab('storage')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'storage' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
+                          <HardDrive className="h-4 w-4" />
+                          {!collapsed && 'Storage'}
+                        </button>
                       </div>
                     </div>
 
@@ -1354,6 +1468,7 @@ function AdminPortalPage() {
                   )}
 
               {tab === 'billing' && <BillingAdminPanel />}
+              {tab === 'storage' && <StorageManagementSection />}
 
               {tab === 'questions' && (
                 <div className="space-y-6">
