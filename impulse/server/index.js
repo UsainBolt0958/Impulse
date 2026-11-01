@@ -10,6 +10,7 @@ import {
   refreshBillingOrder,
   verifyCustomerAccessToken,
 } from './billing.js';
+import { readPersistentJson, storeUploadedImage, writePersistentJson } from './persistence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -80,31 +81,29 @@ async function ensureStateFile() {
 
 async function readState() {
   await ensureStateFile();
-  const raw = await readFile(STATE_FILE, 'utf8');
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { ...DEFAULT_STATE };
-  }
+  return readJsonFile(STATE_FILE, DEFAULT_STATE);
 }
 
 async function writeState(state) {
   await ensureStateFile();
-  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+  await writeJsonFile(STATE_FILE, state);
 }
 
 async function readJsonFile(filePath, fallback) {
-  try {
-    const raw = await readFile(filePath, 'utf8');
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
+  return readPersistentJson(filePath, fallback, async () => {
+    try {
+      const raw = await readFile(filePath, 'utf8');
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  });
 }
 
 async function writeJsonFile(filePath, data) {
-  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+  await writePersistentJson(filePath, data, async () => {
+    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+  });
 }
 
 let quizChallenges = [];
@@ -336,6 +335,15 @@ function sendJson(response, statusCode, payload) {
   response.end(JSON.stringify(payload));
 }
 
+function sendJsonBodyError(response, error) {
+  if (Number.isInteger(error?.statusCode)) {
+    console.error('Persistent admin storage request failed.', error);
+    sendJson(response, error.statusCode, { error: error.message });
+    return;
+  }
+  sendJson(response, 400, { error: 'Invalid JSON body' });
+}
+
 function applyCorsHeaders(request, response) {
   const origin = request.headers.origin;
   if (!origin || !ADMIN_ALLOWED_ORIGINS.has(origin)) return false;
@@ -553,7 +561,7 @@ async function authenticateAdminAccessToken(accessToken) {
   return email;
 }
 
-const server = createServer(async (request, response) => {
+async function handleRequest(request, response) {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
   const originAllowed = applyCorsHeaders(request, response);
 
@@ -1095,7 +1103,7 @@ const server = createServer(async (request, response) => {
       await writeJsonFile(SERIES_FILE, series);
       sendJson(response, 200, next);
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, e);
     }
 
     return;
@@ -1143,7 +1151,7 @@ const server = createServer(async (request, response) => {
       await writeJsonFile(SERIES_FILE, series);
       sendJson(response, 200, next);
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, e);
     }
 
     return;
@@ -1191,7 +1199,7 @@ const server = createServer(async (request, response) => {
       await writeJsonFile(TESTS_FILE, tests);
       sendJson(response, 200, next);
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, e);
     }
 
     return;
@@ -1238,7 +1246,7 @@ const server = createServer(async (request, response) => {
       await writeJsonFile(QUESTIONS_FILE, list);
       sendJson(response, 200, next);
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, e);
     }
     return;
   }
@@ -1299,13 +1307,19 @@ const server = createServer(async (request, response) => {
         sendJson(response, 400, { error: 'Invalid image filename' });
         return;
       }
-      const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${safeFilename}`;
-      const outPath = resolve(UPLOADS_DIR, name);
-      await writeFile(outPath, buf);
-      const urlPath = `/uploads/${name}`;
+      const urlPath = await storeUploadedImage(safeFilename, expectedMime, buf, async () => {
+        const name = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-${safeFilename}`;
+        await writeFile(resolve(UPLOADS_DIR, name), buf);
+        return `/uploads/${name}`;
+      });
       sendJson(response, 200, { url: urlPath, mime: expectedMime });
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      if (e?.statusCode) {
+        console.error('Could not persist uploaded image.', e);
+        sendJson(response, e.statusCode, { error: e.message });
+      } else {
+        sendJsonBodyError(response, e);
+      }
     }
     return;
   }
@@ -1346,7 +1360,7 @@ const server = createServer(async (request, response) => {
       await writeState(normalized);
       sendJson(response, 200, normalized);
     } catch (error) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, error);
     }
 
     return;
@@ -1417,7 +1431,7 @@ const server = createServer(async (request, response) => {
       await writeJsonFile(TESTS_FILE, tests);
       sendJson(response, 200, updated);
     } catch (e) {
-      sendJson(response, 400, { error: 'Invalid JSON body' });
+      sendJsonBodyError(response, e);
     }
     return;
   }
@@ -1453,6 +1467,19 @@ const server = createServer(async (request, response) => {
   }
 
   sendJson(response, 404, { error: 'Not found' });
+}
+
+const server = createServer((request, response) => {
+  handleRequest(request, response).catch((error) => {
+    console.error('Unhandled API request error.', error);
+    if (!response.headersSent) {
+      sendJson(response, error?.statusCode || 500, {
+        error: error?.statusCode ? error.message : 'The API could not complete this request.',
+      });
+    } else {
+      response.destroy(error);
+    }
+  });
 });
 
 server.listen(PORT, () => {
