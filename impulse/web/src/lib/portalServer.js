@@ -88,11 +88,11 @@ async function requestJsonOrThrow(path, init = {}) {
 }
 
 export async function loadPortalStateFromServer() {
-  return requestJson('/admin-state', { method: 'GET' });
+  return requestJsonOrThrow('/admin-state', { method: 'GET', cache: 'no-store' });
 }
 
 export async function loadPublicQuestionsFromServer() {
-  const data = await requestJson('/questions', { method: 'GET', cache: 'no-store' });
+  const data = await requestJsonOrThrow('/questions', { method: 'GET', cache: 'no-store' });
   return Array.isArray(data?.questions) ? data.questions : [];
 }
 

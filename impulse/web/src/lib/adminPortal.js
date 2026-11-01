@@ -1,8 +1,6 @@
-import { seedQuestionsToLocalStorage } from '@/data/seedQuestions';
 import { loadAdminSessionFromServer, loadPortalStateFromServer, savePortalStateToServer } from './portalServer';
 
 export const ADMIN_STORAGE_KEYS = {
-  questions: 'impulse_questions',
   exams: 'impulse_admin_exams',
   profile: 'impulse_admin_profile',
   activity: 'impulse_admin_activity',
@@ -195,17 +193,10 @@ export function normalizeExam(exam, index = 0) {
   };
 }
 
-function buildSeededActivity(questions) {
-  return questions.map((question, index) => ({
-    id: generateId('activity'),
-    type: 'question.created',
-    title: `Imported ${question.exam} ${question.year}`,
-    description: question.subject ? `${question.subject} / ${question.chapter}` : question.chapter,
-    exam: question.exam,
-    questionId: question.id,
-    timestamp: question.created_at || deriveTimestamp(question.id, index),
-    source: 'seed',
-  }));
+function clearLocalQuestionCopies() {
+  if (typeof window === 'undefined') return;
+  ['impulse_questions', 'examforge_questions', 'impulse_seeded', 'examforge_seeded']
+    .forEach((key) => window.localStorage.removeItem(key));
 }
 
 export function readAdminPortalState() {
@@ -218,12 +209,6 @@ export function readAdminPortalState() {
     };
   }
 
-  seedQuestionsToLocalStorage();
-
-  const storedQuestions = readJSON(ADMIN_STORAGE_KEYS.questions, []);
-  const normalizedQuestions = storedQuestions.map((question, index) => normalizeQuestion(question, index));
-  writeJSON(ADMIN_STORAGE_KEYS.questions, normalizedQuestions);
-
   const storedExams = readJSON(ADMIN_STORAGE_KEYS.exams, []).map((exam, index) => normalizeExam(exam, index));
   writeJSON(ADMIN_STORAGE_KEYS.exams, storedExams);
 
@@ -231,14 +216,10 @@ export function readAdminPortalState() {
   const profile = { ...ADMIN_PROFILE_DEFAULT, ...(storedProfile || {}) };
   writeJSON(ADMIN_STORAGE_KEYS.profile, profile);
 
-  const storedActivity = readJSON(ADMIN_STORAGE_KEYS.activity, []);
-  const activity = storedActivity.length > 0 ? storedActivity : buildSeededActivity(normalizedQuestions);
-  if (storedActivity.length === 0 && activity.length > 0) {
-    writeJSON(ADMIN_STORAGE_KEYS.activity, activity);
-  }
+  const activity = readJSON(ADMIN_STORAGE_KEYS.activity, []);
 
   return {
-    questions: normalizedQuestions,
+    questions: [],
     exams: storedExams,
     profile,
     activity,
@@ -247,24 +228,16 @@ export function readAdminPortalState() {
 
 export async function loadAdminPortalState() {
   const remote = await loadPortalStateFromServer();
-
-  if (remote && (
-    (Array.isArray(remote.questions) && remote.questions.length > 0)
-    || (Array.isArray(remote.exams) && remote.exams.length > 0)
-    || (remote.profile && Object.keys(remote.profile).length > 0)
-    || (Array.isArray(remote.activity) && remote.activity.length > 0)
-  )) {
-    const questions = Array.isArray(remote.questions) ? remote.questions.map((question, index) => normalizeQuestion(question, index)) : [];
-    const exams = Array.isArray(remote.exams) ? remote.exams.map((exam, index) => normalizeExam(exam, index)) : [];
-    const profile = { ...ADMIN_PROFILE_DEFAULT, ...(remote.profile || {}) };
-    const activity = Array.isArray(remote.activity) ? remote.activity : [];
-
-    return { questions, exams, profile, activity };
+  if (!remote || !Array.isArray(remote.questions)) {
+    throw new Error('The saved admin question library could not be loaded.');
   }
-
-  const local = readAdminPortalState();
-  await savePortalState(local);
-  return local;
+  clearLocalQuestionCopies();
+  return {
+    questions: remote.questions.map((question, index) => normalizeQuestion(question, index)),
+    exams: Array.isArray(remote.exams) ? remote.exams.map((exam, index) => normalizeExam(exam, index)) : [],
+    profile: { ...ADMIN_PROFILE_DEFAULT, ...(remote.profile || {}) },
+    activity: Array.isArray(remote.activity) ? remote.activity : [],
+  };
 }
 
 export async function loadAdminSession() {
@@ -279,17 +252,13 @@ export async function savePortalState(state) {
     activity: state.activity || [],
   };
 
-  writeJSON(ADMIN_STORAGE_KEYS.questions, normalizedState.questions);
+  await savePortalStateToServer(normalizedState);
+  clearLocalQuestionCopies();
   writeJSON(ADMIN_STORAGE_KEYS.exams, normalizedState.exams);
   writeJSON(ADMIN_STORAGE_KEYS.profile, normalizedState.profile);
   writeJSON(ADMIN_STORAGE_KEYS.activity, normalizedState.activity);
 
-  await savePortalStateToServer(normalizedState);
   return normalizedState;
-}
-
-export function saveQuestions(questions) {
-  writeJSON(ADMIN_STORAGE_KEYS.questions, questions.map((question, index) => normalizeQuestion(question, index)));
 }
 
 export function saveExams(exams) {

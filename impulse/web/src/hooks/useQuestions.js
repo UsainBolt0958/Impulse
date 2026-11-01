@@ -1,34 +1,8 @@
 import { useState, useEffect } from 'react';
-import { loadPublicQuestionsFromServer, savePortalStateToServer } from '@/lib/portalServer';
-
-const QUESTIONS_KEY = 'impulse_questions';
-const LEGACY_QUESTIONS_KEY = 'examforge_questions';
-
-function migrateQuestionsIfNeeded() {
-  if (typeof window === 'undefined') return;
-  const current = localStorage.getItem(QUESTIONS_KEY);
-  const legacy = localStorage.getItem(LEGACY_QUESTIONS_KEY);
-  if (!current && legacy) {
-    localStorage.setItem(QUESTIONS_KEY, legacy);
-  }
-}
-
-function readStoredQuestions() {
-  if (typeof window === 'undefined') return [];
-
-  migrateQuestionsIfNeeded();
-  const stored = localStorage.getItem(QUESTIONS_KEY);
-  if (!stored) return [];
-
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return [];
-  }
-}
+import { loadPublicQuestionsFromServer } from '@/lib/portalServer';
 
 export function useQuestions() {
-  const [questions, setQuestions] = useState(() => readStoredQuestions());
+  const [questions, setQuestions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filters, setFilters] = useState({
     exam: [],
@@ -43,17 +17,14 @@ export function useQuestions() {
 
     (async () => {
       try {
-        const localQuestions = readStoredQuestions();
-        if (localQuestions.length && active) {
-          setQuestions(localQuestions);
-        }
-
         const remoteQuestions = await loadPublicQuestionsFromServer();
-        if (remoteQuestions.length) {
-          if (active) setQuestions(remoteQuestions);
-        } else if (localQuestions.length) {
-          await savePortalStateToServer({ questions: localQuestions, exams: [], profile: {}, activity: [] });
+        if (active) {
+          setQuestions(remoteQuestions);
+          ['impulse_questions', 'examforge_questions', 'impulse_seeded', 'examforge_seeded']
+            .forEach((key) => window.localStorage.removeItem(key));
         }
+      } catch (error) {
+        console.error('Could not load questions from the server.', error);
       } finally {
         if (active) {
           setIsLoading(false);

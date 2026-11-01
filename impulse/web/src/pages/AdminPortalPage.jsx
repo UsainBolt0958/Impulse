@@ -42,6 +42,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import ColoredIcon from '@/components/ColoredIcon';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
 import {
@@ -451,6 +461,11 @@ function AdminPortalPage() {
   const [questionExamFilter, setQuestionExamFilter] = React.useState('all');
   const [questionYearFilter, setQuestionYearFilter] = React.useState('all');
   const [questionDifficultyFilter, setQuestionDifficultyFilter] = React.useState('all');
+  const [selectedQuestionIds, setSelectedQuestionIds] = React.useState(() => new Set());
+  const [questionDeleteOpen, setQuestionDeleteOpen] = React.useState(false);
+  const [pendingQuestionDeleteIds, setPendingQuestionDeleteIds] = React.useState([]);
+  const [questionDeleteConfirmation, setQuestionDeleteConfirmation] = React.useState('');
+  const [isDeletingQuestions, setIsDeletingQuestions] = React.useState(false);
   const [isPyqImportOpen, setIsPyqImportOpen] = React.useState(false);
   const [paperImportExam, setPaperImportExam] = React.useState(null);
   const [removingPaperId, setRemovingPaperId] = React.useState('');
@@ -609,9 +624,15 @@ function AdminPortalPage() {
       }
 
       setIsAuthenticated(true);
-      const remote = await loadAdminPortalState();
-      if (active && remote) {
-        setPortal(remote);
+      try {
+        const remote = await loadAdminPortalState();
+        if (active) setPortal(remote);
+      } catch (error) {
+        if (active) {
+          toast.error(error.message || 'Could not load the saved admin library.');
+          setAuthReady(true);
+        }
+        return;
       }
       // load series for admin
       try {
@@ -1128,26 +1149,66 @@ function AdminPortalPage() {
     setTab('questions');
   };
 
-  const handleQuestionDelete = async (question) => {
-    const confirmed = window.confirm(`Delete ${question.exam} ${question.year}? This only removes the question record.`);
-    if (!confirmed) return;
+  const openQuestionDeleteDialog = (questionIds) => {
+    const existingIds = new Set(portal.questions.map((question) => question.id));
+    const uniqueIds = [...new Set(questionIds)].filter((id) => existingIds.has(id));
+    if (!uniqueIds.length) return;
+    setPendingQuestionDeleteIds(uniqueIds);
+    setQuestionDeleteConfirmation('');
+    setQuestionDeleteOpen(true);
+  };
 
-    const nextQuestions = portal.questions.filter((item) => item.id !== question.id);
-    const nextActivity = [
-      createActivityEntry({
-        type: 'question.deleted',
-        title: `Deleted ${question.exam} ${question.year}`,
-        description: `${question.subject || 'General'} / ${question.chapter || 'No chapter'}`,
-        exam: question.exam,
-        questionId: question.id,
-      }),
-      ...portal.activity,
-    ];
+  const toggleQuestionSelection = (questionId, checked) => {
+    setSelectedQuestionIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(questionId);
+      else next.delete(questionId);
+      return next;
+    });
+  };
 
-    const nextPortal = { ...portal, questions: nextQuestions, activity: nextActivity };
-    syncPortal(nextPortal);
-    await savePortalState(nextPortal);
-    toast.success('Question deleted.');
+  const toggleVisibleQuestionSelection = (checked) => {
+    const visibleIds = filteredQuestions.map((question) => question.id);
+    setSelectedQuestionIds((current) => {
+      const next = new Set(current);
+      visibleIds.forEach((id) => {
+        if (checked) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
+
+  const confirmQuestionDelete = async () => {
+    if (questionDeleteConfirmation !== 'DELETE' || isDeletingQuestions) return;
+
+    const idsToDelete = new Set(pendingQuestionDeleteIds);
+    const deletedQuestions = portal.questions.filter((question) => idsToDelete.has(question.id));
+    if (!deletedQuestions.length) {
+      setQuestionDeleteOpen(false);
+      return;
+    }
+
+    const nextPortal = {
+      ...portal,
+      questions: portal.questions.filter((question) => !idsToDelete.has(question.id)),
+      activity: portal.activity.filter((entry) => !idsToDelete.has(entry.questionId)),
+    };
+
+    setIsDeletingQuestions(true);
+    try {
+      const savedPortal = await savePortalState(nextPortal);
+      syncPortal(savedPortal);
+      setSelectedQuestionIds((current) => new Set([...current].filter((id) => !idsToDelete.has(id))));
+      if (deletedQuestions.some((question) => question.id === editingQuestionId)) resetQuestionForm();
+      setQuestionDeleteOpen(false);
+      setPendingQuestionDeleteIds([]);
+      toast.success(`${deletedQuestions.length} question${deletedQuestions.length === 1 ? '' : 's'} permanently deleted.`);
+    } catch (error) {
+      toast.error(error.message || 'The selected questions could not be deleted.');
+    } finally {
+      setIsDeletingQuestions(false);
+    }
   };
 
   const handleExamSubmit = async (event) => {
@@ -1818,6 +1879,17 @@ function AdminPortalPage() {
                           <Badge variant="outline" className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em]">
                             {filteredQuestions.length} shown
                           </Badge>
+                          {selectedQuestionIds.size > 0 && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              onClick={() => openQuestionDeleteDialog([...selectedQuestionIds])}
+                              className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete selected ({selectedQuestionIds.size})
+                            </Button>
+                          )}
                           <Button type="button" onClick={() => setIsPyqImportOpen(true)} className="rounded-full px-4 text-xs font-black uppercase tracking-[0.14em]">
                             <Upload className="mr-2 h-4 w-4" />
                             Import PYQs
@@ -1837,7 +1909,7 @@ function AdminPortalPage() {
                         </div>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Click edit to load a question into the studio, or delete to remove it from storage.
+                        Deleted questions are removed from the live library and will not be reseeded from this website.
                       </p>
                     </CardHeader>
                     <CardContent className="overflow-hidden">
@@ -1845,6 +1917,15 @@ function AdminPortalPage() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead className="w-12">
+                                <Checkbox
+                                  checked={filteredQuestions.length > 0 && filteredQuestions.every((question) => selectedQuestionIds.has(question.id))
+                                    ? true
+                                    : filteredQuestions.some((question) => selectedQuestionIds.has(question.id)) ? 'indeterminate' : false}
+                                  onCheckedChange={(checked) => toggleVisibleQuestionSelection(checked === true)}
+                                  aria-label="Select all shown questions"
+                                />
+                              </TableHead>
                               <TableHead className="min-w-[180px]">Question</TableHead>
                               <TableHead>Exam</TableHead>
                               <TableHead>Year / shift</TableHead>
@@ -1855,6 +1936,13 @@ function AdminPortalPage() {
                           <TableBody>
                             {filteredQuestions.length ? filteredQuestions.map((question) => (
                               <TableRow key={question.id}>
+                                <TableCell className="align-top">
+                                  <Checkbox
+                                    checked={selectedQuestionIds.has(question.id)}
+                                    onCheckedChange={(checked) => toggleQuestionSelection(question.id, checked === true)}
+                                    aria-label={`Select ${question.exam} ${question.year} question`}
+                                  />
+                                </TableCell>
                                 <TableCell className="max-w-[220px] align-top">
                                   <div className="space-y-1">
                                     <p className="line-clamp-3 text-sm font-medium leading-relaxed">{question.question_text}</p>
@@ -1886,7 +1974,7 @@ function AdminPortalPage() {
                                       <Edit3 className="mr-1.5 h-3.5 w-3.5" />
                                       Edit
                                     </Button>
-                                    <Button size="sm" variant="outline" onClick={() => handleQuestionDelete(question)} className="rounded-full border-border px-3 font-black uppercase tracking-[0.16em] text-destructive hover:bg-destructive hover:text-destructive-foreground">
+                                    <Button size="sm" variant="outline" onClick={() => openQuestionDeleteDialog([question.id])} className="rounded-full border-border px-3 font-black uppercase tracking-[0.16em] text-destructive hover:bg-destructive hover:text-destructive-foreground">
                                       <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                                       Delete
                                     </Button>
@@ -1895,7 +1983,7 @@ function AdminPortalPage() {
                               </TableRow>
                             )) : (
                               <TableRow>
-                                <TableCell colSpan={5} className="py-12 text-center text-sm text-muted-foreground">
+                                <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
                                   No questions match the current filters.
                                 </TableCell>
                               </TableRow>
@@ -2305,6 +2393,53 @@ function AdminPortalPage() {
           </section>
         </main>
       </div>
+      <AlertDialog
+        open={questionDeleteOpen}
+        onOpenChange={(open) => {
+          if (isDeletingQuestions) return;
+          setQuestionDeleteOpen(open);
+          if (!open) {
+            setPendingQuestionDeleteIds([]);
+            setQuestionDeleteConfirmation('');
+          }
+        }}
+      >
+        <AlertDialogContent className="rounded-[1.75rem] border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-black uppercase tracking-tight text-destructive">
+              Permanently delete {pendingQuestionDeleteIds.length} question{pendingQuestionDeleteIds.length === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left">
+              <span className="block">
+                This removes the selected question records from the saved library, public practice list, and related admin activity. The questions will not be restored from a website seed or old browser cache.
+              </span>
+              <span className="block font-semibold text-foreground">
+                This action cannot be undone. Type <code className="rounded bg-secondary px-1.5 py-0.5">DELETE</code> to confirm.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={questionDeleteConfirmation}
+            onChange={(event) => setQuestionDeleteConfirmation(event.target.value)}
+            placeholder="Type DELETE"
+            autoComplete="off"
+            aria-label="Type DELETE to confirm permanent deletion"
+            className="rounded-xl border-border bg-background"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingQuestions}>Cancel</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmQuestionDelete}
+              disabled={questionDeleteConfirmation !== 'DELETE' || isDeletingQuestions}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isDeletingQuestions ? 'Deleting…' : `Delete ${pendingQuestionDeleteIds.length} permanently`}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {isPyqImportOpen ? (
         <PYQImportDialog
           exams={pyqExamOptions}

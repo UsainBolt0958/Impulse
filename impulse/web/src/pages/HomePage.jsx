@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
@@ -8,7 +8,6 @@ import ActivityCalendar from '@/components/ActivityCalendar.jsx';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
 import { useMarkedQuestions } from '@/hooks/useMarkedQuestions';
 import { useMetrics } from '@/hooks/useMetrics';
-import { seedQuestionsToLocalStorage } from '@/data/seedQuestions';
 import { Target, TrendingUp, Flame, BookMarked, Clock, Award, BookOpen } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,10 +74,6 @@ function HomePage() {
       </div>
     );
   };
-
-  useEffect(() => {
-    seedQuestionsToLocalStorage();
-  }, []);
 
   return (
     <>
