@@ -4,15 +4,14 @@ import { cleanup, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { loadPublicSeries, loadTests } from '@/lib/portalServer';
+import { loadPublicTestSummary } from '@/lib/portalServer';
 import TestSeriesExamPage, {
   getTestSeriesExamUrl,
   getUnsubmittedTestSession,
 } from './TestSeriesExamPage';
 
 vi.mock('@/lib/portalServer', () => ({
-  loadPublicSeries: vi.fn(),
-  loadTests: vi.fn(),
+  loadPublicTestSummary: vi.fn(),
 }));
 
 vi.mock('@/components/Header.jsx', () => ({ default: () => null }));
@@ -40,26 +39,17 @@ beforeEach(() => {
       },
     ],
   }));
-  loadPublicSeries.mockResolvedValue([
-    { id: 'series-one', title: 'JEE Mock Series', published: true, durationMinutes: 180 },
-    { id: 'series-two', title: 'Other Series', published: true, durationMinutes: 180 },
-  ]);
-  loadTests.mockResolvedValue([
-    {
+  loadPublicTestSummary.mockResolvedValue({
+    series: { id: 'series-one', title: 'JEE Mock Series', published: true, durationMinutes: 180 },
+    test: {
       id: 'test-one',
       seriesId: 'series-one',
       title: 'Mock Test One',
       published: true,
-      sections: [{ questions: [{ id: 'q1' }] }],
+      questionCount: 1,
+      subjects: ['Physics'],
     },
-    {
-      id: 'test-two',
-      seriesId: 'series-two',
-      title: 'Mock Test Two',
-      published: true,
-      sections: [{ questions: [{ id: 'q2' }] }],
-    },
-  ]);
+  });
 });
 
 describe('TestSeriesExamPage', () => {
@@ -73,7 +63,8 @@ describe('TestSeriesExamPage', () => {
     );
 
     expect(await screen.findByRole('heading', { name: 'Mock Test One', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText('Score: 120')).toBeInTheDocument();
+    expect(loadPublicTestSummary).toHaveBeenCalledWith('series-one', 'test-one');
+    expect(await screen.findByText('Score: 120')).toBeInTheDocument();
     expect(screen.queryByText('Score: 90')).not.toBeInTheDocument();
 
     const startUrl = new URL(screen.getByRole('link', { name: 'Start a new attempt' }).getAttribute('href'), window.location.origin);
@@ -86,6 +77,20 @@ describe('TestSeriesExamPage', () => {
     const reviewUrl = new URL(screen.getByRole('link', { name: 'Review attempt' }).getAttribute('href'), window.location.origin);
     expect(reviewUrl.searchParams.get('attemptId')).toBe('attempt-one');
     expect(reviewUrl.searchParams.get('returnTo')).toBe('/test-series/series-one/test-one');
+  });
+
+  it('explains when a test is no longer published', async () => {
+    loadPublicTestSummary.mockRejectedValueOnce(new Error('Test series test not found.'));
+
+    render(
+      <MemoryRouter initialEntries={['/test-series/series-one/test-one']}>
+        <Routes>
+          <Route path="/test-series/:seriesId/:testId" element={<TestSeriesExamPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('This test series test is no longer available.')).toBeInTheDocument();
   });
 
   it('builds a review URL scoped to the selected test attempt', () => {

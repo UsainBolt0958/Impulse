@@ -1177,18 +1177,29 @@
                 const params = new URLSearchParams(window.location.search);
                 const testId = params.get('testId');
                 const seriesId = params.get('seriesId');
-
-                async function getJson(path){
-                    try{ const r = await fetch(path); if(!r.ok) return null; return await r.json(); }catch(e){ return null }
+                let test = null;
+                let series = null;
+                if (testId && seriesId) {
+                    const base = (
+                        window.__EXAM_SERVER_URL__
+                        || window.SERVER_URL
+                        || window.sessionStorage.getItem('impulse_api_origin')
+                        || ''
+                    ).toString().replace(/\/$/, '');
+                    const promise = fetch(
+                        `${base}/api/test-launch?${new URLSearchParams({ testId, seriesId })}`,
+                        { credentials: 'include', cache: 'no-store' }
+                    ).then(async (response) => {
+                        if (!response.ok) {
+                            throw new Error(`The server denied access to this test (${response.status}).`);
+                        }
+                        return response.json();
+                    });
+                    window.__testSeriesLaunchRequest = { testId, seriesId, promise };
+                    const launch = await promise;
+                    test = launch.test;
+                    series = launch.series;
                 }
-
-                const [testRes, seriesRes] = await Promise.all([
-                    testId ? getJson(`/api/tests/${encodeURIComponent(testId)}`) : Promise.resolve(null),
-                    seriesId ? getJson(`/api/series/${encodeURIComponent(seriesId)}`) : Promise.resolve(null)
-                ]);
-
-                const test = testRes || null;
-                const series = seriesRes || null;
 
                 const brandText = (test && (test.meta && (test.meta.brandText || test.meta.title))) || (series && series.title) || (test && test.title) || document.querySelector('.auth-logo')?.innerText || 'Practice Test';
                 const logoUrl = (test && test.meta && (test.meta.logoUrl || test.meta.coverUrl)) || (series && series.metadata && series.metadata.coverUrl) || null;

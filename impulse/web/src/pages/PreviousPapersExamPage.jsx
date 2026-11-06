@@ -6,7 +6,7 @@ import Footer from '@/components/Footer.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ColoredIcon from '@/components/ColoredIcon';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { establishExamSession, loadPublicSeries, loadTests } from '@/lib/portalServer';
+import { establishExamSession, loadPublicTestCatalog } from '@/lib/portalServer';
 
 function titleCase(value = '') {
   return value
@@ -41,8 +41,8 @@ function PreviousPapersExamPage() {
     setImportedPapers([]);
     setIsLoadingImports(true);
     setImportLoadError('');
-    Promise.all([loadPublicSeries(), loadTests()])
-      .then(([series, tests]) => {
+    loadPublicTestCatalog({ kind: 'previous-papers', examKey })
+      .then(({ series, tests }) => {
         if (!isCurrent) return;
         const paperSeries = new Map(series
           .filter((item) => (
@@ -60,10 +60,7 @@ function PreviousPapersExamPage() {
           .map((test) => ({
             ...test,
             series: paperSeries.get(test.seriesId),
-            questionCount: Number(test.questionCount) || (test.sections || []).reduce(
-              (count, section) => count + (section.questions || []).length,
-              0
-            ),
+            questionCount: Number(test.questionCount) || 0,
           }))
           .sort((left, right) => (
             Number(right.meta.year) - Number(left.meta.year)

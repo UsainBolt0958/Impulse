@@ -34,12 +34,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  addCustomTestTimeSpent,
   calculateCustomTestResults,
   CUSTOM_TEST_RESULTS_KEY,
   CUSTOM_TEST_SESSION_KEY,
   getQuestionType,
 } from '@/lib/customTest';
+import {
+  completeCustomTestCloudSession,
+  CUSTOM_TEST_CLOUD_CHECKPOINT_INTERVAL_MS,
+  loadCustomTestCloudSession,
+  saveCustomTestCloudProgress,
+} from '@/lib/customTestSessionSync';
 import { appendSolvedQuestionAttempts } from '@/lib/solvedQuestions';
+
+const LOCAL_SESSION_AUTOSAVE_INTERVAL_MS = 30_000;
 
 function readSession() {
   try {
@@ -62,6 +71,7 @@ function formatTime(seconds) {
 function CustomTestExamPage() {
   const navigate = useNavigate();
   const [session, setSession] = useState(readSession);
+  const [isSessionReady, setIsSessionReady] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(() => Number(session?.currentIndex) || 0);
   const [remainingSeconds, setRemainingSeconds] = useState(() => {
     return session ? Math.max(0, Math.ceil((session.endsAt - Date.now()) / 1000)) : 0;
@@ -76,9 +86,12 @@ function CustomTestExamPage() {
   ));
   const sessionRef = useRef(session);
   const currentQuestionIdRef = useRef(session?.questions?.[currentIndex]?.id);
+  const pendingTimeSpentRef = useRef({});
   const submitRef = useRef(null);
   const isSubmittedRef = useRef(false);
   const saveErrorShownRef = useRef(false);
+  const cloudSaveErrorShownRef = useRef(false);
+  const cloudCheckpointRequestRef = useRef(Promise.resolve());
 
   useEffect(() => {
     try {
@@ -133,20 +146,78 @@ function CustomTestExamPage() {
     return Object.entries(question?.options || {});
   }, [question]);
 
-  const updateSession = useCallback((updater) => {
-    setSession((current) => {
-      if (!current) return current;
-      const next = typeof updater === 'function' ? updater(current) : updater;
-      sessionRef.current = next;
-      return next;
-    });
+  const flushTimeSpent = useCallback((current = sessionRef.current) => {
+    if (!current) return null;
+    const elapsedByQuestion = pendingTimeSpentRef.current;
+    if (!Object.keys(elapsedByQuestion).length) return current;
+    pendingTimeSpentRef.current = {};
+    return {
+      ...current,
+      timeSpent: addCustomTestTimeSpent(current.timeSpent, elapsedByQuestion),
+    };
   }, []);
 
+  const persistSession = useCallback((sessionToSave = sessionRef.current) => {
+    if (!sessionToSave) return false;
+    try {
+      window.localStorage.setItem(CUSTOM_TEST_SESSION_KEY, JSON.stringify(sessionToSave));
+      saveErrorShownRef.current = false;
+      return true;
+    } catch (error) {
+      console.error('Could not save custom test progress', error);
+      if (!saveErrorShownRef.current) {
+        toast.error('Your browser could not save exam progress. Keep this tab open until submission.');
+        saveErrorShownRef.current = true;
+      }
+      return false;
+    }
+  }, []);
+
+  const updateSession = useCallback((updater) => {
+    const current = flushTimeSpent();
+    if (!current) return null;
+    const updated = typeof updater === 'function' ? updater(current) : updater;
+    const next = { ...updated, updatedAt: new Date().toISOString() };
+    sessionRef.current = next;
+    setSession(next);
+    persistSession(next);
+    return next;
+  }, [flushTimeSpent, persistSession]);
+
+  const checkpointCloudSession = useCallback(async () => {
+    let current = sessionRef.current;
+    if (!current || isSubmittedRef.current) return;
+    const snapshot = flushTimeSpent(current);
+    if (snapshot !== current) {
+      current = { ...snapshot, updatedAt: new Date().toISOString() };
+      sessionRef.current = current;
+      setSession(current);
+      persistSession(current);
+    }
+
+    const saveRequest = cloudCheckpointRequestRef.current
+      .catch(() => undefined)
+      .then(() => saveCustomTestCloudProgress(current));
+    cloudCheckpointRequestRef.current = saveRequest;
+    try {
+      await saveRequest;
+      cloudSaveErrorShownRef.current = false;
+    } catch (error) {
+      console.error('Could not checkpoint custom test progress to Supabase', error);
+      if (!cloudSaveErrorShownRef.current) {
+        toast.error('Cloud test progress could not be saved. Your latest progress remains on this device.');
+        cloudSaveErrorShownRef.current = true;
+      }
+    }
+  }, [flushTimeSpent, persistSession]);
+
   const submitExam = useCallback((automatic = false) => {
-    const currentSession = sessionRef.current;
+    let currentSession = sessionRef.current;
     if (!currentSession || isSubmittedRef.current) return;
     if (!automatic && !window.confirm('Submit this custom test now? You cannot change answers after submission.')) return;
 
+    currentSession = flushTimeSpent(currentSession);
+    sessionRef.current = currentSession;
     isSubmittedRef.current = true;
     const submittedAt = Date.now();
     const result = {
@@ -174,6 +245,13 @@ function CustomTestExamPage() {
           attempt_id: `custom-test:${result.id}:${questionResult.questionId}`,
         })));
       window.localStorage.removeItem(CUSTOM_TEST_SESSION_KEY);
+      cloudCheckpointRequestRef.current
+        .catch(() => undefined)
+        .then(() => completeCustomTestCloudSession(currentSession.id))
+        .catch((error) => {
+          console.error('Could not clear the completed custom test cloud session', error);
+          toast.error('Your result is saved, but cloud cleanup failed. Please keep this device signed in and online.');
+        });
       toast.success(automatic ? 'Time is up. Your test has been submitted.' : 'Custom test submitted.');
       navigate(`/custom-test/results/${encodeURIComponent(result.id)}`, { replace: true });
     } catch (error) {
@@ -181,24 +259,71 @@ function CustomTestExamPage() {
       console.error('Could not save custom test results', error);
       toast.error('Could not save your results. Please try submitting again.');
     }
-  }, [navigate]);
+  }, [flushTimeSpent, navigate]);
   submitRef.current = submitExam;
 
   useEffect(() => {
+    let active = true;
+    const restoreCloudSession = async () => {
+      try {
+        const restoredSession = await loadCustomTestCloudSession(sessionRef.current);
+        if (!active) return;
+        if (restoredSession) {
+          sessionRef.current = restoredSession;
+          setSession(restoredSession);
+          const restoredIndex = Math.min(
+            Math.max(0, Number(restoredSession.currentIndex) || 0),
+            Math.max(0, restoredSession.questions.length - 1),
+          );
+          setCurrentIndex(restoredIndex);
+          setActiveSubject(
+            restoredSession.questions[restoredIndex]?.subject
+            || restoredSession.subjects?.[0]?.name
+            || ''
+          );
+          setRemainingSeconds(Math.max(0, Math.ceil((restoredSession.endsAt - Date.now()) / 1000)));
+          try {
+            window.localStorage.setItem(CUSTOM_TEST_SESSION_KEY, JSON.stringify(restoredSession));
+          } catch (error) {
+            console.error('Could not store restored custom test progress locally', error);
+            toast.error('The cloud test was restored, but this browser could not save a local copy.');
+          }
+        } else if (sessionRef.current) {
+          sessionRef.current = null;
+          setSession(null);
+          window.localStorage.removeItem(CUSTOM_TEST_SESSION_KEY);
+        }
+      } catch (error) {
+        console.error('Could not restore custom test cloud checkpoint', error);
+        if (active) {
+          toast.error("Could not check cloud-saved test progress. Continuing with this device's saved test.");
+        }
+      } finally {
+        if (active) setIsSessionReady(true);
+      }
+    };
+    restoreCloudSession();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSessionReady) return;
     if (!session || !Array.isArray(session.questions) || session.questions.length === 0) {
       toast.error('No active custom test was found.');
       navigate('/custom-test', { replace: true });
       return;
     }
     sessionRef.current = session;
-  }, [session, navigate]);
+  }, [isSessionReady, session, navigate]);
 
   useEffect(() => {
     currentQuestionIdRef.current = question?.id;
   }, [question?.id]);
 
   useEffect(() => {
-    if (!session) return undefined;
+    if (!session || !isSessionReady) return undefined;
     const timerId = window.setInterval(() => {
       const currentSession = sessionRef.current;
       if (!currentSession) return;
@@ -211,38 +336,71 @@ function CustomTestExamPage() {
 
       const activeQuestionId = currentQuestionIdRef.current;
       if (activeQuestionId) {
-        updateSession((current) => ({
-          ...current,
-          timeSpent: {
-            ...current.timeSpent,
-            [activeQuestionId]: (Number(current.timeSpent?.[activeQuestionId]) || 0) + 1,
-          },
-        }));
+        pendingTimeSpentRef.current[activeQuestionId] = (
+          Number(pendingTimeSpentRef.current[activeQuestionId]) || 0
+        ) + 1;
       }
     }, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [session?.id, updateSession]);
+  }, [isSessionReady, session?.id]);
 
   useEffect(() => {
-    if (!session) return;
-    try {
-      window.localStorage.setItem(CUSTOM_TEST_SESSION_KEY, JSON.stringify(session));
-      saveErrorShownRef.current = false;
-    } catch (error) {
-      console.error('Could not save custom test progress', error);
-      if (!saveErrorShownRef.current) {
-        toast.error('Your browser could not save exam progress. Keep this tab open until submission.');
-        saveErrorShownRef.current = true;
+    if (!session || !isSessionReady) return undefined;
+    const autosaveId = window.setInterval(() => {
+      const current = sessionRef.current;
+      if (!current) return;
+      let snapshot = flushTimeSpent(current);
+      if (snapshot !== current) {
+        snapshot = { ...snapshot, updatedAt: new Date().toISOString() };
+        sessionRef.current = snapshot;
+        setSession(snapshot);
       }
-    }
-  }, [session]);
+      persistSession(snapshot);
+    }, LOCAL_SESSION_AUTOSAVE_INTERVAL_MS);
+    return () => window.clearInterval(autosaveId);
+  }, [isSessionReady, session?.id, flushTimeSpent, persistSession]);
+
+  useEffect(() => {
+    if (!session || !isSessionReady) return undefined;
+    const checkpointId = window.setInterval(
+      checkpointCloudSession,
+      CUSTOM_TEST_CLOUD_CHECKPOINT_INTERVAL_MS,
+    );
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') void checkpointCloudSession();
+    };
+    const handleOnline = () => {
+      void checkpointCloudSession();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.clearInterval(checkpointId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [isSessionReady, session?.id, checkpointCloudSession]);
 
   const navigateToQuestion = (index) => {
     if (index < 0 || index >= questions.length) return;
     setCurrentIndex(index);
     setActiveSubject(questions[index].subject || '');
     updateSession((current) => ({ ...current, currentIndex: index }));
+  };
+
+  const saveAndNavigateToNext = () => {
+    const nextIndex = Math.min(currentIndex + 1, questions.length - 1);
+    const nextSession = {
+      ...flushTimeSpent(sessionRef.current),
+      currentIndex: nextIndex,
+      updatedAt: new Date().toISOString(),
+    };
+    if (!persistSession(nextSession)) return;
+    sessionRef.current = nextSession;
+    setSession(nextSession);
+    setCurrentIndex(nextIndex);
+    setActiveSubject(questions[nextIndex].subject || '');
   };
 
   const answerQuestion = (answer) => {
@@ -268,7 +426,7 @@ function CustomTestExamPage() {
     .map((item, index) => (item.subject === subjectName ? index : -1))
     .filter((index) => index >= 0);
 
-  if (!session || !question) {
+  if (!isSessionReady || !session || !question) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background p-6">
         <div className="max-w-md text-center">
@@ -296,8 +454,10 @@ function CustomTestExamPage() {
         <button
           type="button"
           aria-label="Exit custom test"
-          onClick={() => {
-            if (window.confirm('Exit the test? Your current progress will be saved and the timer will continue.')) navigate('/custom-test');
+          onClick={async () => {
+            if (!window.confirm('Exit the test? Your current progress will be saved and the timer will continue.')) return;
+            await checkpointCloudSession();
+            navigate('/custom-test');
           }}
           className="flex h-10 w-10 items-center justify-center rounded-xl border border-border transition-colors hover:bg-secondary"
         >
@@ -466,7 +626,7 @@ function CustomTestExamPage() {
                 <X className="mr-2 h-4 w-4" /> Clear response
               </Button>
               <Button
-                onClick={() => navigateToQuestion(Math.min(currentIndex + 1, questions.length - 1))}
+                onClick={saveAndNavigateToNext}
                 disabled={currentIndex === questions.length - 1}
                 className="h-11 min-w-0 flex-1 rounded-xl font-black uppercase tracking-wide"
               >

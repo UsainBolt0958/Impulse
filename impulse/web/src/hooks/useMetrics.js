@@ -1,14 +1,22 @@
 import { useMemo } from 'react';
 import { useSolvedQuestions } from './useSolvedQuestions';
-import { useQuestions } from './useQuestions';
+import { useAttemptQuestionMetadata } from './useAttemptQuestionMetadata';
 
 export function useMetrics() {
   const { solvedQuestions } = useSolvedQuestions();
-  const { questions } = useQuestions();
+  const questionMetadata = useAttemptQuestionMetadata(solvedQuestions);
 
   const metrics = useMemo(() => {
-    const getQuestionDetails = (questionId) => {
-      return questions.find(q => q.id === questionId);
+    const getQuestionDetails = (attempt) => {
+      const metadata = questionMetadata[String(attempt.question_id)] || {};
+      return {
+        ...metadata,
+        ...attempt,
+        exam: attempt.exam || metadata.exam,
+        subject: attempt.subject || metadata.subject,
+        chapter: attempt.chapter || metadata.chapter,
+        difficulty: attempt.difficulty || metadata.difficulty,
+      };
     };
 
     // Daily/Weekly/Yearly counts
@@ -47,8 +55,8 @@ export function useMetrics() {
       solvedQuestions.forEach(sq => {
         if (!uniqueQuestions.has(sq.question_id)) {
           uniqueQuestions.add(sq.question_id);
-          const q = getQuestionDetails(sq.question_id);
-          if (q) {
+          const q = getQuestionDetails(sq);
+          if (q && q.difficulty) {
             breakdown[q.difficulty] = (breakdown[q.difficulty] || 0) + 1;
           }
         }
@@ -62,8 +70,8 @@ export function useMetrics() {
       const chapterData = {};
 
       solvedQuestions.forEach(sq => {
-        const q = getQuestionDetails(sq.question_id);
-        if (q) {
+        const q = getQuestionDetails(sq);
+        if (q?.chapter) {
           if (!chapterData[q.chapter]) {
             chapterData[q.chapter] = { total: 0, correct: 0, totalTime: 0 };
           }
@@ -86,8 +94,8 @@ export function useMetrics() {
       const subjectData = {};
 
       solvedQuestions.forEach(sq => {
-        const q = getQuestionDetails(sq.question_id);
-        if (q) {
+        const q = getQuestionDetails(sq);
+        if (q?.subject) {
           if (!subjectData[q.subject]) {
             subjectData[q.subject] = { total: 0, correct: 0, totalTime: 0 };
           }
@@ -110,8 +118,8 @@ export function useMetrics() {
       const examData = {};
 
       solvedQuestions.forEach(sq => {
-        const q = getQuestionDetails(sq.question_id);
-        if (q) {
+        const q = getQuestionDetails(sq);
+        if (q?.exam) {
           if (!examData[q.exam]) {
             examData[q.exam] = { total: 0, correct: 0, totalTime: 0 };
           }
@@ -183,7 +191,7 @@ export function useMetrics() {
       accuracyTrends: getAccuracyTrends(),
       activityHeatmap: getActivityHeatmap()
     };
-  }, [solvedQuestions, questions]);
+  }, [solvedQuestions, questionMetadata]);
 
   return metrics;
 }

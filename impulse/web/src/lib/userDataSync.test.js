@@ -40,6 +40,7 @@ describe('user data sync keys', () => {
     [
       'impulse_admin_exams',
       'impulse_questions',
+      'impulse_custom_test_session',
       'impulse_quiz_player_token:challenge-1',
       'exam_hidden_warning',
     ].forEach((key) => expect(isUserDataKey(key)).toBe(false));
@@ -48,6 +49,7 @@ describe('user data sync keys', () => {
   it('clears only signed-in user data from the browser on sign-out', async () => {
     window.localStorage.setItem('impulse_solved', '[]');
     window.localStorage.setItem('test_series_test-123_sess_v1', '{}');
+    window.localStorage.setItem('impulse_custom_test_session', '{"id":"active-test"}');
     window.localStorage.setItem('impulse_admin_exams', '[]');
     window.localStorage.setItem('theme', 'dark');
     window.localStorage.setItem('impulse_quiz_player_token:challenge-1', 'private-token');
@@ -56,6 +58,7 @@ describe('user data sync keys', () => {
 
     expect(window.localStorage.getItem('impulse_solved')).toBeNull();
     expect(window.localStorage.getItem('test_series_test-123_sess_v1')).toBeNull();
+    expect(window.localStorage.getItem('impulse_custom_test_session')).toBeNull();
     expect(window.localStorage.getItem('impulse_admin_exams')).toBe('[]');
     expect(window.localStorage.getItem('theme')).toBeNull();
     expect(window.localStorage.getItem('impulse_quiz_player_token:challenge-1')).toBeNull();
@@ -138,5 +141,114 @@ describe('user data sync keys', () => {
       expect(savedRows.get('impulse_marked')?.value).toEqual(['question-2']);
     });
     stop();
+  });
+
+  it('finishes local account-data reconciliation before background cloud writes complete', async () => {
+    let finishUpsert;
+    let upsertStarted = false;
+    const client = {
+      from() {
+        return {
+          select() {
+            return {
+              async eq() {
+                return { data: [], error: null };
+              },
+            };
+          },
+          upsert() {
+            upsertStarted = true;
+            return new Promise((resolve) => {
+              finishUpsert = () => resolve({ error: null });
+            });
+          },
+          delete() {
+            return {
+              eq() {
+                return {
+                  async eq() {
+                    return { error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    window.localStorage.setItem('impulse_marked', JSON.stringify(['local-question']));
+    let status = 'idle';
+    const stop = startUserDataSync(client, 'user-1', (nextStatus) => {
+      status = nextStatus;
+    });
+
+    try {
+      await vi.waitFor(() => {
+        expect(upsertStarted).toBe(true);
+        expect(status).toBe('syncing');
+      });
+      expect(JSON.parse(window.localStorage.getItem('impulse_marked'))).toEqual(['local-question']);
+
+      finishUpsert();
+      await vi.waitFor(() => expect(status).toBe('synced'));
+    } finally {
+      stop();
+    }
+  });
+
+  it('does not send full custom-test sessions through the generic user-data sync', async () => {
+    const savedRows = new Map();
+    let sessionWrites = 0;
+    let upsertCount = 0;
+    const client = {
+      from() {
+        return {
+          select() {
+            return {
+              async eq() {
+                return { data: [...savedRows.values()], error: null };
+              },
+            };
+          },
+          async upsert(row) {
+            upsertCount += 1;
+            savedRows.set(row.storage_key, row);
+            if (row.storage_key === 'impulse_custom_test_session') sessionWrites += 1;
+            return { error: null };
+          },
+          delete() {
+            return {
+              eq(_column, _userId) {
+                return {
+                  async eq(_column, key) {
+                    savedRows.delete(key);
+                    return { error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    window.localStorage.setItem('impulse_custom_test_session', JSON.stringify({
+      questions: [{ id: 'question-1', prompt: 'Original' }],
+    }));
+    const stop = startUserDataSync(client, 'user-1', () => {});
+
+    try {
+      window.localStorage.setItem('impulse_custom_test_session', JSON.stringify({
+        questions: [{ id: 'question-1', prompt: 'Updated' }],
+      }));
+      window.localStorage.setItem('theme', 'dark');
+
+      await vi.waitFor(() => expect(savedRows.get('theme')?.value).toBe('dark'));
+      expect(upsertCount).toBe(1);
+      expect(sessionWrites).toBe(0);
+      expect(window.localStorage.getItem('impulse_custom_test_session')).toContain('Updated');
+    } finally {
+      stop();
+    }
   });
 });

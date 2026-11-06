@@ -79,7 +79,8 @@ function AccountPage() {
 
   const syncMessage = {
     idle: 'Your data is saved in this browser until you sign in.',
-    syncing: 'Loading and syncing your saved data...',
+    loading: 'Loading your saved study data...',
+    syncing: 'Your saved data is loaded. Syncing recent changes in the background...',
     synced: 'Your learning data is synced to your account.',
     error: `Cloud sync needs attention${syncError ? `: ${syncError}` : '.'}`,
   }[syncStatus];

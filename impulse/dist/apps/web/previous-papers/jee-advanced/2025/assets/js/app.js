@@ -1859,7 +1859,6 @@ try{
                 overlay.querySelector('.img-loading-progress').style.cssText = `
                     font-size: 24px; color: #3b82f6; font-weight: 600;
                 `;
-                // Add keyframes for spinner
                 if (!document.getElementById('img-loading-styles')) {
                     const style = document.createElement('style');
                     style.id = 'img-loading-styles';
@@ -1879,20 +1878,19 @@ try{
         function updateImageLoadingProgress(loaded, total) {
             const progressEl = document.querySelector('#img-loading-overlay .img-loading-progress');
             if (progressEl) {
-                const pct = Math.round((loaded / total) * 100);
-                progressEl.textContent = pct + '%';
+                progressEl.textContent = Math.round((loaded / total) * 100) + '%';
             }
         }
 
         async function preloadExamImages() {
             if (!sess || !sess.data) return;
-            
+
             const imagesToPreload = [];
             S.forEach(subject => {
                 SEC.forEach(section => {
                     if (sess.data[subject] && sess.data[subject][section]) {
-                        sess.data[subject][section].forEach(q => {
-                            if (q.img) imagesToPreload.push(q.img);
+                        sess.data[subject][section].forEach(question => {
+                            if (question.img) imagesToPreload.push(question.img);
                         });
                     }
                 });
@@ -1901,29 +1899,22 @@ try{
             if (imagesToPreload.length === 0) return;
 
             console.log(`🖼️ Preloading ${imagesToPreload.length} exam images...`);
-            
             let loaded = 0;
-            const total = imagesToPreload.length;
-            
-            const preloadPromises = imagesToPreload.map(src => {
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        loaded++;
-                        updateImageLoadingProgress(loaded, total);
-                        resolve({ success: true, src });
-                    };
-                    img.onerror = () => {
-                        loaded++;
-                        updateImageLoadingProgress(loaded, total);
-                        console.warn('Failed to preload image:', src);
-                        resolve({ success: false, src });
-                    };
-                    img.src = src;
-                });
-            });
-
-            await Promise.all(preloadPromises);
+            await Promise.all(imagesToPreload.map(src => new Promise(resolve => {
+                const image = new Image();
+                image.onload = () => {
+                    loaded++;
+                    updateImageLoadingProgress(loaded, imagesToPreload.length);
+                    resolve({ success: true, src });
+                };
+                image.onerror = () => {
+                    loaded++;
+                    updateImageLoadingProgress(loaded, imagesToPreload.length);
+                    console.warn('Failed to preload image:', src);
+                    resolve({ success: false, src });
+                };
+                image.src = src;
+            })));
             console.log('✅ Image preloading complete');
         }
 
@@ -2049,11 +2040,10 @@ try{
                 }
             }
             
-            // Show loading overlay and preload all exam images
             showImageLoadingOverlay();
             await preloadExamImages();
             hideImageLoadingOverlay();
-            
+
             saveSess(true); // Immediate save
             navTo('exam');
             initExamUI();

@@ -10,13 +10,14 @@ import ColoredIcon from '@/components/ColoredIcon';
 import { toast } from 'sonner';
 import {
   establishExamSession,
-  getSeriesBillingAccess,
-  loadPublicSeries,
-  loadTests,
+  getSeriesBillingAccessBatch,
+  loadPublicTestCatalog,
 } from '@/lib/portalServer';
 import { formatPriceInr, loadTestSeriesPriceMap } from '@/lib/premiumCatalog';
 import CheckoutControl from '@/components/CheckoutControl.jsx';
 import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
+
+const TEST_SERIES_PAGE_SIZE = 18;
 
 export function getTestSeriesDashboardUrl(testId, seriesId) {
   return `/test-series/${encodeURIComponent(seriesId)}/${encodeURIComponent(testId)}`;
@@ -27,6 +28,9 @@ function TestSeriesPage() {
   const [seriesList, setSeriesList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadMoreError, setLoadMoreError] = useState('');
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [catalogPageInfo, setCatalogPageInfo] = useState(null);
   const [priceLoadError, setPriceLoadError] = useState(false);
   const [accessLoadError, setAccessLoadError] = useState(false);
 
@@ -36,7 +40,11 @@ function TestSeriesPage() {
       setError('');
 
       try {
-        const [series, tests] = await Promise.all([loadPublicSeries(), loadTests()]);
+        const { series, tests, pageInfo, testCountsBySeries } = await loadPublicTestCatalog({
+          kind: 'test-series',
+          page: 1,
+          limit: TEST_SERIES_PAGE_SIZE,
+        });
         let pricesBySeries = new Map();
         let pricingFailed = false;
         let accessFailed = false;
@@ -49,43 +57,56 @@ function TestSeriesPage() {
         const accessBySeries = new Map();
         if (!pricingFailed && !freeAccessActive) {
           const paidSeries = series.filter((item) => Number(pricesBySeries.get(item.id)?.price_inr) > 0);
-          const accessResults = await Promise.allSettled(
-            paidSeries.map((item) => getSeriesBillingAccess(item.id))
-          );
-          accessResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-              accessBySeries.set(paidSeries[index].id, result.value);
-            } else {
-              console.error(`Could not check access for test series ${paidSeries[index].id}.`, result.reason);
+          if (paidSeries.length > 0) {
+            try {
+              const accessBatches = await Promise.all(
+                Array.from({ length: Math.ceil(paidSeries.length / 50) }, (_, index) => (
+                  getSeriesBillingAccessBatch(
+                    paidSeries.slice(index * 50, (index + 1) * 50).map((item) => item.id)
+                  )
+                ))
+              );
+              accessBatches.forEach((batch) => {
+                Object.entries(batch).forEach(([seriesId, access]) => {
+                  accessBySeries.set(seriesId, access);
+                });
+              });
+            } catch (accessError) {
+              console.error('Could not check access for published test series.', accessError);
               accessFailed = true;
             }
-          });
+          }
         }
         setPriceLoadError(pricingFailed);
         setAccessLoadError(accessFailed);
+        const testsBySeries = new Map();
+        tests.forEach((test) => {
+          if (!test.published) return;
+          const seriesTests = testsBySeries.get(test.seriesId) || [];
+          seriesTests.push(test);
+          testsBySeries.set(test.seriesId, seriesTests);
+        });
         const publishedSeries = series
           .filter(s => s.published && s.meta?.kind !== 'previous-papers') // Previous papers have their own library.
           .map((item) => ({
             ...item,
+            testCount: testCountsBySeries?.[item.id] ?? testsBySeries.get(item.id)?.length ?? 0,
             priceConfig: pricesBySeries.get(item.id) || null,
             price: pricesBySeries.get(item.id)?.enabled ? pricesBySeries.get(item.id).price_inr : null,
             access: accessBySeries.get(item.id) || null,
-            tests: tests
-              .filter((test) => test.seriesId === item.id && test.published) // Only published tests
+            tests: (testsBySeries.get(item.id) || [])
               .map((test) => {
                 const durationMinutes = Number(test.durationMinutes) || Number(item.durationMinutes) || (Number(test.durationSec) ? Math.round(Number(test.durationSec) / 60) : 0);
                 return {
                   ...test,
-                  questions: Number(test.questionCount) || (test.sections || []).reduce(
-                    (count, section) => count + (section.questions || []).length,
-                    0
-                  ),
+                  questions: Number(test.questionCount) || 0,
                   duration: durationMinutes,
-                  subjects: Array.from(new Set((test.sections || []).map((section) => section.subject).filter(Boolean))),
+                  subjects: test.subjects || [],
                 };
               }),
           }));
         setSeriesList(publishedSeries);
+        setCatalogPageInfo(pageInfo || null);
       } catch (fetchError) {
         setError('Unable to load published test series.');
         console.error(fetchError);
@@ -96,6 +117,48 @@ function TestSeriesPage() {
 
     fetchSeries();
   }, [freeAccessActive]);
+
+  const loadMoreTests = async () => {
+    if (!catalogPageInfo?.hasMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const nextPage = await loadPublicTestCatalog({
+        kind: 'test-series',
+        page: catalogPageInfo.page + 1,
+        limit: TEST_SERIES_PAGE_SIZE,
+      });
+      const testsBySeries = new Map();
+      nextPage.tests.forEach((test) => {
+        const tests = testsBySeries.get(test.seriesId) || [];
+        tests.push(test);
+        testsBySeries.set(test.seriesId, tests);
+      });
+      setSeriesList((current) => current.map((series) => {
+        const existingTestIds = new Set(series.tests.map((test) => test.id));
+        const newTests = (testsBySeries.get(series.id) || [])
+          .filter((test) => !existingTestIds.has(test.id))
+          .map((test) => {
+            const durationMinutes = Number(test.durationMinutes)
+              || Number(series.durationMinutes)
+              || (Number(test.durationSec) ? Math.round(Number(test.durationSec) / 60) : 0);
+            return {
+              ...test,
+              questions: Number(test.questionCount) || 0,
+              duration: durationMinutes,
+              subjects: test.subjects || [],
+            };
+          });
+        return { ...series, tests: [...series.tests, ...newTests] };
+      }));
+      setCatalogPageInfo(nextPage.pageInfo);
+    } catch (fetchError) {
+      console.error('Could not load more published test-series tests.', fetchError);
+      setLoadMoreError('Unable to load more tests. Please try again.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   const handleStartTest = async (testId, seriesId) => {
     try {
@@ -141,7 +204,7 @@ function TestSeriesPage() {
                         ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant="default">{series.tests?.length ?? 0} tests</Badge>
+                        <Badge variant="default">{series.testCount} tests</Badge>
                         <Badge variant="secondary">Published</Badge>
                         {series.price !== null && (
                           <Badge variant="outline">
@@ -213,6 +276,16 @@ function TestSeriesPage() {
                     </div>
                   </div>
                 ))}
+                {catalogPageInfo?.hasMore ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Button onClick={loadMoreTests} disabled={isLoadingMore}>
+                      {isLoadingMore ? 'Loading more tests...' : 'Load more tests'}
+                    </Button>
+                    {loadMoreError ? (
+                      <p role="alert" className="text-sm text-destructive">{loadMoreError}</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             )}
             {priceLoadError && (

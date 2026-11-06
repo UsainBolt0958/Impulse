@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
@@ -20,10 +20,9 @@ import {
   CUSTOM_DIFFICULTIES,
   CUSTOM_TEST_SESSION_KEY,
   MAX_QUESTIONS_PER_SUBJECT,
-  getQuestionType,
-  selectCustomTestQuestions,
 } from '@/lib/customTest';
-import { useQuestions } from '@/hooks/useQuestions';
+import { createCustomTestCloudSession } from '@/lib/customTestSessionSync';
+import { createCustomTestQuestions, loadCustomTestCatalog } from '@/lib/portalServer';
 
 const EXAM_ICONS = {
   'JEE MAINS': Calculator,
@@ -51,8 +50,12 @@ const DEFAULT_MARKS = {
 const STEPS = ['Exam', 'Subjects', 'Chapters', 'Settings'];
 
 function CustomTestBuilderPage() {
-  const { questions, isLoading } = useQuestions();
   const navigate = useNavigate();
+  const [questionCatalog, setQuestionCatalog] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [isStarting, setIsStarting] = useState(false);
   const [step, setStep] = useState(1);
   const [selectedExam, setSelectedExam] = useState('');
   const [selectedSubjects, setSelectedSubjects] = useState([]);
@@ -65,40 +68,32 @@ function CustomTestBuilderPage() {
   const [showYears, setShowYears] = useState(false);
   const [marks, setMarks] = useState(DEFAULT_MARKS);
 
-  const exams = useMemo(() => {
-    const byExam = new Map();
-    questions.forEach((question) => {
-      if (question.exam) byExam.set(question.exam, (byExam.get(question.exam) || 0) + 1);
-    });
-    return [...byExam.entries()]
-      .map(([name, count]) => ({ name, count }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [questions]);
+  useEffect(() => {
+    let active = true;
+    setIsLoading(true);
+    setLoadError('');
+    loadCustomTestCatalog()
+      .then((catalog) => {
+        if (active) setQuestionCatalog(catalog);
+      })
+      .catch((error) => {
+        console.error('Could not load the custom-test question catalog.', error);
+        if (active) setLoadError(error.message || 'Could not load available PYQ questions.');
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
 
-  const availableYears = useMemo(() => (
-    [...new Set(questions
-      .filter((question) => question.exam === selectedExam && question.year !== null && question.year !== undefined)
-      .map((question) => String(question.year)))]
-      .sort((left, right) => Number(right) - Number(left))
-  ), [questions, selectedExam]);
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt]);
+
+  const exams = questionCatalog;
+  const selectedExamCatalog = questionCatalog.find((exam) => exam.name === selectedExam);
+  const availableYears = selectedExamCatalog?.years || [];
   const activeYears = selectedYears ?? availableYears;
-
-  const subjects = useMemo(() => {
-    const bySubject = new Map();
-    questions.filter((question) => question.exam === selectedExam).forEach((question) => {
-      const name = question.subject || 'Unspecified';
-      if (!bySubject.has(name)) bySubject.set(name, []);
-      bySubject.get(name).push(question);
-    });
-    return [...bySubject.entries()]
-      .map(([name, subjectQuestions]) => ({
-        name,
-        questions: subjectQuestions,
-        chapters: [...new Set(subjectQuestions.map((question) => question.chapter || 'Unspecified'))]
-          .sort((left, right) => left.localeCompare(right)),
-      }))
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [questions, selectedExam]);
+  const subjects = selectedExamCatalog?.subjects || [];
 
   const activeChapterSubject = subjects.find((subject) => subject.name === chapterSubject)
     || subjects.find((subject) => selectedSubjects.includes(subject.name));
@@ -111,12 +106,13 @@ function CustomTestBuilderPage() {
   );
   const questionTypes = useMemo(() => {
     const types = new Set();
-    questions
-      .filter((question) => question.exam === selectedExam && selectedSubjects.includes(question.subject || 'Unspecified'))
-      .filter((question) => activeYears.includes(String(question.year)))
-      .forEach((question) => types.add(getQuestionType(question)));
+    subjects
+      .filter((subject) => selectedSubjects.includes(subject.name))
+      .flatMap((subject) => subject.typesByYear || [])
+      .filter(({ year }) => activeYears.includes(String(year)))
+      .forEach(({ types: availableTypes }) => availableTypes.forEach((type) => types.add(type)));
     return ['MCQ', 'NUM'].filter((type) => types.has(type));
-  }, [questions, selectedExam, selectedSubjects, activeYears]);
+  }, [subjects, selectedSubjects, activeYears]);
 
   const handleExamSelect = (exam) => {
     setSelectedExam(exam);
@@ -179,56 +175,72 @@ function CustomTestBuilderPage() {
     if (step < 4) setStep((current) => current + 1);
   };
 
-  const startTest = () => {
+  const startTest = async () => {
     if (activeYears.length === 0) {
       toast.error('Select at least one PYQ year.');
-      return;
-    }
-    const testQuestions = selectedSubjects.flatMap((subject) => selectCustomTestQuestions({
-      questions,
-      exam: selectedExam,
-      subject,
-      chapters: selectedChapters[subject] || [],
-      years: activeYears,
-      count: Math.min(MAX_QUESTIONS_PER_SUBJECT, Math.max(1, Math.floor(Number(questionCounts[subject]) || 10))),
-      difficulty,
-    }));
-
-    if (!testQuestions.length) {
-      toast.error('There are no questions for your selected chapters and PYQ years.');
       return;
     }
     if (window.localStorage.getItem(CUSTOM_TEST_SESSION_KEY)
       && !window.confirm('Starting a new test will replace your unfinished custom test. Continue?')) return;
 
-    const startedAt = Date.now();
-    const session = {
-      id: window.crypto?.randomUUID?.() || `custom-${startedAt}`,
-      exam: selectedExam,
-      difficulty: CUSTOM_DIFFICULTIES.find((item) => item.id === difficulty)?.label || difficulty,
-      difficultyId: difficulty,
-      startedAt,
-      endsAt: startedAt + Math.max(1, Number(durationMinutes) || 60) * 60 * 1000,
-      durationSeconds: Math.max(1, Number(durationMinutes) || 60) * 60,
-      subjects: selectedSubjects.map((name) => ({
-        name,
-        chapters: selectedChapters[name] || [],
-        questionIds: testQuestions.filter((question) => question.subject === name).map((question) => question.id),
-      })),
-      questions: testQuestions,
-      answers: {},
-      timeSpent: {},
-      markedForReview: [],
-      bookmarked: [],
-      marks: Object.fromEntries(questionTypes.map((type) => [type, marks[type]])),
-    };
-
+    setIsStarting(true);
     try {
+      const testQuestions = await createCustomTestQuestions({
+        exam: selectedExam,
+        subjects: selectedSubjects.map((name) => ({
+          name,
+          chapters: selectedChapters[name] || [],
+          count: Math.min(
+            MAX_QUESTIONS_PER_SUBJECT,
+            Math.max(1, Math.floor(Number(questionCounts[name]) || 10)),
+          ),
+        })),
+        years: activeYears.map(String),
+        difficulty,
+      });
+      if (!testQuestions.length) {
+        toast.error('There are no questions for your selected chapters and PYQ years.');
+        return;
+      }
+
+      const startedAt = Date.now();
+      const session = {
+        id: window.crypto?.randomUUID?.() || `custom-${startedAt}`,
+        exam: selectedExam,
+        difficulty: CUSTOM_DIFFICULTIES.find((item) => item.id === difficulty)?.label || difficulty,
+        difficultyId: difficulty,
+        startedAt,
+        updatedAt: new Date(startedAt).toISOString(),
+        endsAt: startedAt + Math.max(1, Number(durationMinutes) || 60) * 60 * 1000,
+        durationSeconds: Math.max(1, Number(durationMinutes) || 60) * 60,
+        subjects: selectedSubjects.map((name) => ({
+          name,
+          chapters: selectedChapters[name] || [],
+          questionIds: testQuestions
+            .filter((question) => String(question.subject || 'Unspecified') === name)
+            .map((question) => question.id),
+        })),
+        questions: testQuestions,
+        answers: {},
+        timeSpent: {},
+        markedForReview: [],
+        bookmarked: [],
+        marks: Object.fromEntries(questionTypes.map((type) => [type, marks[type]])),
+      };
+
       window.localStorage.setItem(CUSTOM_TEST_SESSION_KEY, JSON.stringify(session));
+      try {
+        await createCustomTestCloudSession(session);
+      } catch (error) {
+        console.error('Could not create custom test cloud checkpoint', error);
+        toast.error('The test is saved on this device, but cloud resume could not be set up.');
+      }
       navigate('/custom-test/exam');
     } catch (error) {
       console.error('Could not save custom test session', error);
-      toast.error('Could not start the test because this browser could not save the exam session.');
+      toast.error(error.message || 'Could not start the test. Please try again.');
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -272,6 +284,13 @@ function CustomTestBuilderPage() {
                 </div>
                 {isLoading ? (
                   <p className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">Loading available PYQ exams…</p>
+                ) : loadError ? (
+                  <div className="rounded-2xl border border-destructive/40 p-6 text-sm text-destructive">
+                    <p>{loadError}</p>
+                    <Button type="button" variant="outline" onClick={() => setLoadAttempt((attempt) => attempt + 1)} className="mt-3">
+                      Retry loading questions
+                    </Button>
+                  </div>
                 ) : exams.length === 0 ? (
                   <p className="rounded-2xl border border-border p-6 text-sm text-muted-foreground">No PYQ questions are available yet.</p>
                 ) : (
@@ -310,7 +329,10 @@ function CustomTestBuilderPage() {
                   {subjects.map((subject) => {
                     const Icon = SUBJECT_ICONS[subject.name] || BookOpen;
                     const active = selectedSubjects.includes(subject.name);
-                    const count = subject.questions.filter((question) => activeYears.includes(String(question.year))).length;
+                    const count = activeYears.reduce(
+                      (total, year) => total + Number(subject.questionCountByYear?.[year] || 0),
+                      0,
+                    );
                     return (
                       <button
                         key={subject.name}
@@ -366,7 +388,10 @@ function CustomTestBuilderPage() {
                           <div>
                             <CardTitle className="text-lg font-black uppercase">{activeChapterSubject.name} chapters</CardTitle>
                             <p className="mt-1 text-sm text-muted-foreground">
-                              {activeChapterSubject.questions.filter((question) => activeYears.includes(String(question.year))).length} PYQs match selected years.
+                              {activeYears.reduce(
+                                (total, year) => total + Number(activeChapterSubject.questionCountByYear?.[year] || 0),
+                                0,
+                              )} PYQs match selected years.
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -390,15 +415,16 @@ function CustomTestBuilderPage() {
                       <CardContent>
                         <div className="grid max-h-[55vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
                           {activeChapterSubject.chapters.map((chapter) => {
-                            const chapterCount = activeChapterSubject.questions.filter((question) => (
-                              (question.chapter || 'Unspecified') === chapter && activeYears.includes(String(question.year))
-                            )).length;
-                            const checked = (selectedChapters[activeChapterSubject.name] || []).includes(chapter);
+                            const chapterCount = activeYears.reduce(
+                              (total, year) => total + Number(chapter.questionCountByYear?.[year] || 0),
+                              0,
+                            );
+                            const checked = (selectedChapters[activeChapterSubject.name] || []).includes(chapter.name);
                             return (
-                              <label key={chapter} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${checked ? 'border-foreground/50 bg-secondary/50' : 'border-border hover:bg-secondary/30'}`}>
-                                <Checkbox checked={checked} onCheckedChange={() => toggleChapter(activeChapterSubject.name, chapter)} aria-label={`Include ${chapter}`} />
+                              <label key={chapter.name} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors ${checked ? 'border-foreground/50 bg-secondary/50' : 'border-border hover:bg-secondary/30'}`}>
+                                <Checkbox checked={checked} onCheckedChange={() => toggleChapter(activeChapterSubject.name, chapter.name)} aria-label={`Include ${chapter.name}`} />
                                 <span className="min-w-0 flex-1">
-                                  <span className="block text-sm font-bold">{chapter}</span>
+                                  <span className="block text-sm font-bold">{chapter.name}</span>
                                   <span className="mt-0.5 block text-[10px] text-muted-foreground">{chapterCount} available</span>
                                 </span>
                               </label>
@@ -514,8 +540,8 @@ function CustomTestBuilderPage() {
                     Continue <ChevronRight className="ml-2 h-4 w-4" />
                   </Button>
                 ) : (
-                  <Button onClick={startTest} disabled={isLoading || !activeYears.length} className="rounded-xl px-6 font-black uppercase tracking-wide">
-                    Start custom test <Check className="ml-2 h-4 w-4" />
+                  <Button onClick={startTest} disabled={isLoading || isStarting || !activeYears.length} className="rounded-xl px-6 font-black uppercase tracking-wide">
+                    {isStarting ? 'Preparing test…' : 'Start custom test'} <Check className="ml-2 h-4 w-4" />
                   </Button>
                 )}
               </div>

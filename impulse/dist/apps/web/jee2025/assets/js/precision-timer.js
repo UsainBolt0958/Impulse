@@ -56,6 +56,8 @@ const PrecisionTimer = (function() {
     
     // Handle messages from worker
     const handleWorkerMessage = (e) => {
+        if (session && session.sub) return;
+
         const { type, remaining, elapsed, timestamp, drift } = e.data;
         
         switch (type) {

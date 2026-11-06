@@ -5,20 +5,14 @@
 
 export async function initTestSeriesEngine(testId, seriesId) {
   try {
-    // 1. Fetch series configuration
-    const seriesResponse = await fetch(`/api/series/${seriesId}`);
-    if (!seriesResponse.ok) throw new Error('Series not found');
-    const series = await seriesResponse.json();
-
-    // 2. Fetch test details
-    const testResponse = await fetch(`/api/tests/${testId}`);
-    if (!testResponse.ok) throw new Error('Test not found');
-    const test = await testResponse.json();
-
-    // 3. Fetch test template with questions
-    const templateResponse = await fetch(`/api/tests/${testId}/template`);
-    if (!templateResponse.ok) throw new Error('Test template not found');
-    const template = await templateResponse.json();
+    const params = new URLSearchParams({ testId, seriesId });
+    const response = await fetch(`/api/test-launch?${params}`, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Test launch failed (${response.status}).`);
+    const { series, test } = await response.json();
+    const template = test;
 
     return {
       series,

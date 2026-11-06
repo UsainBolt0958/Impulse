@@ -5,17 +5,23 @@ import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   ArrowLeft,
+  Activity,
   BadgePlus,
   BadgeDollarSign,
   BarChart3,
   BookOpen,
   CalendarDays,
+  CircleCheck,
+  CircleX,
+  Clock3,
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  Database,
   Eye,
   Edit3,
   Flame,
+  Gauge,
   Gamepad2,
   HardDrive,
   LayoutDashboard,
@@ -23,10 +29,13 @@ import {
   Plus,
   Moon,
   RefreshCw,
+  Radio,
+  Server,
   Shield,
   Sparkles,
   Star,
   Sun,
+  TriangleAlert,
   Trash2,
   Upload,
   UserCircle2,
@@ -63,6 +72,10 @@ import {
   deleteTest,
   loadTests,
   loadAdminStorageUsage,
+  loadAdminAssetMetrics,
+  loadAdminOperations,
+  loadAdminProjectMetrics,
+  startClientSessionHeartbeat,
   uploadImage,
 } from '@/lib/portalServer';
 import TestSeriesManager from '@/admin/TestSeriesManager';
@@ -352,69 +365,375 @@ function formatStorageSize(bytes) {
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
-function StorageManagementSection() {
-  const [usage, setUsage] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
+function formatNumber(value) {
+  return new Intl.NumberFormat().format(Number(value) || 0);
+}
 
-  const refreshUsage = React.useCallback(async () => {
-    setLoading(true);
-    setError('');
+function formatLatency(value) {
+  const latency = Number(value) || 0;
+  return latency > 5000 ? '>5,000 ms' : `${formatNumber(latency)} ms`;
+}
+
+function formatCappedCount(value, capped) {
+  return `${capped ? '≥' : ''}${formatNumber(value)}`;
+}
+
+const SUPABASE_PLAN_REFERENCES = {
+  free: {
+    name: 'Free',
+    description: 'For prototypes and early usage',
+    databaseGB: 0.5,
+    fileStorageGB: 1,
+    monthlyEgressGB: 5,
+    monthlyActiveUsers: 50_000,
+    realtimeConnections: 200,
+  },
+  pro: {
+    name: 'Pro',
+    description: 'For production workloads',
+    databaseGB: 8,
+    fileStorageGB: 100,
+    monthlyEgressGB: 250,
+    monthlyActiveUsers: 100_000,
+    realtimeConnections: 500,
+  },
+};
+
+const STORAGE_ADDON_GB = 50;
+const GIGABYTE_BYTES = 1024 ** 3;
+const DEFAULT_ASSET_ALERTS = {
+  storagePercent: 80,
+  serverErrorPercent: 5,
+  p95LatencyMs: 1000,
+  concurrentSessions: 100,
+};
+
+function readAssetAlertThresholds() {
+  try {
+    const saved = window.localStorage.getItem('impulse_asset_alert_thresholds');
+    return { ...DEFAULT_ASSET_ALERTS, ...(saved ? JSON.parse(saved) : {}) };
+  } catch (error) {
+    console.error('Could not read saved asset alert thresholds.', error);
+    return DEFAULT_ASSET_ALERTS;
+  }
+}
+
+function readAssetPlanner() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem('impulse_asset_planner') || '{}');
+    return {
+      tier: saved.tier === 'pro' ? 'pro' : 'free',
+      storageAddons: Math.max(0, Math.min(999, Number(saved.storageAddons) || 0)),
+      costs: {
+        freeMonthlyUsd: Math.max(0, Number(saved.costs?.freeMonthlyUsd) || 0),
+        proMonthlyUsd: Math.max(0, Number(saved.costs?.proMonthlyUsd) || 0),
+        storageAddonUsd: Math.max(0, Number(saved.costs?.storageAddonUsd) || 0),
+      },
+    };
+  } catch (error) {
+    console.error('Could not read saved asset planner settings.', error);
+    return { tier: 'free', storageAddons: 0, costs: { freeMonthlyUsd: 0, proMonthlyUsd: 0, storageAddonUsd: 0 } };
+  }
+}
+
+function AssetManagementSection() {
+  const [usage, setUsage] = React.useState(null);
+  const [assetMetrics, setAssetMetrics] = React.useState(null);
+  const [operations, setOperations] = React.useState(null);
+  const [projectMetrics, setProjectMetrics] = React.useState(null);
+  const [selectedTier, setSelectedTier] = React.useState(() => readAssetPlanner().tier);
+  const [storageAddons, setStorageAddons] = React.useState(() => readAssetPlanner().storageAddons);
+  const [costInputs, setCostInputs] = React.useState(() => readAssetPlanner().costs);
+  const [alertThresholds, setAlertThresholds] = React.useState(readAssetAlertThresholds);
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [storageError, setStorageError] = React.useState('');
+  const [metricsError, setMetricsError] = React.useState('');
+  const [operationsError, setOperationsError] = React.useState('');
+  const [projectMetricsError, setProjectMetricsError] = React.useState('');
+
+  const refreshStorage = React.useCallback(async () => {
+    setStorageError('');
     try {
       setUsage(await loadAdminStorageUsage());
     } catch (loadError) {
       console.error('Could not load storage usage.', loadError);
-      setError(loadError.message || 'Storage usage could not be loaded.');
-    } finally {
-      setLoading(false);
+      setStorageError(loadError.message || 'Storage usage could not be loaded.');
     }
   }, []);
+
+  const refreshMetrics = React.useCallback(async () => {
+    setMetricsError('');
+    try {
+      setAssetMetrics(await loadAdminAssetMetrics());
+    } catch (loadError) {
+      console.error('Could not load API traffic metrics.', loadError);
+      setMetricsError(loadError.message || 'API traffic metrics could not be loaded.');
+    }
+  }, []);
+
+  const refreshOperations = React.useCallback(async () => {
+    setOperationsError('');
+    try {
+      setOperations(await loadAdminOperations());
+    } catch (loadError) {
+      console.error('Could not load operations health.', loadError);
+      setOperationsError(loadError.message || 'Operations health could not be loaded.');
+    }
+  }, []);
+
+  const refreshProjectMetrics = React.useCallback(async () => {
+    setProjectMetricsError('');
+    try {
+      setProjectMetrics(await loadAdminProjectMetrics());
+    } catch (loadError) {
+      console.error('Could not load Supabase project metrics.', loadError);
+      setProjectMetricsError(loadError.message || 'Supabase project metrics could not be loaded.');
+    }
+  }, []);
+
+  const refreshUsage = React.useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([refreshStorage(), refreshMetrics(), refreshOperations(), refreshProjectMetrics()]);
+    setRefreshing(false);
+    setLoading(false);
+  }, [refreshMetrics, refreshOperations, refreshProjectMetrics, refreshStorage]);
 
   React.useEffect(() => {
     refreshUsage();
   }, [refreshUsage]);
 
-  const metrics = usage ? [
-    { label: 'Imported images', value: formatStorageSize(usage.uploadBytes), detail: `${usage.uploadCount} stored file(s)` },
-    { label: 'Admin content estimate', value: formatStorageSize(usage.adminContentBytes), detail: `${usage.adminDocumentCount} content document(s)` },
-    { label: 'Tracked total', value: formatStorageSize(usage.trackedBytes), detail: 'Images plus admin-content JSON' },
-  ] : [];
+  React.useEffect(() => {
+    const intervalId = window.setInterval(refreshMetrics, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshMetrics]);
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(refreshOperations, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshOperations]);
+
+  React.useEffect(() => {
+    const intervalId = window.setInterval(refreshProjectMetrics, 5 * 60_000);
+    return () => window.clearInterval(intervalId);
+  }, [refreshProjectMetrics]);
+
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem('impulse_asset_alert_thresholds', JSON.stringify(alertThresholds));
+    } catch (error) {
+      console.error('Could not save asset alert thresholds.', error);
+    }
+  }, [alertThresholds]);
+
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem('impulse_asset_planner', JSON.stringify({
+        tier: selectedTier,
+        storageAddons,
+        costs: costInputs,
+      }));
+    } catch (error) {
+      console.error('Could not save asset planner settings.', error);
+    }
+  }, [costInputs, selectedTier, storageAddons]);
+
+  const plan = SUPABASE_PLAN_REFERENCES[selectedTier];
+  const fileStorageLimitBytes = (plan.fileStorageGB + (storageAddons * STORAGE_ADDON_GB)) * GIGABYTE_BYTES;
+  const fileStoragePercent = usage
+    ? Math.min(100, (usage.uploadBytes / fileStorageLimitBytes) * 100)
+    : 0;
+  const traffic = assetMetrics?.traffic24h;
+  const traffic7d = assetMetrics?.traffic7d;
+  const traffic30d = assetMetrics?.traffic30d;
+  const trafficSeries = assetMetrics?.series || [];
+  const trafficSeries7d = assetMetrics?.series7d || [];
+  const routeMetrics = assetMetrics?.routes || [];
+  const slowestRoutes = [...routeMetrics]
+    .filter((route) => route.requests >= 3)
+    .sort((left, right) => right.p95LatencyMs - left.p95LatencyMs)
+    .slice(0, 5);
+  const maxTrafficRequests = Math.max(1, ...trafficSeries.map((bucket) => bucket.requests));
+  const maxTrafficRequests7d = Math.max(1, ...trafficSeries7d.map((bucket) => bucket.requests));
+  const selectedMonthlyPrice = selectedTier === 'free' ? costInputs.freeMonthlyUsd : costInputs.proMonthlyUsd;
+  const estimatedMonthlyCost = selectedMonthlyPrice + (storageAddons * costInputs.storageAddonUsd);
+  const costInputsComplete = selectedTier === 'free'
+    ? storageAddons === 0 || costInputs.storageAddonUsd > 0
+    : costInputs.proMonthlyUsd > 0 && (storageAddons === 0 || costInputs.storageAddonUsd > 0);
+  const currentStorageGb = usage ? usage.uploadBytes / GIGABYTE_BYTES : null;
+  const storageGrowth = usage?.storageTrend?.bytesPerDay || 0;
+  const storageDaysRemaining = currentStorageGb !== null && storageGrowth > 0
+    ? Math.max(0, Math.floor(((fileStorageLimitBytes - usage.uploadBytes) / storageGrowth)))
+    : null;
+  const errorRate = traffic?.requests
+    ? Number(((traffic.serverErrors / traffic.requests) * 100).toFixed(2))
+    : 0;
+  const projectMetric = (pattern) => projectMetrics?.metrics?.find((metric) => pattern.test(metric.metric));
+  const formatProjectMetric = (metric, fallback = projectMetrics?.configured ? 'Not reported by API' : 'Not connected') => {
+    if (!metric) return fallback;
+    if (typeof metric.value === 'number' && /bytes|size|egress|storage/i.test(metric.metric)) {
+      return formatStorageSize(metric.value);
+    }
+    return String(metric.value);
+  };
+  const activeAlerts = [
+    usage && fileStoragePercent >= Number(alertThresholds.storagePercent) && {
+      label: `Tracked file storage is at ${fileStoragePercent.toFixed(1)}% of the selected plan.`,
+    },
+    traffic?.requests >= 10 && errorRate >= Number(alertThresholds.serverErrorPercent) && {
+      label: `API error rate is ${errorRate.toFixed(1)}% over the last 24 hours.`,
+    },
+    traffic?.requests > 0 && traffic.p95LatencyMs >= Number(alertThresholds.p95LatencyMs) && {
+      label: `API p95 latency is at least ${formatNumber(traffic.p95LatencyMs)} ms.`,
+    },
+    assetMetrics?.activeSessions >= Number(alertThresholds.concurrentSessions) && {
+      label: `Active browser sessions reached ${formatNumber(assetMetrics.activeSessions)}.`,
+    },
+  ].filter(Boolean);
+  const resourceRows = [
+    {
+      label: 'Database',
+      current: formatProjectMetric(projectMetric(/database.*size|db.*size/i)),
+      limit: formatProjectMetric(projectMetric(/database.*(limit|quota)|db.*(limit|quota)/i), `${plan.databaseGB} GB planning reference`),
+      icon: Database,
+    },
+    {
+      label: 'File storage',
+      current: usage ? formatStorageSize(usage.uploadBytes) : 'Not measured',
+      limit: `${plan.fileStorageGB + (storageAddons * STORAGE_ADDON_GB)} GB`,
+      icon: HardDrive,
+    },
+    {
+      label: 'API response traffic · 30d',
+      current: traffic30d ? formatStorageSize(traffic30d.responseBytes) : 'Not measured',
+      limit: 'App API only',
+      icon: Activity,
+    },
+    {
+      label: 'Supabase project egress',
+      current: formatProjectMetric(projectMetric(/egress|bandwidth/i)),
+      limit: `${plan.monthlyEgressGB} GB planning reference`,
+      icon: Activity,
+    },
+    {
+      label: 'Observed browser sessions · 30d',
+      current: assetMetrics ? formatCappedCount(assetMetrics.observedMonthlyActiveSessions, assetMetrics.monthlyActiveSessionsCapped) : 'Not measured',
+      limit: 'Unique app sessions',
+      icon: Users,
+    },
+    {
+      label: 'Supabase monthly active users',
+      current: formatProjectMetric(projectMetric(/monthly.*active|active.*users|mau/i)),
+      limit: `${formatNumber(plan.monthlyActiveUsers)} planning reference`,
+      icon: Users,
+    },
+    {
+      label: 'Supabase Realtime peak connections',
+      current: formatProjectMetric(projectMetric(/realtime.*connection/i)),
+      limit: `${formatNumber(plan.realtimeConnections)} planning reference`,
+      icon: Radio,
+    },
+    {
+      label: 'Peak concurrent app sessions',
+      current: assetMetrics ? formatCappedCount(assetMetrics.peakActiveSessions, assetMetrics.peakActiveSessionsCapped) : 'Not measured',
+      limit: `${formatNumber(alertThresholds.concurrentSessions)} alert threshold`,
+      icon: Users,
+    },
+  ];
+
+  function setAddonCount(value) {
+    const count = Number(value);
+    setStorageAddons(Number.isFinite(count) ? Math.max(0, Math.min(999, Math.floor(count))) : 0);
+  }
+
+  function updateCostInput(field, value) {
+    const amount = Number(value);
+    setCostInputs((current) => ({
+      ...current,
+      [field]: Number.isFinite(amount) ? Math.max(0, amount) : 0,
+    }));
+  }
 
   return (
     <div className="space-y-6">
       <SectionHeading
-        eyebrow="Supabase Storage"
-        title="Storage management"
-        description="Monitor uploaded question images and the admin content saved for your imports."
+        eyebrow="Infrastructure & capacity"
+        title="Asset management"
+        description="Monitor observed app traffic and storage, then compare tracked assets with a Supabase capacity plan."
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           {usage?.measuredAt
-            ? `Last checked ${formatDistanceToNow(new Date(usage.measuredAt), { addSuffix: true })}.`
+            ? `Storage last checked ${formatDistanceToNow(new Date(usage.measuredAt), { addSuffix: true })}.`
             : 'Storage usage is checked directly from Supabase.'}
         </p>
-        <Button type="button" variant="outline" onClick={refreshUsage} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Checking…' : 'Refresh usage'}
+        <Button type="button" variant="outline" onClick={refreshUsage} disabled={refreshing}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+          {refreshing ? 'Refreshing…' : 'Refresh metrics'}
         </Button>
       </div>
-      {error ? (
-        <Card className="rounded-[1.75rem] border-destructive/40">
-          <CardContent className="p-5 text-sm text-destructive" role="alert">{error}</CardContent>
-        </Card>
-      ) : loading && !usage ? (
+      {loading && !usage && !assetMetrics ? (
         <Card className="rounded-[1.75rem] border-border/80">
-          <CardContent className="p-6 text-sm text-muted-foreground">Loading storage usage…</CardContent>
+          <CardContent className="p-6 text-sm text-muted-foreground">Loading resource metrics…</CardContent>
         </Card>
-      ) : usage ? (
+      ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
-            {metrics.map((metric) => (
+          {storageError && (
+            <Card className="rounded-[1.75rem] border-destructive/40">
+              <CardContent className="p-5 text-sm text-destructive" role="alert">{storageError}</CardContent>
+            </Card>
+          )}
+          {metricsError && (
+            <Card className="rounded-[1.75rem] border-destructive/40">
+              <CardContent className="p-5 text-sm text-destructive" role="alert">{metricsError}</CardContent>
+            </Card>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                label: 'Active sessions',
+                value: assetMetrics ? formatCappedCount(assetMetrics.activeSessions, assetMetrics.activeSessionsCapped) : '—',
+                detail: `Seen in the last ${Math.round((assetMetrics?.activeWindowSeconds || 300) / 60)} minutes`,
+                icon: Users,
+              },
+              {
+                label: 'API requests · 24h',
+                value: traffic ? formatNumber(traffic.requests) : '—',
+                detail: `${formatNumber(traffic?.clientErrors || 0)} 4xx · ${formatNumber(traffic?.serverErrors || 0)} 5xx`,
+                icon: Activity,
+              },
+              {
+                label: 'API latency · p95',
+                value: traffic ? formatLatency(traffic.p95LatencyMs) : '—',
+                detail: `p50 ${formatLatency(traffic?.p50LatencyMs || 0)} · avg ${formatLatency(traffic?.averageLatencyMs || 0)}`,
+                icon: Gauge,
+              },
+              {
+                label: 'API response traffic · 24h',
+                value: traffic ? formatStorageSize(traffic.responseBytes) : '—',
+                detail: `${formatStorageSize(traffic?.requestBytes || 0)} received`,
+                icon: Gauge,
+              },
+              {
+                label: 'Concurrent sessions · peak',
+                value: assetMetrics ? formatCappedCount(assetMetrics.peakActiveSessions, assetMetrics.peakActiveSessionsCapped) : '—',
+                detail: `${formatCappedCount(assetMetrics?.activeSessions || 0, assetMetrics?.activeSessionsCapped)} active now · approx. 30-day sessions ${formatCappedCount(assetMetrics?.observedMonthlyActiveSessions || 0, assetMetrics?.monthlyActiveSessionsCapped)}`,
+                icon: Users,
+              },
+              {
+                label: 'Tracked file storage',
+                value: usage ? formatStorageSize(usage.uploadBytes) : '—',
+                detail: `${formatNumber(usage?.uploadCount || 0)} files in admin-uploads`,
+                icon: HardDrive,
+              },
+            ].map((metric) => (
               <Card key={metric.label} className="rounded-[1.75rem] border-border/80">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs font-black uppercase tracking-[0.18em] text-muted-foreground">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-black uppercase tracking-[0.15em] text-muted-foreground">
                     {metric.label}
                   </CardTitle>
+                  <metric.icon className="h-4 w-4 text-primary" />
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-black">{metric.value}</p>
@@ -423,24 +742,404 @@ function StorageManagementSection() {
               </Card>
             ))}
           </div>
+
           <Card className="rounded-[1.75rem] border-border/80">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg font-black">
-                <HardDrive className="h-5 w-5 text-primary" />
-                What this number includes
+                <Activity className="h-5 w-5 text-primary" />
+                API traffic · last 24 hours
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Tracked total is the size of files in the <code>{usage.bucket}</code> image bucket plus the JSON content documents used by the admin panel.
-              </p>
-              <p>
-                Supabase project quotas can include other database and storage usage. Compare this tracked total with the usage/limits shown in your Supabase dashboard; database indexes and overhead are not included in this estimate.
+            <CardContent>
+              <div className="flex h-36 items-end gap-1" role="img" aria-label="API requests grouped into 30-minute periods over the last 24 hours">
+                {trafficSeries.map((bucket) => (
+                  <div
+                    key={bucket.timestamp}
+                    className="min-w-0 flex-1 rounded-t-sm bg-primary/70 transition-all"
+                    title={`${format(new Date(bucket.timestamp), 'MMM d, h:mm a')}: ${formatNumber(bucket.requests)} requests`}
+                    style={{ height: `${Math.max(3, (bucket.requests / maxTrafficRequests) * 100)}%` }}
+                  />
+                ))}
+                {!trafficSeries.length && (
+                  <p className="self-center text-sm text-muted-foreground">Traffic history will appear as requests are received.</p>
+                )}
+              </div>
+              <div className="mt-3 flex justify-between text-xs text-muted-foreground">
+                <span>24 hours ago</span>
+                <span>Now</span>
+              </div>
+              <p className="mt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">HTTP status codes · 24h</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {Object.entries(traffic?.statusCodes || {}).sort(([left], [right]) => left.localeCompare(right)).map(([code, count]) => (
+                  <Badge key={code} variant="outline" className={`rounded-full ${Number(code) >= 500 ? 'border-destructive/50 text-destructive' : Number(code) >= 400 ? 'border-amber-500/50 text-amber-700' : ''}`}>
+                    {code}: {formatNumber(count)}
+                  </Badge>
+                ))}
+                {!Object.keys(traffic?.statusCodes || {}).length && (
+                  <span className="text-xs text-muted-foreground">No API requests measured yet.</span>
+                )}
+              </div>
+              <p className="mt-4 text-xs font-bold uppercase tracking-wide text-muted-foreground">Peak active sessions · 30-minute samples</p>
+              <div className="mt-2 flex h-16 items-end gap-1" role="img" aria-label="Peak active browser sessions sampled every thirty minutes over the last twenty-four hours">
+                {trafficSeries.map((bucket) => (
+                  <div
+                    key={`sessions-${bucket.timestamp}`}
+                    className="min-w-0 flex-1 rounded-t-sm bg-sky-500/70"
+                    title={`${format(new Date(bucket.timestamp), 'MMM d, h:mm a')}: ${formatNumber(bucket.peakActiveSessions)} peak sessions`}
+                    style={{ height: `${Math.max(bucket.peakActiveSessions ? 4 : 0, (bucket.peakActiveSessions / Math.max(1, assetMetrics?.peakActiveSessions || 1)) * 100)}%` }}
+                  />
+                ))}
+              </div>
+              <p className="mt-4 text-sm text-muted-foreground">
+                API-level response bytes are not Supabase egress. Percentiles use latency histogram buckets. Metrics are in-process and instance-local; history resets when the API restarts and is not shared across multiple API instances.
               </p>
             </CardContent>
           </Card>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card className="rounded-[1.75rem] border-border/80">
+              <CardHeader>
+                <CardTitle className="text-lg font-black">Requests by endpoint · 24h</CardTitle>
+                <p className="text-sm text-muted-foreground">Paths are normalized; query strings and record IDs are not retained.</p>
+              </CardHeader>
+              <CardContent>
+                {routeMetrics.length ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>API route</TableHead>
+                          <TableHead className="text-right">Requests</TableHead>
+                          <TableHead className="text-right">4xx / 5xx</TableHead>
+                          <TableHead className="text-right">p95</TableHead>
+                          <TableHead className="text-right">Response</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {routeMetrics.map((route) => (
+                          <TableRow key={route.path}>
+                            <TableCell className="font-mono text-xs">{route.path}</TableCell>
+                            <TableCell className="text-right">{formatNumber(route.requests)}</TableCell>
+                            <TableCell className="text-right">{formatNumber(route.clientErrors)} / {formatNumber(route.serverErrors)}</TableCell>
+                            <TableCell className="text-right">{formatLatency(route.p95LatencyMs)}</TableCell>
+                            <TableCell className="text-right">{formatStorageSize(route.responseBytes)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : <p className="text-sm text-muted-foreground">Endpoint details appear as API requests arrive.</p>}
+                {slowestRoutes.length > 0 && (
+                  <div className="mt-5 border-t border-border/70 pt-4">
+                    <p className="mb-2 text-sm font-bold">Slowest routes by p95</p>
+                    <div className="space-y-2">
+                      {slowestRoutes.map((route) => (
+                        <div key={`slow-${route.path}`} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="truncate font-mono">{route.path}</span>
+                          <span className="shrink-0 font-bold">{formatLatency(route.p95LatencyMs)} · {formatNumber(route.requests)} req</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="rounded-[1.75rem] border-border/80">
+              <CardHeader>
+                <CardTitle className="text-lg font-black">Traffic &amp; errors · last 7 days</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {traffic7d ? `${formatNumber(traffic7d.requests)} requests · ${formatNumber(traffic7d.clientErrors)} client errors · ${formatNumber(traffic7d.serverErrors)} server errors` : 'Waiting for traffic data'}
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="flex h-36 items-end gap-2" role="img" aria-label="Daily API traffic over the last seven days; red indicates server errors">
+                  {trafficSeries7d.map((day) => (
+                    <div key={day.timestamp} className="flex h-full min-w-0 flex-1 items-end gap-px" title={`${format(new Date(day.timestamp), 'MMM d')}: ${formatNumber(day.requests)} requests, ${formatNumber(day.serverErrors)} server errors`}>
+                      <div className="flex-1 rounded-t-sm bg-primary/70" style={{ height: `${Math.max(3, ((day.requests - day.serverErrors) / maxTrafficRequests7d) * 100)}%` }} />
+                      <div className="w-1/4 rounded-t-sm bg-destructive/80" style={{ height: `${Math.max(day.serverErrors ? 3 : 0, (day.serverErrors / maxTrafficRequests7d) * 100)}%` }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex justify-between text-xs text-muted-foreground"><span>6 days ago</span><span>Today</span></div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Last 30 days: {formatNumber(traffic30d?.requests || 0)} API requests · {formatStorageSize(traffic30d?.responseBytes || 0)} API responses. This is not a Supabase MAU or egress measurement.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-[1.75rem] border-border/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-black">
+                <Shield className="h-5 w-5 text-primary" />
+                Capacity alerts
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Thresholds are saved in this browser and evaluated against observed app metrics.</p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {activeAlerts.length > 0 ? (
+                <div className="space-y-2" role="status">
+                  {activeAlerts.map((alert) => (
+                    <div key={alert.label} className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                      <span>{alert.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CircleCheck className="h-4 w-4 text-emerald-600" /> No configured thresholds exceeded.
+                </p>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { key: 'storagePercent', label: 'Storage warning (%)', min: 1, max: 100 },
+                  { key: 'serverErrorPercent', label: 'API error warning (%)', min: 0, max: 100 },
+                  { key: 'p95LatencyMs', label: 'p95 latency warning (ms)', min: 1, max: 120000 },
+                  { key: 'concurrentSessions', label: 'Concurrent sessions warning', min: 1, max: 1000000 },
+                ].map((threshold) => (
+                  <label key={threshold.key} className="space-y-2 text-xs font-bold">
+                    <span>{threshold.label}</span>
+                    <Input
+                      type="number"
+                      min={threshold.min}
+                      max={threshold.max}
+                      value={alertThresholds[threshold.key]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setAlertThresholds((current) => ({
+                          ...current,
+                          [threshold.key]: Number.isFinite(value)
+                            ? Math.min(threshold.max, Math.max(threshold.min, value))
+                            : threshold.min,
+                        }));
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Alerts are shown here only; no email, SMS, or push notification channel is configured.
+              </p>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+            <Card className="rounded-[1.75rem] border-border/80">
+              <CardHeader>
+                <CardTitle className="text-lg font-black">Supabase plan comparison</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Planning references only. Verify current quotas and pricing in your Supabase dashboard.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Object.entries(SUPABASE_PLAN_REFERENCES).map(([key, option]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={selectedTier === key}
+                      onClick={() => setSelectedTier(key)}
+                      className={`rounded-2xl border p-4 text-left transition-colors ${selectedTier === key ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-secondary/60'}`}
+                    >
+                      <span className="block font-black">{option.name}</span>
+                      <span className="mt-1 block text-xs text-muted-foreground">{option.description}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="rounded-2xl border border-border/80 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-bold">Extra file storage</p>
+                      <p className="text-xs text-muted-foreground">Plan an additional {STORAGE_ADDON_GB} GB per block</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setAddonCount(storageAddons - 1)} aria-label="Remove storage block">−</Button>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="999"
+                        value={storageAddons}
+                        onChange={(event) => setAddonCount(event.target.value)}
+                        aria-label="Additional storage blocks"
+                        className="w-20 text-center"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => setAddonCount(storageAddons + 1)} aria-label="Add storage block">+</Button>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Planned file capacity: <strong className="text-foreground">{plan.fileStorageGB + (storageAddons * STORAGE_ADDON_GB)} GB</strong>
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    This is a comparison planner only; it does not change your Supabase subscription or provision storage.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {[
+                    { field: 'freeMonthlyUsd', label: 'Free plan price (USD/mo)' },
+                    { field: 'proMonthlyUsd', label: 'Pro plan price (USD/mo)' },
+                    { field: 'storageAddonUsd', label: 'Per extra block (USD/mo)' },
+                  ].map(({ field, label }) => (
+                    <label key={field} className="space-y-2 text-xs font-bold">
+                      <span>{label}</span>
+                      <Input type="number" min="0" step="0.01" value={costInputs[field]} onChange={(event) => updateCostInput(field, event.target.value)} />
+                    </label>
+                  ))}
+                </div>
+                <div className="rounded-xl bg-secondary/60 p-3">
+                  <p className="text-sm font-bold">
+                    {costInputsComplete
+                      ? `Estimated monthly total: $${estimatedMonthlyCost.toFixed(2)} USD`
+                      : 'Enter a Pro rate and any add-on rate to estimate monthly cost.'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">Enter prices from your actual quote; tax, overages, compute add-ons, and usage-based charges are not included.</p>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                    <span className="font-bold">Tracked admin-uploads bucket</span>
+                    <span className="text-muted-foreground">
+                      {usage ? `${formatStorageSize(usage.uploadBytes)} / ${plan.fileStorageGB + (storageAddons * STORAGE_ADDON_GB)} GB` : 'Not measured'}
+                    </span>
+                  </div>
+                  <Progress value={fileStoragePercent} aria-label="Tracked file storage against selected plan" />
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {usage?.storageTrend?.samples >= 2
+                      ? storageGrowth > 0
+                        ? `Recent observed growth: ${formatStorageSize(storageGrowth)} per day · at this rate, approximately ${storageDaysRemaining} day(s) to the selected limit.`
+                        : 'No storage growth was measured between the latest samples.'
+                      : 'Storage growth projection appears after at least two measurements spaced 6+ hours apart.'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-[1.75rem] border-border/80">
+              <CardHeader>
+                <CardTitle className="text-lg font-black">{plan.name} resource limits</CardTitle>
+                <p className="text-sm text-muted-foreground">Observed usage is shown only where this app can measure it.</p>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                {resourceRows.map((resource) => (
+                  <div key={resource.label} className="flex items-center justify-between gap-4 border-b border-border/60 py-3 last:border-0">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <resource.icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-sm font-semibold">{resource.label}</span>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold">{resource.current}</p>
+                      <p className="text-xs text-muted-foreground">limit {resource.limit}</p>
+                    </div>
+                  </div>
+                ))}
+                <p className="pt-3 text-xs leading-relaxed text-muted-foreground">
+                  Storage usage covers only the <code>admin-uploads</code> bucket. Database size, Supabase egress, monthly active users, and Realtime connections require Supabase project-level metrics and are not available to this app yet.
+                </p>
+                {usage && (
+                  <p className="pt-2 text-xs leading-relaxed text-muted-foreground">
+                    Admin content JSON is separately estimated at {formatStorageSize(usage.adminContentBytes)} across {formatNumber(usage.adminDocumentCount)} document(s); it is database content, not file-bucket storage.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-[1.75rem] border-border/80">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg font-black">
+                <Server className="h-5 w-5 text-primary" />
+                Operations &amp; project health
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">API process health and live checks of the Supabase database and storage APIs.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {operationsError && <p className="text-sm text-destructive" role="alert">{operationsError}</p>}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: 'Application API',
+                    status: operations?.api?.status,
+                    detail: operations?.api
+                      ? `${formatNumber(operations.api.uptimeSeconds)} sec uptime · ${operations.api.nodeVersion} · ${formatStorageSize(operations.api.memoryBytes)} memory`
+                      : 'Not checked',
+                  },
+                  {
+                    label: 'Supabase database API',
+                    status: operations?.supabase?.database?.status,
+                    detail: operations?.supabase?.database?.latencyMs !== undefined
+                      ? `${operations.supabase.database.latencyMs} ms`
+                      : operations?.supabase?.configured === false ? 'Not configured' : 'Not connected',
+                  },
+                  {
+                    label: 'Supabase storage API',
+                    status: operations?.supabase?.storage?.status,
+                    detail: operations?.supabase?.storage?.latencyMs !== undefined
+                      ? `${operations.supabase.storage.latencyMs} ms`
+                      : operations?.supabase?.configured === false ? 'Not configured' : 'Not connected',
+                  },
+                  {
+                    label: 'Supabase backups',
+                    status: operations?.backups?.status,
+                    detail: operations?.backups?.message || 'Not checked',
+                  },
+                ].map((service) => {
+                  const healthy = service.status === 'healthy';
+                  const unavailable = service.status === 'not_available' || service.status === 'not_configured';
+                  return (
+                    <div key={service.label} className="rounded-xl border border-border/80 p-4">
+                      <div className="flex items-center gap-2 text-sm font-bold">
+                        {healthy
+                          ? <CircleCheck className="h-4 w-4 text-emerald-600" />
+                          : unavailable
+                            ? <Clock3 className="h-4 w-4 text-muted-foreground" />
+                            : <CircleX className="h-4 w-4 text-destructive" />}
+                        {service.label}
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">{service.detail}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="rounded-xl border border-border/80 p-4">
+                <p className="text-sm font-bold">Project-level billing &amp; resource metrics</p>
+                {projectMetricsError && <p className="mt-2 text-sm text-destructive" role="alert">{projectMetricsError}</p>}
+                {projectMetrics?.status === 'error' ? (
+                  <p className="mt-2 text-sm text-destructive" role="alert">{projectMetrics.message}</p>
+                ) : projectMetrics?.configured && projectMetrics.status === 'healthy' ? (
+                  <>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Live numeric usage values returned by the Supabase Management API, measured {projectMetrics.measuredAt ? formatDistanceToNow(new Date(projectMetrics.measuredAt), { addSuffix: true }) : 'recently'}. Metric names and units come from Supabase.
+                    </p>
+                    {projectMetrics.metrics?.length ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        {projectMetrics.metrics.map((metric, index) => {
+                          const label = metric.metric.replace(/\[\d+\]/g, '').replace(/[._-]+/g, ' ');
+                          const value = typeof metric.value === 'number' && /bytes|size|egress|storage/i.test(metric.metric)
+                            ? formatStorageSize(metric.value)
+                            : String(metric.value);
+                          return (
+                            <div key={`${metric.metric}-${index}`} className="rounded-lg bg-secondary/60 px-3 py-2">
+                              <p className="text-xs capitalize text-muted-foreground">{label}</p>
+                              <p className="text-sm font-bold">{value}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : <p className="mt-2 text-xs text-muted-foreground">The Management API returned no numeric usage metrics.</p>}
+                  </>
+                ) : (
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Database size, Supabase egress, billable MAUs, actual Realtime connections, current invoice, and backup history require project-level access. Configure <code>SUPABASE_PROJECT_REF</code> and a private <code>SUPABASE_MANAGEMENT_ACCESS_TOKEN</code> on the API host as described in <code>supabase/SETUP.md</code>. These values are deliberately not inferred from app traffic.
+                    {projectMetrics?.message ? ` ${projectMetrics.message}` : ''}
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </>
-      ) : null}
+      )}
     </div>
   );
 }
@@ -495,6 +1194,11 @@ function AdminPortalPage() {
   React.useEffect(() => {
     applyTheme(getStoredTheme());
   }, [applyTheme]);
+
+  React.useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    return startClientSessionHeartbeat();
+  }, [isAuthenticated]);
 
   // Series state
   const [seriesList, setSeriesList] = React.useState([]);
@@ -1427,7 +2131,7 @@ function AdminPortalPage() {
                         </button>
                         <button type="button" onClick={() => setTab('storage')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'storage' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <HardDrive className="h-4 w-4" />
-                          {!collapsed && 'Storage'}
+                          {!collapsed && 'Assets'}
                         </button>
                       </div>
                     </div>
@@ -1529,7 +2233,7 @@ function AdminPortalPage() {
                   )}
 
               {tab === 'billing' && <BillingAdminPanel />}
-              {tab === 'storage' && <StorageManagementSection />}
+              {tab === 'storage' && <AssetManagementSection />}
 
               {tab === 'questions' && (
                 <div className="space-y-6">

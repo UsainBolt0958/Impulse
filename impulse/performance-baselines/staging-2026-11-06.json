@@ -1,0 +1,549 @@
+{
+  "schemaVersion": 1,
+  "measuredAt": "2026-11-06T09:04:18.187Z",
+  "mode": "read-only unauthenticated GET requests; no account or payment actions",
+  "rounds": 2,
+  "site": {
+    "origin": "https://69f58f03.impulse-6mk.pages.dev",
+    "status": 200,
+    "elapsedMs": 332,
+    "decodedHtmlBytes": 485,
+    "contentType": "text/html; charset=utf-8",
+    "cacheControl": "public, max-age=0, must-revalidate",
+    "etag": false,
+    "assets": [
+      {
+        "url": "/assets/index-rFTIuK2i.js",
+        "status": 200,
+        "elapsedMs": 365,
+        "decodedBodyBytes": 1743711,
+        "contentType": "application/javascript",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "etag": true
+      },
+      {
+        "url": "/assets/index-ShQaf5ba.css",
+        "status": 200,
+        "elapsedMs": 95.1,
+        "decodedBodyBytes": 144393,
+        "contentType": "text/css; charset=utf-8",
+        "cacheControl": "public, max-age=0, must-revalidate",
+        "etag": true
+      }
+    ]
+  },
+  "api": {
+    "origin": "https://impulse-api-staging.onrender.com",
+    "endpoints": [
+      {
+        "name": "health",
+        "path": "/api/health",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 225.9,
+        "minMs": 91.2,
+        "maxMs": 225.9,
+        "medianBodyBytes": 11,
+        "responseKeys": [
+          "ok"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 225.9,
+            "bodyBytes": 11
+          },
+          {
+            "status": 200,
+            "elapsedMs": 91.2,
+            "bodyBytes": 11
+          }
+        ]
+      },
+      {
+        "name": "questions-all",
+        "path": "/api/questions",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 904.5,
+        "minMs": 886.7,
+        "maxMs": 904.5,
+        "medianBodyBytes": 446021,
+        "responseKeys": [
+          "questions"
+        ],
+        "itemCount": 150,
+        "questionCount": 150,
+        "uniqueQuestionIds": 150,
+        "questionIdSignature": "8b77f6ee299f49fd13211a89d3b2b9c440752db4e9b19b8ea4040ca47312a037",
+        "distribution": {
+          "exam": {
+            "JEE MAINS": 150
+          },
+          "year": {
+            "2025": 150
+          },
+          "subject": {
+            "Mathematics": 50,
+            "Physics": 50,
+            "Chemistry": 50
+          },
+          "difficulty": {
+            "Easy": 90,
+            "Hard": 4,
+            "Medium": 56
+          },
+          "type": {
+            "MCQ": 120,
+            "NUM": 30
+          }
+        },
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 904.5,
+            "bodyBytes": 446021
+          },
+          {
+            "status": 200,
+            "elapsedMs": 886.7,
+            "bodyBytes": 446021
+          }
+        ]
+      },
+      {
+        "name": "questions-page-1",
+        "path": "/api/questions?page=1&limit=20",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 1142.2,
+        "minMs": 833.6,
+        "maxMs": 1142.2,
+        "medianBodyBytes": 446021,
+        "responseKeys": [
+          "questions"
+        ],
+        "itemCount": 150,
+        "questionCount": 150,
+        "uniqueQuestionIds": 150,
+        "questionIdSignature": "8b77f6ee299f49fd13211a89d3b2b9c440752db4e9b19b8ea4040ca47312a037",
+        "distribution": {
+          "exam": {
+            "JEE MAINS": 150
+          },
+          "year": {
+            "2025": 150
+          },
+          "subject": {
+            "Mathematics": 50,
+            "Physics": 50,
+            "Chemistry": 50
+          },
+          "difficulty": {
+            "Easy": 90,
+            "Hard": 4,
+            "Medium": 56
+          },
+          "type": {
+            "MCQ": 120,
+            "NUM": 30
+          }
+        },
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 1142.2,
+            "bodyBytes": 446021
+          },
+          {
+            "status": 200,
+            "elapsedMs": 833.6,
+            "bodyBytes": 446021
+          }
+        ]
+      },
+      {
+        "name": "questions-page-2",
+        "path": "/api/questions?page=2&limit=20",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 1006.1,
+        "minMs": 900.3,
+        "maxMs": 1006.1,
+        "medianBodyBytes": 446021,
+        "responseKeys": [
+          "questions"
+        ],
+        "itemCount": 150,
+        "questionCount": 150,
+        "uniqueQuestionIds": 150,
+        "questionIdSignature": "8b77f6ee299f49fd13211a89d3b2b9c440752db4e9b19b8ea4040ca47312a037",
+        "distribution": {
+          "exam": {
+            "JEE MAINS": 150
+          },
+          "year": {
+            "2025": 150
+          },
+          "subject": {
+            "Mathematics": 50,
+            "Physics": 50,
+            "Chemistry": 50
+          },
+          "difficulty": {
+            "Easy": 90,
+            "Hard": 4,
+            "Medium": 56
+          },
+          "type": {
+            "MCQ": 120,
+            "NUM": 30
+          }
+        },
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 1006.1,
+            "bodyBytes": 446021
+          },
+          {
+            "status": 200,
+            "elapsedMs": 900.3,
+            "bodyBytes": 446021
+          }
+        ]
+      },
+      {
+        "name": "questions-filtered",
+        "path": "/api/questions?exam=JEE%20MAINS&subject=Physics&page=1&limit=20",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 1020.4,
+        "minMs": 943.9,
+        "maxMs": 1020.4,
+        "medianBodyBytes": 446021,
+        "responseKeys": [
+          "questions"
+        ],
+        "itemCount": 150,
+        "questionCount": 150,
+        "uniqueQuestionIds": 150,
+        "questionIdSignature": "8b77f6ee299f49fd13211a89d3b2b9c440752db4e9b19b8ea4040ca47312a037",
+        "distribution": {
+          "exam": {
+            "JEE MAINS": 150
+          },
+          "year": {
+            "2025": 150
+          },
+          "subject": {
+            "Mathematics": 50,
+            "Physics": 50,
+            "Chemistry": 50
+          },
+          "difficulty": {
+            "Easy": 90,
+            "Hard": 4,
+            "Medium": 56
+          },
+          "type": {
+            "MCQ": 120,
+            "NUM": 30
+          }
+        },
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 943.9,
+            "bodyBytes": 446021
+          },
+          {
+            "status": 200,
+            "elapsedMs": 1020.4,
+            "bodyBytes": 446021
+          }
+        ]
+      },
+      {
+        "name": "questions-limit-1",
+        "path": "/api/questions?limit=1",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 973.6,
+        "minMs": 862.6,
+        "maxMs": 973.6,
+        "medianBodyBytes": 446021,
+        "responseKeys": [
+          "questions"
+        ],
+        "itemCount": 150,
+        "questionCount": 150,
+        "uniqueQuestionIds": 150,
+        "questionIdSignature": "8b77f6ee299f49fd13211a89d3b2b9c440752db4e9b19b8ea4040ca47312a037",
+        "distribution": {
+          "exam": {
+            "JEE MAINS": 150
+          },
+          "year": {
+            "2025": 150
+          },
+          "subject": {
+            "Mathematics": 50,
+            "Physics": 50,
+            "Chemistry": 50
+          },
+          "difficulty": {
+            "Easy": 90,
+            "Hard": 4,
+            "Medium": 56
+          },
+          "type": {
+            "MCQ": 120,
+            "NUM": 30
+          }
+        },
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 862.6,
+            "bodyBytes": 446021
+          },
+          {
+            "status": 200,
+            "elapsedMs": 973.6,
+            "bodyBytes": 446021
+          }
+        ]
+      },
+      {
+        "name": "question-catalog",
+        "path": "/api/questions/catalog?exam=JEE%20MAINS&subject=Physics",
+        "statusCodes": [
+          404
+        ],
+        "medianMs": 114.7,
+        "minMs": 110.9,
+        "maxMs": 114.7,
+        "medianBodyBytes": 21,
+        "responseKeys": [
+          "error"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 404,
+            "elapsedMs": 114.7,
+            "bodyBytes": 21
+          },
+          {
+            "status": 404,
+            "elapsedMs": 110.9,
+            "bodyBytes": 21
+          }
+        ]
+      },
+      {
+        "name": "custom-test-catalog",
+        "path": "/api/questions/custom-test/catalog",
+        "statusCodes": [
+          404
+        ],
+        "medianMs": 114,
+        "minMs": 112.7,
+        "maxMs": 114,
+        "medianBodyBytes": 21,
+        "responseKeys": [
+          "error"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 404,
+            "elapsedMs": 112.7,
+            "bodyBytes": 21
+          },
+          {
+            "status": 404,
+            "elapsedMs": 114,
+            "bodyBytes": 21
+          }
+        ]
+      },
+      {
+        "name": "quiz-catalog",
+        "path": "/api/quiz/catalog",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 967.3,
+        "minMs": 826.4,
+        "maxMs": 967.3,
+        "medianBodyBytes": 3597,
+        "responseKeys": [
+          "subjects"
+        ],
+        "itemCount": 3,
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 967.3,
+            "bodyBytes": 3597
+          },
+          {
+            "status": 200,
+            "elapsedMs": 826.4,
+            "bodyBytes": 3597
+          }
+        ]
+      },
+      {
+        "name": "series",
+        "path": "/api/series",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 849.5,
+        "minMs": 842.8,
+        "maxMs": 849.5,
+        "medianBodyBytes": 886,
+        "responseKeys": [
+          "series"
+        ],
+        "itemCount": 2,
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 849.5,
+            "bodyBytes": 886
+          },
+          {
+            "status": 200,
+            "elapsedMs": 842.8,
+            "bodyBytes": 886
+          }
+        ]
+      },
+      {
+        "name": "tests",
+        "path": "/api/tests",
+        "statusCodes": [
+          200
+        ],
+        "medianMs": 838.1,
+        "minMs": 637.3,
+        "maxMs": 838.1,
+        "medianBodyBytes": 2915,
+        "responseKeys": [
+          "tests"
+        ],
+        "itemCount": 2,
+        "samples": [
+          {
+            "status": 200,
+            "elapsedMs": 637.3,
+            "bodyBytes": 2915
+          },
+          {
+            "status": 200,
+            "elapsedMs": 838.1,
+            "bodyBytes": 2915
+          }
+        ]
+      },
+      {
+        "name": "test-catalog",
+        "path": "/api/test-catalog?kind=test-series&page=1&limit=18",
+        "statusCodes": [
+          404
+        ],
+        "medianMs": 129,
+        "minMs": 113.5,
+        "maxMs": 129,
+        "medianBodyBytes": 21,
+        "responseKeys": [
+          "error"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 404,
+            "elapsedMs": 129,
+            "bodyBytes": 21
+          },
+          {
+            "status": 404,
+            "elapsedMs": 113.5,
+            "bodyBytes": 21
+          }
+        ]
+      },
+      {
+        "name": "access-admin-state",
+        "path": "/api/admin-state",
+        "statusCodes": [
+          401
+        ],
+        "medianMs": 131,
+        "minMs": 111.3,
+        "maxMs": 131,
+        "medianBodyBytes": 24,
+        "responseKeys": [
+          "error"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 401,
+            "elapsedMs": 131,
+            "bodyBytes": 24
+          },
+          {
+            "status": 401,
+            "elapsedMs": 111.3,
+            "bodyBytes": 24
+          }
+        ]
+      },
+      {
+        "name": "access-engine-questions",
+        "path": "/api/engine/questions",
+        "statusCodes": [
+          401
+        ],
+        "medianMs": 110.9,
+        "minMs": 99.1,
+        "maxMs": 110.9,
+        "medianBodyBytes": 24,
+        "responseKeys": [
+          "error"
+        ],
+        "itemCount": 0,
+        "samples": [
+          {
+            "status": 401,
+            "elapsedMs": 110.9,
+            "bodyBytes": 24
+          },
+          {
+            "status": 401,
+            "elapsedMs": 99.1,
+            "bodyBytes": 24
+          }
+        ]
+      }
+    ],
+    "checks": {
+      "questionPageUsesPagination": false,
+      "pageOneAndPageTwoDiffer": false,
+      "questionFilterReducesResults": false,
+      "limitOneReturnsAtMostOneQuestion": false
+    }
+  }
+}

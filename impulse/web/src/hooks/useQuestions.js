@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { loadPublicQuestionsFromServer } from '@/lib/portalServer';
 
 export function useQuestions() {
@@ -37,16 +37,14 @@ export function useQuestions() {
     };
   }, []);
 
-  const getFilteredQuestions = () => {
-    return questions.filter(q => {
+  const filteredQuestions = useMemo(() => questions.filter(q => {
       if (filters.exam.length > 0 && !filters.exam.includes(q.exam)) return false;
       if (filters.difficulty.length > 0 && !filters.difficulty.includes(q.difficulty)) return false;
       if (filters.chapter.length > 0 && !filters.chapter.includes(q.chapter)) return false;
       if (filters.subject.length > 0 && !filters.subject.includes(q.subject)) return false;
       if (filters.year.length > 0 && !filters.year.includes(q.year)) return false;
       return true;
-    });
-  };
+    }), [questions, filters]);
 
   const getQuestionById = (id) => {
     return questions.find(q => q.id === id);
@@ -73,7 +71,7 @@ export function useQuestions() {
   return {
     questions,
     isLoading,
-    filteredQuestions: getFilteredQuestions(),
+    filteredQuestions,
     filters,
     updateFilters,
     clearFilters,

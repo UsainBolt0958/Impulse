@@ -8,6 +8,8 @@ Create a project in the Supabase dashboard and keep the database password privat
 
 Open **SQL Editor**, paste the contents of [`schema.sql`](./schema.sql), and run it. The policies allow signed-in users to read and change only their own profile and saved data.
 
+For compact cross-device custom-test resume, also run [`custom_test_sessions.sql`](./custom_test_sessions.sql) after `schema.sql`. It stores the question snapshot once while a test is active and keeps later answer/time checkpoints separate. Existing full-session values under `user_data` are imported the next time a signed-in user opens Custom Tests; do not delete the old `user_data` table.
+
 To enable username search and friend requests, also run [`friends.sql`](./friends.sql) in the SQL Editor. This is an additive migration and is safe to run for a project where you already ran `schema.sql`.
 
 To configure the Free, Lite, Gold, and Ultimate catalog, subscription term prices, per-series prices, referral discount settings, and billing tables, also run [`premium.sql`](./premium.sql). It seeds the current plan catalog and prices; later edits made in the billing admin panel are stored in Supabase. It does not create purchases or charge users.
@@ -15,6 +17,16 @@ To configure the Free, Lite, Gold, and Ultimate catalog, subscription term price
 Run [`admin_access.sql`](./admin_access.sql) after `premium.sql`. It restricts the admin role to the verified Google accounts `yashbharati81@gmail.com` and `impulsepreps@gmail.com`. No account UUID needs to be inserted manually. The same role gates the full admin portal and billing controls; other signed-in accounts see **No admin access**.
 
 Run [`upi_payments.sql`](./upi_payments.sql) after `premium.sql` and `admin_access.sql`. It creates server-managed UPI orders and purchased test-series records, and service-role-only database functions that verify the configured price and apply a confirmed payment once. Never expose the Supabase service-role key to the browser or a user.
+
+Run [`persistent_admin_storage.sql`](./persistent_admin_storage.sql) to store admin content in Supabase and create the public image bucket used for uploaded question images. Run it before deploying the matching API code. This is required for hosted admin edits and uploads to survive API restarts/deployments. It uses the existing `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the API host; do not add the service-role key to Cloudflare or any `VITE_*` setting. Existing Render-local JSON files and uploads are not migrated by this SQL; they are ignored in production after this change.
+
+To compact legacy test-paper records, run [`compact_test_solutions.sql`](./compact_test_solutions.sql) after `persistent_admin_storage.sql`. It removes an `explanation` field only when it exactly duplicates that question's `solution`; the API restores the original response shape when serving tests. Future API saves apply the same safe compaction automatically. Questions with different solution and explanation text are unchanged.
+
+To migrate public question reads from the monolithic admin JSON document to indexed, versioned rows, first verify that the latest question bank is present in `admin_content` and every question has a unique, non-empty `id`. Then run [`normalized_question_storage.sql`](./normalized_question_storage.sql) in the SQL Editor. It backfills the current question list as version 1, verifies the rows, and only then replaces `admin_content.questions` with an empty array. The migration also creates an atomic service-role-only admin save function that keeps question bodies out of the admin JSON document. The API hydrates the admin state from the versioned table, so the admin portal still receives its full question list. The migration fails if the hosted admin document is missing, IDs are invalid, or the backfill does not match; fix the source data and rerun it before proceeding. The SQL does not read local files or transfer data from this workspace.
+
+After the migration succeeds, set `SUPABASE_NORMALIZED_QUESTIONS=true` on the private Node API host and restart the API. This switches question listing, metadata, chapter/custom-test catalogs, custom-test selection, admin-state reads, and writes to the normalized table/RPC. Keep the setting unset or `false` until SQL has completed. If the setting is enabled before the migration, requests fail explicitly rather than silently serving stale legacy data. Quiz lookups still fetch current question bodies where their existing behavior requires them.
+
+The migration removes the duplicate question list from `admin_content`; however, the normalized rows, indexes, and retained historical versions have their own storage overhead. Do not assume the project's reported database size will fall: compare Supabase usage before/after, and account for PostgreSQL space reclamation behavior. For rollback, stop the API and pause admin edits, run [`restore_legacy_question_storage.sql`](./restore_legacy_question_storage.sql), then set `SUPABASE_NORMALIZED_QUESTIONS=false` and restart. This restores current questions to the admin document; the version table is retained and can be dropped only after confirming no consumers need it.
 
 ## 3. Enable Google sign-in
 
@@ -48,12 +60,15 @@ The API must be hosted separately from the static website/admin pages (Cloudflar
 SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
 SUPABASE_ANON_KEY=YOUR_PUBLIC_PUBLISHABLE_OR_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY=YOUR_PRIVATE_SERVICE_ROLE_KEY
+SUPABASE_NORMALIZED_QUESTIONS=false
 ADMIN_ALLOWED_ORIGINS=https://YOUR_DOMAIN,https://admin.YOUR_DOMAIN
 NODE_ENV=production
 ADMIN_COOKIE_SAMESITE=None
 UPIGATEWAY_USER_TOKEN=YOUR_PRIVATE_MERCHANT_TOKEN
 PAYMENT_RETURN_URL=https://YOUR_DOMAIN/payments/return
 ```
+
+For live Supabase project-usage metrics in the admin **Assets** panel, also set `SUPABASE_PROJECT_REF` and `SUPABASE_MANAGEMENT_ACCESS_TOKEN` on this private API host. The project reference is the ID in the project's `https://<project-ref>.supabase.co` URL. Create a Supabase Management API token for an account authorized for the project, and treat it as a highly privileged secret. Keep the token server-side only; never use a `VITE_` prefix or put it in a frontend environment setting. A sample variable list is in [`server/.env.example`](../server/.env.example). If these variables are not configured, project-level database, egress, MAU, and Realtime metrics remain unavailable rather than being inferred from app traffic.
 
 Set `VITE_API_BASE_URL=https://YOUR_API_HOST/api` for both frontend builds so their requests reach this API. Include every website origin that calls the API in `ADMIN_ALLOWED_ORIGINS`, including the main site and admin site. `UPIGATEWAY_API_BASE` is optional and defaults to `https://free.upigateway.dev/api`.
 
@@ -69,7 +84,7 @@ The API also uses Supabase Auth to validate customer sessions. For local `npm ru
 
 ## What syncs
 
-After sign-in, the app imports applicable study data already in that browser and syncs solved-question attempts (which drive the study calendar and analysis), bookmarks, notebooks, profile visibility, custom-test results/progress, test-series sessions, and exam analytics. The Google account name/avatar and the editable profile name are stored in `profiles`. Public question content, admin content, theme preferences, and quiz invitation tokens are not copied as user data.
+After sign-in, the app imports applicable study data already in that browser and syncs solved-question attempts (which drive the study calendar and analysis), bookmarks, notebooks, profile visibility, custom-test results, test-series sessions, and exam analytics. Active custom tests use a separate user-owned snapshot/checkpoint table: question content is uploaded once per active test, and compact answer/time/navigation progress is checkpointed every 90 seconds and when leaving the test. The Google account name/avatar and the editable profile name are stored in `profiles`. Public question content, admin content, theme preferences, and quiz invitation tokens are not copied as user data.
 
 Data remains in the browser while signed out. On sign-out, the account-linked browser keys are cleared to avoid showing one user's records to another person using the same browser; the cloud copy is retained.
 

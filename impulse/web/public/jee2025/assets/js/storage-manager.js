@@ -15,6 +15,26 @@ const StorageManager = (function() {
     let db = null;
     let isInitialized = false;
     let initPromise = null;
+    const sessionOperations = new Map();
+
+    const queueSessionOperation = (sessionId, operation) => {
+        const previous = sessionOperations.get(sessionId) || Promise.resolve();
+        const current = previous.catch(() => undefined).then(operation);
+        sessionOperations.set(sessionId, current);
+        current.then(
+            () => {
+                if (sessionOperations.get(sessionId) === current) {
+                    sessionOperations.delete(sessionId);
+                }
+            },
+            () => {
+                if (sessionOperations.get(sessionId) === current) {
+                    sessionOperations.delete(sessionId);
+                }
+            }
+        );
+        return current;
+    };
     
     // Initialize IndexedDB
     const init = () => {
@@ -170,7 +190,7 @@ const StorageManager = (function() {
     };
     
     // Save session to IndexedDB
-    const saveSession = async (sessionId, sessionData) => {
+    const saveSession = (sessionId, sessionData) => queueSessionOperation(sessionId, async () => {
         await init();
         
         const record = {
@@ -209,7 +229,7 @@ const StorageManager = (function() {
             fallbackToLocalStorage(sessionId, sessionData);
             return false;
         }
-    };
+    });
     
     // Fallback to localStorage with chunking for large data
     const fallbackToLocalStorage = (sessionId, sessionData) => {
@@ -311,7 +331,7 @@ const StorageManager = (function() {
     };
     
     // Create checkpoint (minute-by-minute snapshot)
-    const createCheckpoint = async (sessionId, checkpointData) => {
+    const createCheckpoint = (sessionId, checkpointData) => queueSessionOperation(sessionId, async () => {
         await init();
         
         const checkpointId = `${sessionId}_${Date.now()}`;
@@ -351,7 +371,7 @@ const StorageManager = (function() {
         }
 
         return savedInIndexedDB || savedInLocalStorage ? checkpointId : null;
-    };
+    });
     
     // Get latest checkpoint
     const getLatestCheckpoint = async (sessionId) => {
@@ -393,52 +413,64 @@ const StorageManager = (function() {
     };
     
     // Clear session
-    const clearSession = async (sessionId) => {
-        await init();
-        
-        try {
-            // Clear from IndexedDB
-            if (isInitialized && db) {
-                const transaction = db.transaction([STORE_NAME, CHECKPOINT_STORE], 'readwrite');
-                transaction.objectStore(STORE_NAME).delete(sessionId);
-                
-                // Clear checkpoints
-                const cpStore = transaction.objectStore(CHECKPOINT_STORE);
-                const index = cpStore.index('sessionId');
-                const request = index.openCursor(sessionId);
-                
-                request.onsuccess = (event) => {
-                    const cursor = event.target.result;
-                    if (cursor) {
-                        cpStore.delete(cursor.value.checkpointId);
-                        cursor.continue();
-                    }
-                };
-            }
-            
-            // Clear from localStorage
-            const key = `exam_session_${sessionId}`;
-            localStorage.removeItem(key);
-            const checkpointPrefix = `${CHECKPOINT_LOCAL_PREFIX}${sessionId}_`;
-            for (let index = localStorage.length - 1; index >= 0; index--) {
-                const checkpointKey = localStorage.key(index);
-                if (checkpointKey && checkpointKey.startsWith(checkpointPrefix)) {
-                    localStorage.removeItem(checkpointKey);
-                }
-            }
-            
-            const chunks = localStorage.getItem(`${key}_chunks`);
-            if (chunks) {
-                const numChunks = parseInt(chunks);
-                for (let i = 0; i < numChunks; i++) {
-                    localStorage.removeItem(`${key}_chunk_${i}`);
-                }
-                localStorage.removeItem(`${key}_chunks`);
-            }
-        } catch (e) {
-            console.error('Failed to clear session:', e);
+    const clearSession = (sessionId) => queueSessionOperation(sessionId, async () => {
+        if (typeof sessionId !== 'string' || !sessionId) {
+            throw new Error('A valid exam session ID is required for cleanup.');
         }
-    };
+
+        await init();
+        let indexedDbError = null;
+        if (isInitialized && db) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const transaction = db.transaction([STORE_NAME, CHECKPOINT_STORE], 'readwrite');
+                    transaction.oncomplete = resolve;
+                    transaction.onerror = () => reject(
+                        transaction.error || new Error('Could not clear the exam session from IndexedDB.')
+                    );
+                    transaction.onabort = () => reject(
+                        transaction.error || new Error('Exam session cleanup was aborted.')
+                    );
+                    transaction.objectStore(STORE_NAME).delete(sessionId);
+
+                    const checkpointStore = transaction.objectStore(CHECKPOINT_STORE);
+                    const request = checkpointStore.index('sessionId').openCursor(sessionId);
+                    request.onsuccess = (event) => {
+                        const cursor = event.target.result;
+                        if (!cursor) return;
+                        checkpointStore.delete(cursor.value.checkpointId);
+                        cursor.continue();
+                    };
+                });
+            } catch (error) {
+                indexedDbError = error;
+                console.error('Failed to clear exam session from IndexedDB:', error);
+            }
+        }
+
+        const key = `exam_session_${sessionId}`;
+        localStorage.removeItem(key);
+        const checkpointPrefix = `${CHECKPOINT_LOCAL_PREFIX}${sessionId}_`;
+        for (let index = localStorage.length - 1; index >= 0; index--) {
+            const checkpointKey = localStorage.key(index);
+            if (checkpointKey && checkpointKey.startsWith(checkpointPrefix)) {
+                localStorage.removeItem(checkpointKey);
+            }
+        }
+
+        const chunks = localStorage.getItem(`${key}_chunks`);
+        if (chunks) {
+            const numChunks = parseInt(chunks, 10);
+            for (let index = 0; index < numChunks; index++) {
+                localStorage.removeItem(`${key}_chunk_${index}`);
+            }
+            localStorage.removeItem(`${key}_chunks`);
+        }
+
+        if (indexedDbError) {
+            throw indexedDbError;
+        }
+    });
     
     // Get storage quota info
     const getStorageInfo = async () => {

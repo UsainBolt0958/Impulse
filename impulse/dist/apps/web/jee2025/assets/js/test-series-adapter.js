@@ -41,21 +41,22 @@ class TestSeriesAdapter {
       ).toString().replace(/\/$/, '');
       const base = _base || '';
 
-      const loadJson = async (path) => {
-        const response = await fetch(`${base}/api${path}`, {
-          credentials: 'include',
-          cache: 'no-store',
+      const cachedLaunch = window.__testSeriesLaunchRequest;
+      const launch = cachedLaunch
+        && cachedLaunch.testId === testId
+        && cachedLaunch.seriesId === seriesId
+        ? cachedLaunch.promise
+        : fetch(
+          `${base}/api/test-launch?${new URLSearchParams({ testId, seriesId })}`,
+          { credentials: 'include', cache: 'no-store' }
+        ).then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`The server denied access to this test (${response.status}).`);
+          }
+          return response.json();
         });
-        if (!response.ok) {
-          throw new Error(`The server denied access to this test (${response.status}).`);
-        }
-        return response.json();
-      };
-      const [series, test, template] = await Promise.all([
-        loadJson(`/series/${encodeURIComponent(seriesId)}`),
-        loadJson(`/tests/${encodeURIComponent(testId)}`),
-        loadJson(`/tests/${encodeURIComponent(testId)}/template`),
-      ]);
+      const { series, test } = await launch;
+      const template = test;
 
       this.series = series;
       this.test = test;
