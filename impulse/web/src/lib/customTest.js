@@ -33,6 +33,36 @@ export function addCustomTestTimeSpent(timeSpent = {}, elapsedByQuestion = {}) {
   return updatedTimeSpent;
 }
 
+export function compactCustomTestResult(result) {
+  if (!result || !Array.isArray(result.questionResults)) return result;
+  return {
+    ...result,
+    questionResults: result.questionResults.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      if (
+        item.questionVersion
+        && typeof item.questionVersion.questionId === 'string'
+        && Number.isInteger(item.questionVersion.version)
+      ) {
+        return Object.fromEntries(Object.entries(item).filter(([key]) => (
+          !['question', 'questionText', 'explanation'].includes(key)
+        )));
+      }
+
+      const question = item.question;
+      if (!question || typeof question !== 'object') return item;
+
+      const compactItem = { ...item };
+      delete compactItem.question;
+      return {
+        ...compactItem,
+        questionText: question.question_text || question.question || question.text || '',
+        explanation: question.explanation || question.solution || '',
+      };
+    }),
+  };
+}
+
 export function calculateCustomTestResults(session, submittedAt = Date.now()) {
   const answers = session.answers || {};
   const timeSpent = session.timeSpent || {};
@@ -68,14 +98,23 @@ export function calculateCustomTestResults(session, submittedAt = Date.now()) {
     }
     totalTimeSpent += time;
 
+    const questionVersion = Number.isInteger(question.question_version)
+      && question.question_version > 0
+      ? { questionId: question.id, version: question.question_version }
+      : null;
+
     return {
       index: index + 1,
       questionId: question.id,
+      ...(questionVersion ? { questionVersion } : {}),
       subject: question.subject || 'Unspecified',
       chapter: question.chapter || 'Unspecified',
       difficulty: question.difficulty || 'Unspecified',
       questionType,
-      question,
+      ...(!questionVersion ? {
+        questionText: question.question_text || question.question || question.text || '',
+        explanation: question.explanation || question.solution || '',
+      } : {}),
       answer,
       correctAnswer,
       hasAnswer,

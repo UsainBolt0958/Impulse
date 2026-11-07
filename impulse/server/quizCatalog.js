@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 const QUIZ_CATALOG_CACHE_TTL_MS = 15_000;
+const QUIZ_CHAPTER_CACHE_MAX_ENTRIES = 100;
 
 let cachedQuizCatalog = null;
 let quizCatalogExpiresAt = 0;
@@ -8,6 +9,8 @@ let cachedQuizQuestionsByChapter = null;
 let quizQuestionsExpiresAt = 0;
 let quizCatalogVersion = 0;
 let pendingQuizIndexRequest = null;
+const cachedQuizQuestionsBySelection = new Map();
+const pendingQuizQuestionRequests = new Map();
 
 function buildPlayableQuestionIndex(questions) {
   const index = new Map();
@@ -158,6 +161,64 @@ export async function getOrLoadQuizQuestions(
   return structuredClone(index.get(key) || []);
 }
 
+export async function getOrLoadQuizQuestionsForChapter(
+  loadQuestions,
+  subject,
+  chapter,
+  requestVersion = quizCatalogVersion,
+) {
+  const key = JSON.stringify([
+    String(subject || '').trim(),
+    String(chapter || '').trim(),
+  ]);
+  if (requestVersion !== quizCatalogVersion) {
+    const questions = await loadQuestions();
+    return getPlayableQuestionsForChapter(questions, key);
+  }
+
+  const fullIndex = getCachedQuizQuestionsIfFresh(subject, chapter, requestVersion);
+  if (fullIndex) return fullIndex;
+
+  const cached = cachedQuizQuestionsBySelection.get(key);
+  if (cached && Date.now() < cached.expiresAt) {
+    return structuredClone(cached.questions);
+  }
+
+  const pending = pendingQuizQuestionRequests.get(key);
+  if (pending?.version === requestVersion) return structuredClone(await pending.promise);
+
+  const request = Promise.resolve()
+    .then(loadQuestions)
+    .then((questions) => {
+      const playableQuestions = getPlayableQuestionsForChapter(questions, key);
+      if (requestVersion === quizCatalogVersion) {
+        cachedQuizQuestionsBySelection.delete(key);
+        while (cachedQuizQuestionsBySelection.size >= QUIZ_CHAPTER_CACHE_MAX_ENTRIES) {
+          const oldestKey = cachedQuizQuestionsBySelection.keys().next().value;
+          if (oldestKey === undefined) break;
+          cachedQuizQuestionsBySelection.delete(oldestKey);
+        }
+        cachedQuizQuestionsBySelection.set(key, {
+          questions: playableQuestions,
+          expiresAt: Date.now() + QUIZ_CATALOG_CACHE_TTL_MS,
+        });
+      }
+      return playableQuestions;
+    })
+    .finally(() => {
+      if (pendingQuizQuestionRequests.get(key)?.promise === request) {
+        pendingQuizQuestionRequests.delete(key);
+      }
+    });
+  pendingQuizQuestionRequests.set(key, { version: requestVersion, promise: request });
+  return structuredClone(await request);
+}
+
+function getPlayableQuestionsForChapter(questions, key) {
+  const index = buildPlayableQuestionIndex(questions);
+  return structuredClone(index.get(key) || []);
+}
+
 function cacheAndCloneQuizCatalog(index, requestVersion) {
   const catalog = buildQuizCatalogFromIndex(index);
   if (requestVersion === quizCatalogVersion) {
@@ -222,4 +283,6 @@ export function invalidateQuizCatalogCache() {
   cachedQuizQuestionsByChapter = null;
   quizQuestionsExpiresAt = 0;
   pendingQuizIndexRequest = null;
+  cachedQuizQuestionsBySelection.clear();
+  pendingQuizQuestionRequests.clear();
 }

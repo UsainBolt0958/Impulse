@@ -1641,8 +1641,7 @@ function AdminPortalPage() {
         );
         if (!createdSeries?.id) throw new Error('Could not create the dynamic paper series.');
         series = await updateSeries(createdSeries.id, {
-          published: true,
-          publish_at: timestamp,
+          published: false,
           durationMinutes,
           meta: {
             kind: 'previous-papers',
@@ -1653,25 +1652,7 @@ function AdminPortalPage() {
             paperImportId,
           },
         });
-        if (!series?.id) throw new Error('Could not publish the dynamic paper series.');
-
-        importedTest = await createTest({
-          title: `${paper.year} - ${paper.shiftName}`,
-          seriesId: series.id,
-          durationMinutes,
-          sections: buildDynamicPaperSections(importedQuestions),
-          published: true,
-          publish_at: timestamp,
-          meta: {
-            kind: 'previous-paper',
-            paperImportId,
-            exam: paper.exam,
-            examKey,
-            year: paper.year,
-            shiftName: paper.shiftName,
-          },
-        });
-        if (!importedTest?.id) throw new Error('Could not save the imported paper to the dynamic exam engine.');
+        if (!series?.id) throw new Error('Could not prepare the dynamic paper series.');
       }
 
       const importedActivity = importedQuestions.map((question) => createActivityEntry({
@@ -1690,6 +1671,30 @@ function AdminPortalPage() {
       portalSaveAttempted = true;
       const savedPortal = await savePortalState(nextPortal);
       syncPortal(savedPortal);
+      if (addToDynamicPreviousPapers) {
+        importedTest = await createTest({
+          title: `${paper.year} - ${paper.shiftName}`,
+          seriesId: series.id,
+          durationMinutes,
+          sections: buildDynamicPaperSections(importedQuestions),
+          published: true,
+          publish_at: timestamp,
+          meta: {
+            kind: 'previous-paper',
+            paperImportId,
+            exam: paper.exam,
+            examKey,
+            year: paper.year,
+            shiftName: paper.shiftName,
+          },
+        });
+        if (!importedTest?.id) throw new Error('Could not save the imported paper to the dynamic exam engine.');
+        series = await updateSeries(series.id, {
+          published: true,
+          publish_at: timestamp,
+        });
+        if (!series?.id) throw new Error('Could not publish the imported paper series.');
+      }
       toast.success(addToDynamicPreviousPapers
         ? `Imported ${importedQuestions.length} questions and added ${paper.exam} ${paper.year}, ${paper.shiftName} to Previous Papers.`
         : `Imported ${importedQuestions.length} questions from ${paper.exam} ${paper.year}, ${paper.shiftName}.`);

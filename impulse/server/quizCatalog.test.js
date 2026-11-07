@@ -7,6 +7,7 @@ import {
   getCachedQuizQuestions,
   getOrLoadQuizCatalog,
   getOrLoadQuizQuestions,
+  getOrLoadQuizQuestionsForChapter,
   getQuizCatalogCacheVersion,
   getQuizQuestion,
   invalidateQuizCatalogCache,
@@ -42,6 +43,18 @@ describe('quiz catalog helpers', () => {
           { name: 'Waves', questionCount: 1 },
         ],
       },
+    ]);
+  });
+
+  it('builds the same catalog from the normalized minimal question projection', () => {
+    expect(buildQuizCatalog([{
+      subject: 'Physics',
+      chapter: 'Mechanics',
+      question_text: 'Question',
+      options: { A: 'A', B: 'B', C: 'C', D: 'D' },
+      correct_answer: 'A',
+    }])).toEqual([
+      { name: 'Physics', chapters: [{ name: 'Mechanics', questionCount: 1 }] },
     ]);
   });
 
@@ -153,6 +166,82 @@ describe('quiz catalog helpers', () => {
       { name: 'Physics', chapters: [{ name: 'Mechanics', questionCount: 1 }] },
     ]);
     await expect(questionsRequest).resolves.toMatchObject([{ id: 'physics-1' }]);
+  });
+
+  it('caches normalized chapter loads independently and coalesces matching requests', async () => {
+    let finishPhysicsLoad;
+    const loadPhysics = vi.fn(() => new Promise((resolve) => {
+      finishPhysicsLoad = resolve;
+    }));
+    const firstPhysicsRequest = getOrLoadQuizQuestionsForChapter(
+      loadPhysics,
+      'Physics',
+      'Mechanics',
+    );
+    const duplicatePhysicsRequest = getOrLoadQuizQuestionsForChapter(
+      loadPhysics,
+      ' Physics ',
+      'Mechanics ',
+    );
+
+    await Promise.resolve();
+    expect(loadPhysics).toHaveBeenCalledOnce();
+    finishPhysicsLoad([playableQuestion({ id: 'physics-1' })]);
+    await expect(firstPhysicsRequest).resolves.toMatchObject([{ id: 'physics-1' }]);
+    await expect(duplicatePhysicsRequest).resolves.toMatchObject([{ id: 'physics-1' }]);
+
+    const loadOptics = vi.fn(async () => [
+      playableQuestion({ id: 'physics-optics', chapter: 'Optics' }),
+    ]);
+    await expect(getOrLoadQuizQuestionsForChapter(loadOptics, 'Physics', 'Optics'))
+      .resolves.toMatchObject([{ id: 'physics-optics' }]);
+    expect(loadOptics).toHaveBeenCalledOnce();
+
+    await expect(getOrLoadQuizQuestionsForChapter(
+      vi.fn(async () => { throw new Error('cache miss'); }),
+      'Physics',
+      'Mechanics',
+    )).resolves.toMatchObject([{ id: 'physics-1' }]);
+  });
+
+  it('does not repopulate a normalized chapter cache after invalidation', async () => {
+    let finishStaleLoad;
+    const requestVersion = getQuizCatalogCacheVersion();
+    const staleRequest = getOrLoadQuizQuestionsForChapter(
+      () => new Promise((resolve) => { finishStaleLoad = resolve; }),
+      'Physics',
+      'Mechanics',
+      requestVersion,
+    );
+    await Promise.resolve();
+
+    invalidateQuizCatalogCache();
+    finishStaleLoad([playableQuestion({ id: 'stale-question' })]);
+    await expect(staleRequest).resolves.toMatchObject([{ id: 'stale-question' }]);
+
+    const reload = vi.fn(async () => [playableQuestion({ id: 'fresh-question' })]);
+    await expect(getOrLoadQuizQuestionsForChapter(reload, 'Physics', 'Mechanics'))
+      .resolves.toMatchObject([{ id: 'fresh-question' }]);
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it('bounds normalized chapter cache entries and evicts the oldest chapter', async () => {
+    const firstLoad = vi.fn(async () => [playableQuestion({ id: 'first-question' })]);
+    await getOrLoadQuizQuestionsForChapter(firstLoad, 'Physics', 'Chapter 0');
+
+    for (let index = 1; index <= 100; index += 1) {
+      await getOrLoadQuizQuestionsForChapter(
+        async () => [playableQuestion({
+          id: `question-${index}`,
+          chapter: `Chapter ${index}`,
+        })],
+        'Physics',
+        `Chapter ${index}`,
+      );
+    }
+
+    await getOrLoadQuizQuestionsForChapter(firstLoad, 'Physics', 'Chapter 0');
+    expect(firstLoad).toHaveBeenCalledTimes(2);
   });
 
   it('does not cache a cold index after invalidation', async () => {

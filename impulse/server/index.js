@@ -16,15 +16,26 @@ import {
   getSupabaseConnectionStatus,
   normalizedQuestionStorageEnabled,
   readPersistentJson,
+  readPersistentJsonItem,
+  readPersistentJsonItemsByField,
   readNormalizedCustomTestCatalogQuestions,
   readNormalizedQuestionCatalog,
   readNormalizedQuestionMetadata,
   readNormalizedQuestionPage,
+  readCurrentNormalizedQuestionVersions,
+  readNormalizedQuestionVersions,
+  readNormalizedQuizCatalogQuestions,
+  readNormalizedQuizQuestions,
   readNormalizedQuestions,
   readNormalizedQuestionsForSelection,
   storeUploadedImage,
   writePersistentJson,
 } from './persistence.js';
+import {
+  collectTestQuestionReferences,
+  compactVersionedTestQuestions,
+  hydrateVersionedTestQuestions,
+} from './versionedQuestionRefs.js';
 import {
   getOrLoadCustomTestCatalog,
   getOrLoadQuestionCatalog,
@@ -37,6 +48,7 @@ import {
 import {
   getOrLoadQuizCatalog,
   getOrLoadQuizQuestions,
+  getOrLoadQuizQuestionsForChapter,
   getQuizCatalogCacheVersion,
   invalidateQuizCatalogCache,
 } from './quizCatalog.js';
@@ -54,6 +66,7 @@ import {
 import { getSupabaseProjectMetrics } from './supabaseProjectMetrics.js';
 import {
   getOrLoadPublicCatalog,
+  getTestCountsBySeries,
   invalidatePublicCatalogCache,
   paginatePublicTestCatalog,
 } from './publicCatalog.js';
@@ -149,14 +162,58 @@ async function writeState(state) {
 }
 
 async function readJsonFile(filePath, fallback) {
-  return readPersistentJson(filePath, fallback, async () => {
-    try {
-      const raw = await readFile(filePath, 'utf8');
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
-  });
+  return readPersistentJson(filePath, fallback, () => readLocalJsonFile(filePath, fallback));
+}
+
+async function readJsonFileItem(filePath, id) {
+  return readPersistentJsonItem(filePath, id, [], () => readLocalJsonFile(filePath, []));
+}
+
+async function readJsonFileItemsByField(filePath, fieldValue, fieldName = 'seriesId') {
+  return readPersistentJsonItemsByField(
+    filePath,
+    fieldValue,
+    [],
+    () => readLocalJsonFile(filePath, []),
+    fieldName,
+  );
+}
+
+async function readLocalJsonFile(filePath, fallback) {
+  try {
+    const raw = await readFile(filePath, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function getTestQuestionEntries(test) {
+  return (test?.sections || []).flatMap((section) => (
+    Array.isArray(section?.questions) ? section.questions : []
+  ));
+}
+
+async function compactVersionedTest(test) {
+  const questions = getTestQuestionEntries(test);
+  const canCreateReferences = normalizedQuestionStorageEnabled();
+  const questionIds = canCreateReferences ? [...new Set(questions
+    .filter((question) => !question?.questionRef && typeof question?.id === 'string')
+    .map((question) => question.id))] : [];
+  const references = collectTestQuestionReferences(test);
+  if (!canCreateReferences && references.length === 0) return test;
+  const [currentRows, referencedRows] = await Promise.all([
+    questionIds.length ? readCurrentNormalizedQuestionVersions(questionIds) : [],
+    references.length ? readNormalizedQuestionVersions(references) : [],
+  ]);
+  return compactVersionedTestQuestions(test, currentRows, referencedRows);
+}
+
+async function hydrateVersionedTests(tests) {
+  const references = tests.flatMap(collectTestQuestionReferences);
+  if (references.length === 0) return tests;
+  const rows = await readNormalizedQuestionVersions(references);
+  return tests.map((test) => hydrateVersionedTestQuestions(test, rows));
 }
 
 async function writeJsonFile(filePath, data) {
@@ -980,6 +1037,71 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/questions/versions' && request.method === 'POST') {
+    const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+    let user;
+    try {
+      user = await verifyCustomerAccessToken(accessToken);
+    } catch (error) {
+      console.error('Could not verify access to historical question versions.', error);
+      sendJson(response, 503, { error: 'Question version access is temporarily unavailable.' });
+      return;
+    }
+    if (!user) {
+      sendJson(response, 401, { error: 'Sign in to review saved question versions.' });
+      return;
+    }
+
+    let body;
+    try {
+      body = await readRequestBody(request, 64 * 1024);
+    } catch (error) {
+      sendJson(response, error?.statusCode || 400, { error: error.message });
+      return;
+    }
+
+    const references = body?.references;
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body)
+      || !Array.isArray(references) || references.length < 1 || references.length > 200
+      || references.some((reference) => (
+        !reference || typeof reference.questionId !== 'string'
+        || !reference.questionId.trim() || reference.questionId.length > 500
+        || !Number.isInteger(reference.version) || reference.version < 1
+      ))
+    ) {
+      sendJson(response, 400, { error: 'Provide between 1 and 200 valid question version references.' });
+      return;
+    }
+    const uniqueReferences = [...new Map(references.map((reference) => [
+      `${reference.questionId}:${reference.version}`,
+      reference,
+    ])).values()];
+    const rows = await readNormalizedQuestionVersions(uniqueReferences);
+    const found = new Set(rows
+      .filter((row) => row.content?.id === row.question_id)
+      .map((row) => `${row.question_id}:${row.version}`));
+    const missing = uniqueReferences.filter((reference) => (
+      !found.has(`${reference.questionId}:${reference.version}`)
+    ));
+    if (missing.length > 0) {
+      sendJson(response, 503, { error: 'One or more saved question versions are unavailable.' });
+      return;
+    }
+    response.setHeader('Cache-Control', 'private, no-store');
+    sendJson(response, 200, {
+      questions: rows.map((row) => ({
+        questionId: row.question_id,
+        version: row.version,
+        content: {
+          question_text: row.content.question_text || row.content.question || row.content.text || '',
+          explanation: row.content.explanation || row.content.solution || '',
+        },
+      })),
+    });
+    return;
+  }
+
   if (url.pathname === '/api/questions/catalog' && request.method === 'GET') {
     const exam = url.searchParams.get('exam')?.trim();
     const subject = url.searchParams.get('subject')?.trim();
@@ -1040,7 +1162,9 @@ async function handleRequest(request, response) {
   if (url.pathname === '/api/quiz/catalog' && request.method === 'GET') {
     const cacheVersion = getQuizCatalogCacheVersion();
     const subjects = await getOrLoadQuizCatalog(async () => {
-      return readQuestions();
+      return normalizedQuestionStorageEnabled()
+        ? readNormalizedQuizCatalogQuestions()
+        : readQuestions();
     }, cacheVersion);
     sendJson(response, 200, { subjects });
     return;
@@ -1078,12 +1202,19 @@ async function handleRequest(request, response) {
       }
 
       const cacheVersion = getQuizCatalogCacheVersion();
-      const availableQuestions = await getOrLoadQuizQuestions(
-        readQuestions,
-        subject,
-        chapter,
-        cacheVersion,
-      );
+      const availableQuestions = normalizedQuestionStorageEnabled()
+        ? await getOrLoadQuizQuestionsForChapter(
+          () => readNormalizedQuizQuestions(subject, chapter),
+          subject,
+          chapter,
+          cacheVersion,
+        )
+        : await getOrLoadQuizQuestions(
+          readQuestions,
+          subject,
+          chapter,
+          cacheVersion,
+        );
       if (availableQuestions.length < questionCount) {
         sendJson(response, 400, { error: `Only ${availableQuestions.length} playable question(s) are available for this chapter.` });
         return;
@@ -1296,11 +1427,25 @@ async function handleRequest(request, response) {
       sendJson(response, 401, { error: 'Unauthorized' });
       return;
     }
+    if (!includeAll && !isAdmin) {
+      const catalog = await getOrLoadPublicCatalog('public-series-list', async () => {
+        const series = await readJsonFile(SERIES_FILE, []);
+        return {
+          series: series
+            .filter((item) => item.published)
+            .map(publicSeriesSummary),
+        };
+      });
+      sendJson(response, 200, catalog);
+      return;
+    }
+
     const series = await readJsonFile(SERIES_FILE, []);
     const tests = await readJsonFile(TESTS_FILE, []);
+    const testCounts = getTestCountsBySeries(tests);
     const enriched = series.map((item) => ({
       ...item,
-      testCount: tests.filter((t) => t.seriesId === item.id).length,
+      testCount: testCounts.get(item.id) || 0,
     }));
     sendJson(response, 200, {
       series: includeAll
@@ -1319,6 +1464,7 @@ async function handleRequest(request, response) {
     }
     const series = await readJsonFile(SERIES_FILE, []);
     const tests = await readJsonFile(TESTS_FILE, []);
+    const testCounts = getTestCountsBySeries(tests);
     const item = series.find(s => s.id === seriesId);
     if (!item) { sendJson(response, 404, { error: 'Series not found' }); return; }
     if (!item.published && !isAdminRequest(request)) {
@@ -1332,7 +1478,7 @@ async function handleRequest(request, response) {
     
     const enriched = {
       ...item,
-      testCount: tests.filter((t) => t.seriesId === item.id).length,
+      testCount: testCounts.get(item.id) || 0,
     };
     sendJson(response, 200, isAdminRequest(request) ? enriched : publicSeriesSummary(enriched));
     return;
@@ -1433,13 +1579,13 @@ async function handleRequest(request, response) {
             const newId = `test-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
             updated.id = newId;
             updated.created_at = new Date().toISOString();
-            tests.unshift(updated);
+            tests.unshift(await compactVersionedTest(updated));
             await writeJsonFile(TESTS_FILE, tests);
             sendJson(response, 200, updated);
             return;
           }
 
-          tests[idx] = updated;
+          tests[idx] = await compactVersionedTest(updated);
           await writeJsonFile(TESTS_FILE, tests);
           sendJson(response, 200, updated);
           return;
@@ -1453,7 +1599,7 @@ async function handleRequest(request, response) {
         durationSec = body.durationMinutes * 60;
       }
       const next = { id, title: body.title || 'Untitled Test', seriesId: body.seriesId || null, sections: body.sections || [], durationSec: durationSec, durationMinutes: body.durationMinutes || undefined, published: body.published || false, publish_at: body.publish_at || null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), meta: body.meta || {} };
-      tests.unshift(next);
+      tests.unshift(await compactVersionedTest(next));
       await writeJsonFile(TESTS_FILE, tests);
       sendJson(response, 200, next);
     } catch (e) {
@@ -1466,8 +1612,7 @@ async function handleRequest(request, response) {
   // Engine: get test template (public)
   if (url.pathname.startsWith('/api/tests/') && url.pathname.endsWith('/template') && request.method === 'GET') {
     const id = url.pathname.replace('/api/tests/', '').replace('/template', '');
-    const tests = await readJsonFile(TESTS_FILE, []);
-    const test = tests.find(t => t.id === id);
+    const test = await readJsonFileItem(TESTS_FILE, id);
     if (!test) { sendJson(response, 404, { error: 'Not found' }); return; }
     if (!test.published && !isAdminRequest(request)) {
       sendJson(response, 404, { error: 'Not found' });
@@ -1477,7 +1622,7 @@ async function handleRequest(request, response) {
       sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
       return;
     }
-    sendJson(response, 200, test);
+    sendJson(response, 200, (await hydrateVersionedTests([test]))[0]);
     return;
   }
 
@@ -1700,17 +1845,17 @@ async function handleRequest(request, response) {
 
     const summaryCacheKey = JSON.stringify(['summary', seriesId, testId]);
     const summary = await getOrLoadPublicCatalog(summaryCacheKey, async () => {
-      const [series, tests] = await Promise.all([
-        readJsonFile(SERIES_FILE, []),
-        readJsonFile(TESTS_FILE, []),
+      const [selectedSeries, selectedTest] = await Promise.all([
+        readJsonFileItem(SERIES_FILE, seriesId),
+        readJsonFileItem(TESTS_FILE, testId),
       ]);
-      const selectedSeries = series.find((item) => item.id === seriesId && item.published);
-      const selectedTest = tests.find((item) => (
-        item.id === testId
-        && item.seriesId === seriesId
-        && item.published
-      ));
-      if (!selectedSeries || !selectedTest) {
+      if (
+        !selectedSeries
+        || !selectedTest
+        || !selectedSeries.published
+        || selectedTest.seriesId !== seriesId
+        || !selectedTest.published
+      ) {
         const error = new Error('Test series test not found.');
         error.statusCode = 404;
         throw error;
@@ -1733,17 +1878,17 @@ async function handleRequest(request, response) {
       return;
     }
 
-    const [series, tests] = await Promise.all([
-      readJsonFile(SERIES_FILE, []),
-      readJsonFile(TESTS_FILE, []),
+    const [selectedSeries, selectedTest] = await Promise.all([
+      readJsonFileItem(SERIES_FILE, seriesId),
+      readJsonFileItem(TESTS_FILE, testId),
     ]);
-    const selectedSeries = series.find((item) => item.id === seriesId && item.published);
-    const selectedTest = tests.find((item) => (
-      item.id === testId
-      && item.seriesId === seriesId
-      && item.published
-    ));
-    if (!selectedSeries || !selectedTest) {
+    if (
+      !selectedSeries
+      || !selectedTest
+      || !selectedSeries.published
+      || selectedTest.seriesId !== seriesId
+      || !selectedTest.published
+    ) {
       sendJson(response, 404, { error: 'Test series test not found.' });
       return;
     }
@@ -1755,7 +1900,7 @@ async function handleRequest(request, response) {
     response.setHeader('Cache-Control', 'private, no-store');
     sendJson(response, 200, {
       series: publicSeriesSummary(selectedSeries),
-      test: selectedTest,
+      test: (await hydrateVersionedTests([selectedTest]))[0],
     });
     return;
   }
@@ -1770,7 +1915,7 @@ async function handleRequest(request, response) {
     }
     if (includeAll || isAdmin) {
       const tests = await readJsonFile(TESTS_FILE, []);
-      sendJson(response, 200, { tests });
+      sendJson(response, 200, { tests: await hydrateVersionedTests(tests) });
       return;
     }
 
@@ -1791,8 +1936,7 @@ async function handleRequest(request, response) {
       sendJson(response, 400, { error: 'Invalid test id' });
       return;
     }
-    const tests = await readJsonFile(TESTS_FILE, []);
-    const test = tests.find(t => t.id === id);
+    const test = await readJsonFileItem(TESTS_FILE, id);
     if (!test) { sendJson(response, 404, { error: 'Test not found' }); return; }
     if (!test.published && !isAdminRequest(request)) {
       sendJson(response, 404, { error: 'Test not found' });
@@ -1802,7 +1946,7 @@ async function handleRequest(request, response) {
       sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
       return;
     }
-    sendJson(response, 200, test);
+    sendJson(response, 200, (await hydrateVersionedTests([test]))[0]);
     return;
   }
 
@@ -1828,7 +1972,7 @@ async function handleRequest(request, response) {
         updated_at: new Date().toISOString(),
       };
 
-      tests[idx] = updated;
+      tests[idx] = await compactVersionedTest(updated);
       await writeJsonFile(TESTS_FILE, tests);
       sendJson(response, 200, updated);
     } catch (e) {
@@ -1861,9 +2005,8 @@ async function handleRequest(request, response) {
     const seriesId = url.pathname.split('/api/series/')[1].split('/')[0];
     if (!seriesId) { sendJson(response, 400, { error: 'Invalid series id' }); return; }
 
-    const tests = await readJsonFile(TESTS_FILE, []);
-    const seriesTests = tests.filter(t => t.seriesId === seriesId);
-    sendJson(response, 200, { tests: seriesTests });
+    const seriesTests = await readJsonFileItemsByField(TESTS_FILE, seriesId);
+    sendJson(response, 200, { tests: await hydrateVersionedTests(seriesTests) });
     return;
   }
 
