@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 process.env.SUPABASE_URL = 'https://project.supabase.co';
@@ -8,8 +10,15 @@ const {
   getPersistentStorageUsage,
   normalizedQuestionStorageEnabled,
   readPersistentJson,
+  readPersistentJsonItem,
+  readPersistentJsonItemsByField,
   readNormalizedQuestionPage,
+  readCurrentNormalizedQuestionVersions,
+  readNormalizedQuestionVersions,
+  readNormalizedQuizCatalogQuestions,
+  readNormalizedQuizQuestions,
   readNormalizedQuestions,
+  readNormalizedQuestionsForSelection,
   storeUploadedImage,
   writePersistentJson,
 } = await import('./persistence.js');
@@ -19,6 +28,37 @@ afterEach(() => {
 });
 
 describe('persistent admin storage', () => {
+  it('avoids rewriting already-compacted test documents when the SQL is rerun', async () => {
+    const migration = await readFile(
+      fileURLToPath(new URL('../supabase/compact_test_solutions.sql', import.meta.url)),
+      'utf8',
+    );
+
+    expect(migration).toMatch(/p_in_question\s+and\s+v_key = 'explanation'/i);
+    expect(migration).toMatch(/p_in_question or v_key = 'questions'/i);
+    expect(migration).toMatch(/security definer[\s\S]*?compact_duplicate_solution_aliases_recursive\(p_value, false\)/i);
+    expect(migration).toMatch(/with compacted as materialized/i);
+    expect(migration).toMatch(/begin;[\s\S]*?for update[\s\S]*?tests\.json is missing from admin_content/i);
+    expect(migration).toMatch(/tests\.json must be a json array[\s\S]*?tests\.json compaction verification failed[\s\S]*?commit;/i);
+    expect(migration).toMatch(/content is distinct from public\.compact_duplicate_solution_aliases\(content\)/i);
+    expect(migration).toMatch(/document\.content is distinct from compacted\.content/i);
+    expect(migration).toMatch(/where key = 'tests\.json'[\s\S]*?jsonb_typeof\(content\) = 'array'/i);
+  });
+
+  it('keeps normalized question ordering unique while allowing admin reorders', async () => {
+    const migration = await readFile(
+      fileURLToPath(new URL('../supabase/normalized_question_storage.sql', import.meta.url)),
+      'utf8',
+    );
+
+    expect(migration).toMatch(/position bigint not null check \(position >= 0\)/);
+    expect(migration).toMatch(/create unique index if not exists question_versions_current_position[\s\S]*?where is_current;/);
+    expect(migration).toMatch(/pg_advisory_xact_lock\(hashtextextended\('admin-state-question-versions', 0\)\)/);
+    expect(migration).toMatch(/max\(position\) filter \(where is_current\)/);
+    expect(migration).toMatch(/set position = position \+ v_position_offset[\s\S]*?for v_question, v_position in/);
+    expect(migration).toMatch(/if v_reorder_positions and exists[\s\S]*?position <> v_position/);
+  });
+
   it('uses normalized question storage only when explicitly enabled', () => {
     const previous = process.env.SUPABASE_NORMALIZED_QUESTIONS;
     delete process.env.SUPABASE_NORMALIZED_QUESTIONS;
@@ -68,8 +108,13 @@ describe('persistent admin storage', () => {
           { id: 'q-1', solution: 'same', explanation: 'same' },
           { id: 'q-2', solution: 'solution', explanation: 'different' },
           { id: 'q-3', explanation: 'no solution' },
+          {
+            id: 'q-4',
+            parts: [{ solution: 'nested', explanation: 'nested' }],
+          },
         ],
       }],
+      metadata: { solution: 'metadata only' },
     }];
     const expectedTests = [{
       id: 'test-1',
@@ -78,8 +123,13 @@ describe('persistent admin storage', () => {
           { id: 'q-1', solution: 'same' },
           { id: 'q-2', solution: 'solution', explanation: 'different' },
           { id: 'q-3', explanation: 'no solution' },
+          {
+            id: 'q-4',
+            parts: [{ solution: 'nested' }],
+          },
         ],
       }],
+      metadata: { solution: 'metadata only' },
     }];
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([{ content: storedTests }]), { status: 200 }))
@@ -94,12 +144,31 @@ describe('persistent admin storage', () => {
             { id: 'q-1', solution: 'same', explanation: 'same' },
             { id: 'q-2', solution: 'solution', explanation: 'different' },
             { id: 'q-3', explanation: 'no solution' },
+            {
+              id: 'q-4',
+              parts: [{ solution: 'nested', explanation: 'nested' }],
+            },
           ],
         }],
+        metadata: { solution: 'metadata only' },
       }]);
 
     await writePersistentJson('server/data/tests.json', expectedTests, vi.fn());
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).content).toEqual(expectedTests);
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).content).toEqual([{
+      id: 'test-1',
+      sections: [{
+        questions: [
+          { id: 'q-1', solution: 'same' },
+          { id: 'q-2', solution: 'solution', explanation: 'different' },
+          { id: 'q-3', explanation: 'no solution' },
+          {
+            id: 'q-4',
+            parts: [{ solution: 'nested' }],
+          },
+        ],
+      }],
+      metadata: { solution: 'metadata only' },
+    }]);
     await expect(readPersistentJson('server/data/tests.json', [], vi.fn()))
       .resolves.toEqual([{
         id: 'test-1',
@@ -108,8 +177,13 @@ describe('persistent admin storage', () => {
             { id: 'q-1', solution: 'same', explanation: 'same' },
             { id: 'q-2', solution: 'solution', explanation: 'different' },
             { id: 'q-3', explanation: 'no solution' },
+            {
+              id: 'q-4',
+              parts: [{ solution: 'nested', explanation: 'nested' }],
+            },
           ],
         }],
+        metadata: { solution: 'metadata only' },
       }]);
   });
 
@@ -198,6 +272,79 @@ describe('persistent admin storage', () => {
     ]);
   });
 
+  it('loads exact immutable question versions by question ID and version', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { question_id: 'question-1', version: 3, content: { id: 'question-1' } },
+    ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readNormalizedQuestionVersions([
+      { questionId: 'question-1', version: 3 },
+      { questionId: 'question-2', version: 3 },
+    ])).resolves.toEqual([
+      { question_id: 'question-1', version: 3, content: { id: 'question-1' } },
+    ]);
+
+    const requestUrl = new URL(fetchMock.mock.calls[0][0]);
+    expect(requestUrl.searchParams.get('select')).toBe('question_id,version,content');
+    expect(requestUrl.searchParams.get('version')).toBe('eq.3');
+    expect(requestUrl.searchParams.get('question_id')).toBe('in.("question-1","question-2")');
+  });
+
+  it('loads current immutable versions for selected test questions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { question_id: 'question-1', version: 2, content: { id: 'question-1' } },
+    ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readCurrentNormalizedQuestionVersions(['question-1', 'question-1']))
+      .resolves.toEqual([
+        { question_id: 'question-1', version: 2, content: { id: 'question-1' } },
+      ]);
+    expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('is_current')).toBe('eq.true');
+  });
+
+  it('includes the immutable version number with selected custom-test questions', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { version: 5, content: { id: 'question-1', question_text: 'Prompt' } },
+    ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readNormalizedQuestionsForSelection({
+      exam: 'JEE MAINS',
+      subjects: ['Physics'],
+      chapters: ['Mechanics'],
+      years: ['2025'],
+      difficulty: 'easy',
+    })).resolves.toEqual([{
+      id: 'question-1',
+      question_text: 'Prompt',
+      question_version: 5,
+    }]);
+  });
+
+  it('validates versioned-reference migration ordering and keeps unmatched snapshots', async () => {
+    const migration = await readFile(
+      fileURLToPath(new URL('../supabase/version_test_question_references.sql', import.meta.url)),
+      'utf8',
+    );
+    const rollback = await readFile(
+      fileURLToPath(new URL('../supabase/restore_test_question_snapshots.sql', import.meta.url)),
+      'utf8',
+    );
+
+    expect(migration).toMatch(/question_versions is missing; run normalized_question_storage\.sql first/i);
+    expect(migration).toMatch(/question_version_matches_test_question/);
+    expect(migration).toMatch(/p_question \? 'questionRef'[\s\S]*?return p_question/i);
+    expect(migration).toMatch(/storage_key = 'impulse_custom_test_results'[\s\S]*?value is distinct from/i);
+    expect(migration).toMatch(/v_version\.content->>'id' = v_question_id/);
+    expect(migration).toMatch(/begin;[\s\S]*?commit;/i);
+    expect(rollback).toMatch(/restore_test_question_version_snapshot/);
+    expect(rollback).toMatch(/restore_test_result_question_snapshot/);
+    expect(rollback).toMatch(/Test question snapshot rollback verification failed/);
+    expect(rollback).not.toMatch(/drop table public\.question_versions/i);
+  });
+
   it('returns an indexed question page and exact total from Supabase', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(
       JSON.stringify([{ content: { id: 'q-2' } }]),
@@ -228,6 +375,55 @@ describe('persistent admin storage', () => {
     expect(options.headers.Prefer).toBe('count=exact');
   });
 
+  it('loads only the requested normalized quiz chapter in position order', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      { content: { id: 'question-1' } },
+      { content: { id: 'question-2' } },
+    ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readNormalizedQuizQuestions(' Physics ', 'Mechanics ')).resolves.toEqual([
+      { id: 'question-1' },
+      { id: 'question-2' },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [url, options] = fetchMock.mock.calls[0];
+    const query = new URL(url).searchParams;
+    expect(query.get('is_current')).toBe('eq.true');
+    expect(query.get('subject')).toBe('eq.Physics');
+    expect(query.get('chapter')).toBe('eq.Mechanics');
+    expect(query.get('order')).toBe('position.asc');
+    expect(options.headers.Range).toBe('0-999');
+  });
+
+  it('loads only quiz catalog fields from normalized question rows', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      {
+        subject: 'Physics',
+        chapter: 'Mechanics',
+        options: { A: 'A', B: 'B', C: 'C', D: 'D' },
+        correct_answer: 'A',
+        question_text: 'Question',
+        question: null,
+      },
+    ]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(readNormalizedQuizCatalogQuestions()).resolves.toMatchObject([
+      { subject: 'Physics', chapter: 'Mechanics', question_text: 'Question' },
+    ]);
+
+    const [url, options] = fetchMock.mock.calls[0];
+    const query = new URL(url).searchParams;
+    expect(query.get('select')).toBe(
+      'subject,chapter,options,correct_answer,question_text:content->>question_text,question:content->>question',
+    );
+    expect(query.get('is_current')).toBe('eq.true');
+    expect(query.get('order')).toBe('position.asc');
+    expect(options.headers.Range).toBe('0-999');
+  });
+
   it('uses the successful write to refresh the cached document', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([{ content: [{ id: 'old' }] }]), { status: 200 }))
@@ -240,6 +436,54 @@ describe('persistent admin storage', () => {
     await expect(readPersistentJson('server/data/series.json', [], localRead))
       .resolves.toEqual([{ id: 'new' }]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('indexes collection items briefly, returns isolated rows, and invalidates after writes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await writePersistentJson('server/data/series.json', [
+      { id: 'series-1', title: 'Original' },
+      { id: 'series-1', title: 'Duplicate' },
+    ], vi.fn());
+    fetchMock.mockClear();
+
+    const first = await readPersistentJsonItem('server/data/series.json', 'series-1', [], vi.fn());
+    first.title = 'Mutated';
+    await expect(readPersistentJsonItem('server/data/series.json', 'series-1', [], vi.fn()))
+      .resolves.toEqual({ id: 'series-1', title: 'Original' });
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await writePersistentJson('server/data/series.json', [
+      { id: 'series-1', title: 'Updated' },
+    ], vi.fn());
+    await expect(readPersistentJsonItem('server/data/series.json', 'series-1', [], vi.fn()))
+      .resolves.toEqual({ id: 'series-1', title: 'Updated' });
+  });
+
+  it('indexes collection groups by field and invalidates grouped reads after writes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await writePersistentJson('server/data/tests.json', [
+      { id: 'test-1', seriesId: 'series-1' },
+      { id: 'test-2', seriesId: 'series-1' },
+      { id: 'test-3', seriesId: 'series-2' },
+    ], vi.fn());
+    fetchMock.mockClear();
+
+    const first = await readPersistentJsonItemsByField('server/data/tests.json', 'series-1', [], vi.fn());
+    first[0].id = 'mutated';
+    await expect(readPersistentJsonItemsByField('server/data/tests.json', 'series-1', [], vi.fn()))
+      .resolves.toEqual([
+        { id: 'test-1', seriesId: 'series-1' },
+        { id: 'test-2', seriesId: 'series-1' },
+      ]);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await writePersistentJson('server/data/tests.json', [
+      { id: 'test-4', seriesId: 'series-1' },
+    ], vi.fn());
+    await expect(readPersistentJsonItemsByField('server/data/tests.json', 'series-1', [], vi.fn()))
+      .resolves.toEqual([{ id: 'test-4', seriesId: 'series-1' }]);
   });
 
   it('does not retain a large document in the process cache', async () => {

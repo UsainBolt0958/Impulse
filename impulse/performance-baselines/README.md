@@ -11,3 +11,5 @@ Remove-Item Env:\BASELINE_OUTPUT
 The script performs unauthenticated GET requests only. It does not sign in, modify data, start exams, or initiate payment. It checks frontend HTML/assets and public API endpoints, records three timing/size samples by default (up to five), summarizes numeric question metadata, and checks whether paging/filtering changes the question result. Set `STAGING_SITE_URL`, `STAGING_API_URL`, or `BASELINE_ROUNDS` to override the defaults.
 
 The file [`staging-2026-11-06.md`](./staging-2026-11-06.md) records the current browser and API findings. The raw machine-readable run is [`staging-2026-11-06.json`](./staging-2026-11-06.json).
+
+For the append-only solved-attempt rollout, use [`database-optimization-baseline-2026-11-06.md`](./database-optimization-baseline-2026-11-06.md) and its five-round pre-change data [`staging-pre-next-optimization-2026-11-06.json`](./staging-pre-next-optimization-2026-11-06.json). The report includes read-only Supabase size queries and the staging verification/rollback sequence. It explicitly separates request-write savings from database-size changes.

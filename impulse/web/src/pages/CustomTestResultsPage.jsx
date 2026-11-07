@@ -34,6 +34,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { CUSTOM_TEST_RESULTS_KEY } from '@/lib/customTest';
+import { loadQuestionVersions } from '@/lib/portalServer';
 
 const PIE_COLORS = ['#10b981', '#f59e0b', '#cbd5e1'];
 
@@ -85,8 +86,51 @@ function buildBreakdown(results, key) {
 function CustomTestResultsPage() {
   const { resultId } = useParams();
   const [section, setSection] = React.useState('overview');
+  const [versionedQuestionContent, setVersionedQuestionContent] = React.useState({});
+  const [questionContentError, setQuestionContentError] = React.useState('');
+  const [questionContentLoading, setQuestionContentLoading] = React.useState(false);
   const results = useMemo(() => readResults(), []);
   const result = results.find((item) => item.id === decodeURIComponent(resultId || ''));
+  React.useEffect(() => {
+    if (section !== 'questions') return undefined;
+    const references = (result?.questionResults || [])
+      .map((item) => item?.questionVersion)
+      .filter((reference) => (
+        reference
+        && typeof reference.questionId === 'string'
+        && Number.isInteger(reference.version)
+        && reference.version > 0
+      ));
+    if (references.length === 0) return undefined;
+
+    let active = true;
+    setQuestionContentLoading(true);
+    setQuestionContentError('');
+    loadQuestionVersions(references)
+      .then((questions) => {
+        if (!active) return;
+        setVersionedQuestionContent(Object.fromEntries(questions.map((question) => [
+          `${question.questionId}:${question.version}`,
+          question.content,
+        ])));
+      })
+      .catch((error) => {
+        console.error('Could not load question versions for custom-test review.', error);
+        if (active) setQuestionContentError('Some question review details could not be loaded. Please try again later.');
+      })
+      .finally(() => {
+        if (active) setQuestionContentLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [result, section]);
+  const getVersionedQuestion = (item) => {
+    const reference = item?.questionVersion;
+    if (!reference) return null;
+    return versionedQuestionContent[`${reference.questionId}:${reference.version}`] || null;
+  };
   const subjectBreakdown = useMemo(
     () => buildBreakdown(result?.questionResults || [], 'subject'),
     [result],
@@ -397,7 +441,20 @@ function CustomTestResultsPage() {
                         <span className="tabular-nums">{item.timeSpent}s</span>
                       </div>
                     </div>
-                    <div className="mt-4 text-sm leading-7"><RichText>{item.question.question_text || item.question.text || 'Question text is unavailable.'}</RichText></div>
+                    <div className="mt-4 text-sm leading-7">
+                      <RichText>
+                        {item.questionText
+                          ?? getVersionedQuestion(item)?.question_text
+                          ?? getVersionedQuestion(item)?.question
+                          ?? item.question?.question_text
+                          ?? item.question?.question
+                          ?? item.question?.text
+                          ?? 'Question text is unavailable.'}
+                      </RichText>
+                    </div>
+                    {item.questionVersion && !getVersionedQuestion(item) && questionContentLoading && (
+                      <p className="mt-2 text-xs text-muted-foreground">Loading saved question version...</p>
+                    )}
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl bg-secondary/40 p-3 text-sm">
                         <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Your answer</div>
@@ -408,11 +465,24 @@ function CustomTestResultsPage() {
                         <div className="mt-1 font-bold">{String(item.correctAnswer)}</div>
                       </div>
                     </div>
-                    {item.question.explanation && (
+                    {(item.explanation
+                      || getVersionedQuestion(item)?.explanation
+                      || getVersionedQuestion(item)?.solution
+                      || item.question?.explanation
+                      || item.question?.solution) && (
                       <div className="mt-4 rounded-2xl border border-border p-4">
                         <div className="mb-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Explanation</div>
-                        <RichText>{item.question.explanation}</RichText>
+                        <RichText>
+                          {item.explanation
+                            || getVersionedQuestion(item)?.explanation
+                            || getVersionedQuestion(item)?.solution
+                            || item.question?.explanation
+                            || item.question?.solution}
+                        </RichText>
                       </div>
+                    )}
+                    {item.questionVersion && !getVersionedQuestion(item) && questionContentError && (
+                      <p className="mt-3 text-xs text-destructive">{questionContentError}</p>
                     )}
                     {(result.bookmarked || []).includes(item.questionId) && (
                       <div className="mt-3 flex items-center gap-1 text-xs font-bold text-primary"><Bookmark className="h-3.5 w-3.5" /> Bookmarked during test</div>

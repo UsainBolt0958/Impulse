@@ -36,6 +36,7 @@ import {
 import {
   addCustomTestTimeSpent,
   calculateCustomTestResults,
+  compactCustomTestResult,
   CUSTOM_TEST_RESULTS_KEY,
   CUSTOM_TEST_SESSION_KEY,
   getQuestionType,
@@ -220,16 +221,20 @@ function CustomTestExamPage() {
     sessionRef.current = currentSession;
     isSubmittedRef.current = true;
     const submittedAt = Date.now();
-    const result = {
+    const result = compactCustomTestResult({
       ...calculateCustomTestResults(currentSession, submittedAt),
       markedForReview: currentSession.markedForReview || [],
       bookmarked: currentSession.bookmarked || [],
-    };
+    });
 
     try {
       const storedResults = JSON.parse(window.localStorage.getItem(CUSTOM_TEST_RESULTS_KEY) || '[]');
       const results = Array.isArray(storedResults) ? storedResults : [];
-      window.localStorage.setItem(CUSTOM_TEST_RESULTS_KEY, JSON.stringify([result, ...results].slice(0, 50)));
+      const compactedResults = results.map(compactCustomTestResult);
+      window.localStorage.setItem(
+        CUSTOM_TEST_RESULTS_KEY,
+        JSON.stringify([result, ...compactedResults].slice(0, 50)),
+      );
       const attemptTimestamp = new Date(result.submittedAt).toISOString();
       appendSolvedQuestionAttempts(result.questionResults
         .filter((questionResult) => questionResult.hasAnswer)

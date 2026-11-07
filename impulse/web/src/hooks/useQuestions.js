@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { loadPublicQuestionsFromServer } from '@/lib/portalServer';
 
 export function useQuestions() {
@@ -46,19 +46,31 @@ export function useQuestions() {
       return true;
     }), [questions, filters]);
 
-  const getQuestionById = (id) => {
-    return questions.find(q => q.id === id);
-  };
+  const questionsById = useMemo(() => {
+    const index = new Map();
+    questions.forEach((question) => {
+      if (!index.has(question.id)) index.set(question.id, question);
+    });
+    return index;
+  }, [questions]);
+  const uniqueValuesByField = useMemo(() => new Map(), [questions]);
 
-  const getUniqueValues = (field) => {
-    return [...new Set(questions.map(q => q[field]))].sort();
-  };
+  const getQuestionById = useCallback(
+    (id) => questionsById.get(id),
+    [questionsById],
+  );
+  const getUniqueValues = useCallback((field) => {
+    if (!uniqueValuesByField.has(field)) {
+      uniqueValuesByField.set(field, [...new Set(questions.map(q => q[field]))].sort());
+    }
+    return [...uniqueValuesByField.get(field)];
+  }, [questions, uniqueValuesByField]);
 
-  const updateFilters = (newFilters) => {
+  const updateFilters = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
-  };
+  }, []);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
       exam: [],
       difficulty: [],
@@ -66,7 +78,7 @@ export function useQuestions() {
       subject: [],
       year: []
     });
-  };
+  }, []);
 
   return {
     questions,

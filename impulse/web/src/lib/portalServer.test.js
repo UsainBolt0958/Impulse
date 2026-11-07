@@ -8,6 +8,7 @@ let loadPublicQuestionCatalog;
 let loadPublicQuestionMetadata;
 let loadPublicQuestionsPage;
 let loadPublicQuestionsFromServer;
+let loadQuestionVersions;
 let loadPublicSeries;
 let loadPublicTestCatalog;
 let loadPublicTestSummary;
@@ -46,6 +47,7 @@ beforeEach(async () => {
     loadPublicQuestionMetadata,
     loadPublicQuestionsPage,
     loadPublicQuestionsFromServer,
+    loadQuestionVersions,
     loadPublicSeries,
     loadPublicTestCatalog,
     loadPublicTestSummary,
@@ -67,6 +69,42 @@ afterEach(() => {
 });
 
 describe('portal server requests', () => {
+  it('loads pinned question versions in one request for scorecard review', async () => {
+    const references = [{ questionId: 'question-1', version: 3 }];
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      questions: [{
+        questionId: 'question-1',
+        version: 3,
+        content: { question_text: 'Prompt' },
+      }],
+    }), { status: 200 }));
+
+    await expect(loadQuestionVersions(references)).resolves.toEqual([{
+      questionId: 'question-1',
+      version: 3,
+      content: { question_text: 'Prompt' },
+    }]);
+    expect(fetchMock.mock.calls[0][0]).toContain('/questions/versions');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ references });
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer test-access-token');
+  });
+
+  it('batches large scorecards within the API request limit', async () => {
+    fetchMock.mockImplementation(async () => (
+      new Response(JSON.stringify({ questions: [] }), { status: 200 })
+    ));
+    const references = Array.from({ length: 205 }, (_, index) => ({
+      questionId: `question-${index}`,
+      version: 1,
+    }));
+
+    await expect(loadQuestionVersions(references)).resolves.toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.map(([, options]) => (
+      JSON.parse(options.body).references.length
+    ))).toEqual([100, 100, 5]);
+  });
+
   it('sends one authenticated request for a batch of series access checks', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
       accessBySeriesId: {

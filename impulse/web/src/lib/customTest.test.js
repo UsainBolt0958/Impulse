@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   addCustomTestTimeSpent,
   calculateCustomTestResults,
+  compactCustomTestResult,
   selectCustomTestQuestions,
   selectCustomTestQuestionsBySubject,
 } from './customTest';
@@ -184,7 +185,12 @@ describe('calculateCustomTestResults', () => {
       accuracy: 50,
       totalTimeSpent: 75,
     });
-
+    expect(result.questionResults[0]).toMatchObject({
+      questionText: '',
+      explanation: '',
+      questionId: 'correct',
+    });
+    expect(result.questionResults[0]).not.toHaveProperty('question');
   });
 
   it('applies the no-negative-mark default to a wrong numerical response', () => {
@@ -208,6 +214,123 @@ describe('calculateCustomTestResults', () => {
     }, 13_000);
 
     expect(result).toMatchObject({ score: 0, negativeMarks: 0, wrongCount: 1 });
+  });
+
+  it('stores a pinned question version instead of duplicating review text', () => {
+    const result = calculateCustomTestResults({
+      id: 'versioned-test',
+      exam: 'JEE MAINS',
+      difficulty: 'hard',
+      startedAt: 1_000,
+      durationSeconds: 600,
+      questions: [{
+        id: 'question-1',
+        question_version: 4,
+        subject: 'Physics',
+        chapter: 'Mechanics',
+        type: 'MCQ',
+        question_text: 'Prompt',
+        solution: 'Reason',
+        correct_answer: 'A',
+      }],
+      subjects: [{ name: 'Physics' }],
+      answers: {},
+      timeSpent: {},
+      marks: { MCQ: { correct: 4, wrong: -1 } },
+    }, 13_000);
+
+    expect(result.questionResults[0]).toMatchObject({
+      questionId: 'question-1',
+      questionVersion: { questionId: 'question-1', version: 4 },
+    });
+    expect(result.questionResults[0]).not.toHaveProperty('questionText');
+    expect(result.questionResults[0]).not.toHaveProperty('explanation');
+  });
+});
+
+describe('addCustomTestTimeSpent', () => {
+  it('merges elapsed question time without mutating existing time totals', () => {
+    const existing = { question1: 12 };
+    const elapsed = { question1: 3, question2: 5 };
+
+    expect(addCustomTestTimeSpent(existing, elapsed)).toEqual({
+      question1: 15,
+      question2: 5,
+    });
+
+    expect(existing).toEqual({ question1: 12 });
+    expect(elapsed).toEqual({ question1: 3, question2: 5 });
+  });
+
+  it('ignores invalid or non-positive elapsed values', () => {
+    expect(addCustomTestTimeSpent({ question1: 4 }, {
+      question1: 0,
+      question2: -1,
+      question3: 'not-a-number',
+    })).toEqual({ question1: 4 });
+  });
+});
+
+describe('compactCustomTestResult', () => {
+  it('removes legacy question snapshots while retaining scorecard review content', () => {
+    const oldResult = {
+      id: 'legacy-result',
+      questionResults: [{
+        questionId: 'question-1',
+        subject: 'Physics',
+        correctAnswer: 'A',
+        question: {
+          id: 'question-1',
+          subject: 'Physics',
+          question_text: 'Question prompt',
+          options: { A: 'First', B: 'Second', C: 'Third', D: 'Fourth' },
+          correct_answer: 'A',
+          solution: 'Explanation',
+          explanation: 'Explanation',
+          image: 'question.svg',
+          largeMetadata: 'x'.repeat(100),
+        },
+      }],
+    };
+
+    expect(compactCustomTestResult(oldResult)).toEqual({
+      id: 'legacy-result',
+      questionResults: [{
+        questionId: 'question-1',
+        subject: 'Physics',
+        correctAnswer: 'A',
+        questionText: 'Question prompt',
+        explanation: 'Explanation',
+      }],
+    });
+    expect(oldResult.questionResults[0].question.options).toBeDefined();
+  });
+
+  it('leaves already compact and malformed legacy result entries unchanged', () => {
+    const result = {
+      id: 'compact-result',
+      questionResults: [
+        { questionId: 'question-1', questionText: 'Prompt', explanation: 'Why' },
+        null,
+      ],
+    };
+
+    expect(compactCustomTestResult(result)).toEqual(result);
+    expect(compactCustomTestResult({ id: 'incomplete' })).toEqual({ id: 'incomplete' });
+  });
+
+  it('removes review snapshots when a result already has an immutable version reference', () => {
+    expect(compactCustomTestResult({
+      questionResults: [{
+        questionId: 'question-1',
+        questionVersion: { questionId: 'question-1', version: 2 },
+        questionText: 'Prompt',
+        explanation: 'Reason',
+      }],
+    }).questionResults[0]).toEqual({
+      questionId: 'question-1',
+      questionVersion: { questionId: 'question-1', version: 2 },
+    });
   });
 });
 

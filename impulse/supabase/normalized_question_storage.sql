@@ -1,7 +1,7 @@
 create table if not exists public.question_versions (
   question_id text not null,
   version integer not null check (version > 0),
-  position integer not null check (position >= 0),
+  position bigint not null check (position >= 0),
   is_current boolean not null default false,
   content jsonb not null,
   exam text generated always as (nullif(content->>'exam', '')) stored,
@@ -15,6 +15,9 @@ create table if not exists public.question_versions (
   created_at timestamptz not null default now(),
   primary key (question_id, version)
 );
+
+alter table public.question_versions
+  alter column position type bigint using position::bigint;
 
 create unique index if not exists question_versions_one_current
   on public.question_versions (question_id)
@@ -101,7 +104,7 @@ begin
   select
     question.value->>'id',
     1,
-    (question.ordinality - 1)::integer,
+    (question.ordinality - 1)::bigint,
     true,
     question.value
   from jsonb_array_elements(v_state->'questions') with ordinality as question(value, ordinality)
@@ -115,7 +118,7 @@ begin
       and current_question.is_current
     where current_question.question_id is null
       or current_question.content <> question.value
-      or current_question.position <> (question.ordinality - 1)::integer
+      or current_question.position <> (question.ordinality - 1)::bigint
   ) then
     raise exception 'Question backfill verification failed; admin content was not compacted';
   end if;
@@ -144,14 +147,18 @@ as $$
 declare
   v_question jsonb;
   v_question_id text;
-  v_position integer;
+  v_position bigint;
+  v_position_offset bigint;
   v_version integer;
   v_previous_content jsonb;
+  v_reorder_positions boolean;
   v_ids text[] := array[]::text[];
 begin
   if coalesce(auth.role(), '') <> 'service_role' then
     raise exception 'service_role is required';
   end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('admin-state-question-versions', 0));
 
   if jsonb_typeof(p_content) is distinct from 'object'
     or jsonb_typeof(p_content->'questions') is distinct from 'array' then
@@ -192,8 +199,29 @@ begin
   where is_current
     and not (question_id = any(v_ids));
 
+  select exists (
+    select 1
+    from jsonb_array_elements(p_content->'questions') with ordinality as question(value, ordinality)
+    join public.question_versions current_question
+      on current_question.question_id = question.value->>'id'
+      and current_question.is_current
+    where current_question.position <> (question.ordinality - 1)::bigint
+  )
+  into v_reorder_positions;
+
+  if v_reorder_positions then
+    select coalesce(max(position) filter (where is_current), 0) + cardinality(v_ids) + 1
+    into v_position_offset
+    from public.question_versions;
+
+    -- Move active rows outside the target ordinal range before reordering under the unique index.
+    update public.question_versions
+    set position = position + v_position_offset
+    where is_current;
+  end if;
+
   for v_question, v_position in
-    select question.value, (question.ordinality - 1)::integer
+    select question.value, (question.ordinality - 1)::bigint
     from jsonb_array_elements(p_content->'questions') with ordinality as question(value, ordinality)
   loop
     v_question_id := v_question->>'id';
@@ -205,9 +233,17 @@ begin
     for update;
 
     if v_previous_content is not null and v_previous_content = v_question then
-      update public.question_versions
-      set position = v_position
-      where question_id = v_question_id and is_current;
+      if v_reorder_positions and exists (
+        select 1
+        from public.question_versions
+        where question_id = v_question_id
+          and is_current
+          and position <> v_position
+      ) then
+        update public.question_versions
+        set position = v_position
+        where question_id = v_question_id and is_current;
+      end if;
     else
       update public.question_versions
       set is_current = false

@@ -35,4 +35,30 @@ describe('useQuestions', () => {
     ]);
     expect(result.current.filteredQuestions).not.toBe(initialFilteredQuestions);
   });
+
+  it('preserves first-match lookup and sorted unique values without exposing cached arrays', async () => {
+    loadPublicQuestionsFromServer.mockResolvedValue([
+      { id: 'duplicate', subject: 'Physics' },
+      { id: 'duplicate', subject: 'Chemistry' },
+      { id: 'missing-subject' },
+    ]);
+    const { result } = renderHook(() => useQuestions());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.getQuestionById('duplicate')).toMatchObject({ subject: 'Physics' });
+    expect(result.current.getUniqueValues('subject')).toEqual([
+      'Chemistry',
+      'Physics',
+      undefined,
+    ]);
+
+    const firstValues = result.current.getUniqueValues('subject');
+    firstValues.pop();
+    expect(result.current.getUniqueValues('subject')).toEqual([
+      'Chemistry',
+      'Physics',
+      undefined,
+    ]);
+  });
 });

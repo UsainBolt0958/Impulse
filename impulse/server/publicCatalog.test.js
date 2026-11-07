@@ -4,6 +4,7 @@ import {
   getOrLoadPublicCatalog,
   getCachedPublicCatalog,
   getPublicCatalogCacheVersion,
+  getTestCountsBySeries,
   invalidatePublicCatalogCache,
   paginatePublicTestCatalog,
 } from './publicCatalog.js';
@@ -14,6 +15,19 @@ afterEach(() => {
 });
 
 describe('public catalog cache', () => {
+  it('counts tests per series in one pass', () => {
+    expect(getTestCountsBySeries([
+      { id: 'test-1', seriesId: 'series-1' },
+      { id: 'test-2', seriesId: 'series-1' },
+      { id: 'test-3', seriesId: 'series-2' },
+      { id: 'unassigned' },
+    ])).toEqual(new Map([
+      ['series-1', 2],
+      ['series-2', 1],
+      [undefined, 1],
+    ]));
+  });
+
   it('coalesces concurrent cache misses and returns isolated values', async () => {
     let finishLoad;
     const loader = vi.fn(() => new Promise((resolve) => {

@@ -23,6 +23,19 @@ const USER_DATA_KEYS = new Set([
   'jee_adv_2025_sess_v1_hash',
 ]);
 const LOCAL_ONLY_USER_DATA_KEYS = new Set(['impulse_custom_test_session']);
+const SOLVED_ATTEMPTS_KEY = 'impulse_solved';
+const STUDY_ATTEMPT_PAGE_SIZE = 1000;
+const STUDY_ATTEMPT_WRITE_BATCH_SIZE = 250;
+const TEST_SERIES_SESSION_SYNC_INTERVAL_MS = 90_000;
+
+function isTestSeriesSessionKey(key) {
+  return /^test_series_.+_sess_v1$/.test(key);
+}
+
+function appendOnlyStudyAttemptsEnabled() {
+  return import.meta.env.VITE_SUPABASE_APPEND_ONLY_ATTEMPTS === 'true';
+}
+
 export function isUserDataKey(key) {
   return USER_DATA_KEYS.has(key)
     || /^test_series_.+_(?:data|sess)_v1(?:_hash)?$/.test(key)
@@ -56,11 +69,52 @@ function mergeAttempts(remoteValue, localValue) {
   if (!Array.isArray(remoteValue) || !Array.isArray(localValue)) return localValue;
   const seen = new Set();
   return [...remoteValue, ...localValue].filter((attempt) => {
-    const identity = attempt?.attemptId || attempt?.attempt_id || JSON.stringify(attempt);
+    const identity = getAttemptIdentity(attempt);
     if (seen.has(identity)) return false;
     seen.add(identity);
     return true;
   });
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function getAttemptIdentity(attempt) {
+  return attempt?.attemptId || attempt?.attempt_id || stableSerialize(attempt);
+}
+
+async function readAppendOnlyStudyAttempts(client, userId) {
+  const attempts = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await client
+      .from('study_attempts')
+      .select('attempt_id,attempt')
+      .eq('user_id', userId)
+      .order('attempt_id', { ascending: true })
+      .range(offset, offset + STUDY_ATTEMPT_PAGE_SIZE - 1);
+    if (error) throw error;
+
+    const rows = data || [];
+    for (const row of rows) {
+      if (!row.attempt || typeof row.attempt !== 'object' || Array.isArray(row.attempt)) {
+        throw new Error('A saved study attempt has an invalid shape.');
+      }
+      attempts.push(row.attempt);
+    }
+
+    if (rows.length < STUDY_ATTEMPT_PAGE_SIZE) return attempts;
+    offset += STUDY_ATTEMPT_PAGE_SIZE;
+  }
 }
 
 function mergeUniqueValues(remoteValue, localValue) {
@@ -200,22 +254,51 @@ export function clearLocalUserData() {
 }
 
 export function startUserDataSync(client, userId, onStatusChange) {
+  const appendOnlyStudyAttempts = appendOnlyStudyAttemptsEnabled();
   let isActive = true;
   let isReady = false;
   let isFlushing = false;
   let initializing = null;
   let timer = null;
   const pendingKeys = new Set();
+  const urgentKeys = new Set();
+  const knownStudyAttemptIds = new Set();
+  const lastTestSeriesSessionSyncAt = new Map();
 
   const setStatus = (status, error = null) => {
     if (isActive) onStatusChange(status, error);
   };
 
   const saveKey = async (key, removed) => {
+    if (!isActive) return;
+    if (appendOnlyStudyAttempts && key === SOLVED_ATTEMPTS_KEY) {
+      if (removed || window.localStorage.getItem(key) === null) return;
+
+      const attempts = readLocalValue(key);
+      if (!Array.isArray(attempts)) {
+        throw new Error('Saved solved-question data must be an array.');
+      }
+      const newAttempts = attempts.filter((attempt) => (
+        !knownStudyAttemptIds.has(getAttemptIdentity(attempt))
+      ));
+
+      for (let offset = 0; offset < newAttempts.length; offset += STUDY_ATTEMPT_WRITE_BATCH_SIZE) {
+        if (!isActive) return;
+        const batch = newAttempts.slice(offset, offset + STUDY_ATTEMPT_WRITE_BATCH_SIZE);
+        const { error } = await client.rpc('append_study_attempts', {
+          p_attempts: batch,
+        });
+        if (error) throw error;
+        batch.forEach((attempt) => knownStudyAttemptIds.add(getAttemptIdentity(attempt)));
+      }
+      return;
+    }
+
     const query = client.from('user_data');
     if (removed || window.localStorage.getItem(key) === null) {
       const { error } = await query.delete().eq('user_id', userId).eq('storage_key', key);
       if (error) throw error;
+      lastTestSeriesSessionSyncAt.delete(key);
       return;
     }
 
@@ -227,6 +310,23 @@ export function startUserDataSync(client, userId, onStatusChange) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id,storage_key' });
     if (error) throw error;
+    if (isTestSeriesSessionKey(key)) {
+      lastTestSeriesSessionSyncAt.set(key, Date.now());
+    }
+  };
+
+  const getPendingFlushDelay = () => {
+    let delay = Number.POSITIVE_INFINITY;
+    for (const key of pendingKeys) {
+      if (urgentKeys.has(key)) return 0;
+      if (!isTestSeriesSessionKey(key)) return 350;
+      const lastSyncedAt = lastTestSeriesSessionSyncAt.get(key);
+      const nextAllowedAt = lastSyncedAt === undefined
+        ? Date.now() + 350
+        : lastSyncedAt + TEST_SERIES_SESSION_SYNC_INTERVAL_MS;
+      delay = Math.min(delay, Math.max(0, nextAllowedAt - Date.now()));
+    }
+    return Number.isFinite(delay) ? delay : 350;
   };
 
   const scheduleFlush = (delay) => {
@@ -242,16 +342,25 @@ export function startUserDataSync(client, userId, onStatusChange) {
     isFlushing = true;
     try {
       while (isActive && pendingKeys.size > 0) {
-        const readyKeys = [...pendingKeys];
-        pendingKeys.clear();
+        const now = Date.now();
+        const readyKeys = [...pendingKeys].filter((key) => (
+          !isTestSeriesSessionKey(key)
+          || urgentKeys.has(key)
+          || lastTestSeriesSessionSyncAt.get(key) === undefined
+          || now - lastTestSeriesSessionSyncAt.get(key) >= TEST_SERIES_SESSION_SYNC_INTERVAL_MS
+        ));
+        if (readyKeys.length === 0) break;
 
-        try {
-          for (const key of readyKeys) {
+        for (const key of readyKeys) {
+          if (!isActive) break;
+          pendingKeys.delete(key);
+          try {
             await saveKey(key, window.localStorage.getItem(key) === null);
+            urgentKeys.delete(key);
+          } catch (error) {
+            pendingKeys.add(key);
+            throw error;
           }
-        } catch (error) {
-          readyKeys.forEach((key) => pendingKeys.add(key));
-          throw error;
         }
       }
       setStatus(pendingKeys.size > 0 ? 'syncing' : 'synced');
@@ -264,7 +373,7 @@ export function startUserDataSync(client, userId, onStatusChange) {
     } finally {
       isFlushing = false;
       if (isActive && pendingKeys.size > 0 && !timer) {
-        scheduleFlush(350);
+        scheduleFlush(getPendingFlushDelay());
       }
     }
   };
@@ -272,11 +381,24 @@ export function startUserDataSync(client, userId, onStatusChange) {
   const scheduleSave = (key, removed) => {
     if (!isReady || !isActive) return;
     pendingKeys.add(key);
-    scheduleFlush(350);
-    if (removed) pendingKeys.add(key);
+    if (removed) urgentKeys.add(key);
+    scheduleFlush(getPendingFlushDelay());
+  };
+
+  const flushTestSeriesSessionsWhenHidden = () => {
+    if (!isActive || !isReady || document.visibilityState !== 'hidden') return;
+    pendingKeys.forEach((key) => {
+      if (isTestSeriesSessionKey(key)) urgentKeys.add(key);
+    });
+    if (urgentKeys.size > 0) {
+      if (timer) window.clearTimeout(timer);
+      timer = null;
+      flush();
+    }
   };
 
   const stopObserving = installStorageObserver(scheduleSave);
+  document.addEventListener('visibilitychange', flushTestSeriesSessionsWhenHidden);
 
   const initialize = () => {
     if (initializing) return initializing;
@@ -287,12 +409,56 @@ export function startUserDataSync(client, userId, onStatusChange) {
         .select('storage_key,value')
         .eq('user_id', userId);
       if (error) throw error;
+      if (!isActive) return;
 
       const cloudValues = new Map((data || []).map((row) => [row.storage_key, row.value]));
       const localKeys = Object.keys(window.localStorage).filter(isUserDataKey);
+      if (appendOnlyStudyAttempts) {
+        const legacyAttempts = cloudValues.get(SOLVED_ATTEMPTS_KEY);
+        if (legacyAttempts != null && !Array.isArray(legacyAttempts)) {
+          throw new Error('Saved cloud solved-question data must be an array.');
+        }
+        const cloudAttempts = mergeAttempts(
+          Array.isArray(legacyAttempts) ? legacyAttempts : [],
+          await readAppendOnlyStudyAttempts(client, userId),
+        );
+        if (!isActive) return;
+        const localAttempts = readLocalValue(SOLVED_ATTEMPTS_KEY);
+        if (localAttempts != null && !Array.isArray(localAttempts)) {
+          throw new Error('Saved local solved-question data must be an array.');
+        }
+        const localAttemptList = Array.isArray(localAttempts) ? localAttempts : [];
+        const mergedAttempts = mergeAttempts(cloudAttempts, localAttemptList);
+
+        cloudAttempts.forEach((attempt) => {
+          knownStudyAttemptIds.add(getAttemptIdentity(attempt));
+        });
+
+        if (
+          mergedAttempts.length > 0
+          || Array.isArray(localAttempts)
+          || cloudValues.has(SOLVED_ATTEMPTS_KEY)
+        ) {
+          const serializedValue = serializeLocalValue(mergedAttempts);
+          const oldValue = window.localStorage.getItem(SOLVED_ATTEMPTS_KEY);
+          window.localStorage.setItem(SOLVED_ATTEMPTS_KEY, serializedValue);
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: SOLVED_ATTEMPTS_KEY,
+            oldValue,
+            newValue: serializedValue,
+            storageArea: window.localStorage,
+          }));
+        }
+
+        const cloudAttemptIds = new Set(cloudAttempts.map(getAttemptIdentity));
+        if (localAttemptList.some((attempt) => !cloudAttemptIds.has(getAttemptIdentity(attempt)))) {
+          pendingKeys.add(SOLVED_ATTEMPTS_KEY);
+        }
+      }
 
       for (const [key, remoteValue] of cloudValues) {
         if (!isUserDataKey(key)) continue;
+        if (appendOnlyStudyAttempts && key === SOLVED_ATTEMPTS_KEY) continue;
         const localValue = readLocalValue(key);
         const value = localValue === null
           ? remoteValue
@@ -310,10 +476,19 @@ export function startUserDataSync(client, userId, onStatusChange) {
       }
 
       for (const key of localKeys) {
+        if (appendOnlyStudyAttempts && key === SOLVED_ATTEMPTS_KEY) continue;
         if (!cloudValues.has(key)) pendingKeys.add(key);
       }
 
       isReady = true;
+      if (appendOnlyStudyAttempts) {
+        const latestAttempts = readLocalValue(SOLVED_ATTEMPTS_KEY);
+        if (Array.isArray(latestAttempts) && latestAttempts.some((attempt) => (
+          !knownStudyAttemptIds.has(getAttemptIdentity(attempt))
+        ))) {
+          pendingKeys.add(SOLVED_ATTEMPTS_KEY);
+        }
+      }
       if (pendingKeys.size > 0) {
         setStatus('syncing');
         flush();
@@ -348,6 +523,7 @@ export function startUserDataSync(client, userId, onStatusChange) {
     if (timer) window.clearTimeout(timer);
     window.removeEventListener('online', retry);
     window.removeEventListener('focus', retry);
+    document.removeEventListener('visibilitychange', flushTestSeriesSessionsWhenHidden);
     stopObserving();
   };
 }

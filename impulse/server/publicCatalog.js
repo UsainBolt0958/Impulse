@@ -83,10 +83,7 @@ export function invalidatePublicCatalogCache() {
 }
 
 export function paginatePublicTestCatalog(series, tests, page, limit, summarizeTest = (test) => test) {
-  const testCounts = new Map();
-  tests.forEach(({ seriesId }) => {
-    testCounts.set(seriesId, (testCounts.get(seriesId) || 0) + 1);
-  });
+  const testCounts = getTestCountsBySeries(tests);
 
   const start = (page - 1) * limit;
   const pageTests = tests.slice(start, start + limit);
@@ -101,4 +98,12 @@ export function paginatePublicTestCatalog(series, tests, page, limit, summarizeT
       hasMore: start + limit < tests.length,
     },
   };
+}
+
+export function getTestCountsBySeries(tests) {
+  const testCounts = new Map();
+  tests.forEach(({ seriesId }) => {
+    testCounts.set(seriesId, (testCounts.get(seriesId) || 0) + 1);
+  });
+  return testCounts;
 }

@@ -13,9 +13,12 @@ const PERSISTED_DOCUMENTS = new Set([
 ]);
 const PERSISTED_DOCUMENT_CACHE_TTL_MS = 15_000;
 const PERSISTED_DOCUMENT_CACHE_MAX_BYTES = 5 * 1024 * 1024;
+const PERSISTED_COLLECTION_INDEX_MAX_ITEMS = 10_000;
 const persistentDocumentCache = new Map();
 const persistentDocumentRequests = new Map();
 const persistentDocumentVersions = new Map();
+const persistentCollectionIndexCache = new Map();
+const persistentCollectionIndexRequests = new Map();
 
 function isSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
@@ -35,43 +38,60 @@ export function normalizedQuestionStorageEnabled() {
 
 function compactTestQuestionSolutions(tests) {
   if (!Array.isArray(tests)) return tests;
-  return tests.map((test) => ({
-    ...test,
-    sections: Array.isArray(test.sections)
-      ? test.sections.map((section) => ({
-        ...section,
-        questions: Array.isArray(section.questions)
-          ? section.questions.map((question) => {
-            if (
-              typeof question?.solution !== 'string'
-              || question.explanation !== question.solution
-            ) return question;
-            const { explanation, ...compactQuestion } = question;
-            return compactQuestion;
-          })
-          : section.questions,
-      }))
-      : test.sections,
-  }));
+  return mapTestQuestionCollections(tests, (question) => (
+    mapQuestionTree(question, compactQuestionTree)
+  ));
 }
 
 function restoreTestQuestionSolutions(tests) {
   if (!Array.isArray(tests)) return tests;
-  return tests.map((test) => ({
-    ...test,
-    sections: Array.isArray(test.sections)
-      ? test.sections.map((section) => ({
-        ...section,
-        questions: Array.isArray(section.questions)
-          ? section.questions.map((question) => (
-            typeof question?.solution === 'string' && question.explanation === undefined
-              ? { ...question, explanation: question.solution }
-              : question
-          ))
-          : section.questions,
-      }))
-      : test.sections,
-  }));
+  return mapTestQuestionCollections(tests, (question) => (
+    mapQuestionTree(question, restoreQuestionTree)
+  ));
+}
+
+function mapTestQuestionCollections(value, mapQuestion) {
+  if (Array.isArray(value)) return value.map((item) => mapTestQuestionCollections(item, mapQuestion));
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    key === 'questions' && Array.isArray(item)
+      ? item.map(mapQuestion)
+      : mapTestQuestionCollections(item, mapQuestion),
+  ]));
+}
+
+function mapQuestionTree(value, mapQuestionObject) {
+  if (Array.isArray(value)) return value.map((item) => mapQuestionTree(item, mapQuestionObject));
+  if (!value || typeof value !== 'object') return value;
+
+  const mapped = Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    mapQuestionTree(item, mapQuestionObject),
+  ]));
+  return mapQuestionObject(mapped);
+}
+
+function compactQuestionTree(question) {
+  if (
+    !question
+    || typeof question !== 'object'
+    || typeof question.solution !== 'string'
+    || question.explanation !== question.solution
+  ) return question;
+
+  const { explanation, ...compactQuestion } = question;
+  return compactQuestion;
+}
+
+function restoreQuestionTree(question) {
+  return question
+    && typeof question === 'object'
+    && typeof question.solution === 'string'
+    && question.explanation === undefined
+    ? { ...question, explanation: question.solution }
+    : question;
 }
 
 function restorePersistedDocument(key, content) {
@@ -222,6 +242,23 @@ export async function readNormalizedCustomTestCatalogQuestions() {
   }
 }
 
+export async function readNormalizedQuizCatalogQuestions() {
+  const query = new URLSearchParams({
+    select: 'subject,chapter,options,correct_answer,question_text:content->>question_text,question:content->>question',
+    is_current: 'eq.true',
+    order: 'position.asc',
+  });
+  const questions = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    questions.push(...batch);
+    if (batch.length < 1000) return questions;
+  }
+}
+
 export async function readNormalizedQuestionsForSelection({
   exam,
   subjects,
@@ -230,7 +267,7 @@ export async function readNormalizedQuestionsForSelection({
   difficulty,
 }) {
   const query = new URLSearchParams({
-    select: 'content',
+    select: 'content,version',
     is_current: 'eq.true',
     exam: `eq.${exam}`,
     year: getInFilter(years),
@@ -245,8 +282,75 @@ export async function readNormalizedQuestionsForSelection({
       start,
       end: start + 999,
     });
-    rows.push(...batch.map((row) => row.content));
+    rows.push(...batch.map((row) => ({
+      ...row.content,
+      question_version: row.version,
+    })));
     if (batch.length < 1000) return rows;
+  }
+}
+
+export async function readCurrentNormalizedQuestionVersions(questionIds) {
+  const ids = [...new Set(questionIds.map((id) => String(id).trim()).filter(Boolean))];
+  const rows = [];
+  for (let offset = 0; offset < ids.length; offset += 100) {
+    const query = new URLSearchParams({
+      select: 'question_id,version,content',
+      is_current: 'eq.true',
+      question_id: getInFilter(ids.slice(offset, offset + 100)),
+    });
+    rows.push(...await fetchNormalizedQuestionRows(query, {
+      start: 0,
+      end: 99,
+    }));
+  }
+  return rows;
+}
+
+export async function readNormalizedQuestionVersions(references) {
+  const versionsByNumber = new Map();
+  references.forEach((reference) => {
+    const version = Number(reference.version);
+    if (!Number.isInteger(version) || version < 1) return;
+    const ids = versionsByNumber.get(version) || new Set();
+    ids.add(String(reference.questionId));
+    versionsByNumber.set(version, ids);
+  });
+
+  const rows = [];
+  for (const [version, ids] of versionsByNumber) {
+    const values = [...ids];
+    for (let offset = 0; offset < values.length; offset += 100) {
+      const query = new URLSearchParams({
+        select: 'question_id,version,content',
+        version: `eq.${version}`,
+        question_id: getInFilter(values.slice(offset, offset + 100)),
+      });
+      rows.push(...await fetchNormalizedQuestionRows(query, {
+        start: 0,
+        end: 99,
+      }));
+    }
+  }
+  return rows;
+}
+
+export async function readNormalizedQuizQuestions(subject, chapter) {
+  const query = new URLSearchParams({
+    select: 'content',
+    is_current: 'eq.true',
+    subject: `eq.${subject.trim()}`,
+    chapter: `eq.${chapter.trim()}`,
+    order: 'position.asc',
+  });
+  const questions = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    questions.push(...batch.map((row) => row.content));
+    if (batch.length < 1000) return questions;
   }
 }
 
@@ -323,9 +427,137 @@ export async function readPersistentJson(filePath, fallback, readLocal) {
   }
 }
 
+export async function readPersistentJsonItem(filePath, itemId, fallback, readLocal, idField = 'id') {
+  const key = basename(filePath);
+  if (!PERSISTED_DOCUMENTS.has(key)) {
+    const collection = await readLocal();
+    return collection.find((item) => item?.[idField] === itemId) ?? null;
+  }
+  if (!isSupabaseConfigured() && process.env.NODE_ENV === 'production') requireSupabaseConfig();
+
+  const indexKey = `${key}:${idField}`;
+  const cached = persistentCollectionIndexCache.get(indexKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return structuredClone(cached.items.get(itemId) ?? null);
+  }
+  if (cached) persistentCollectionIndexCache.delete(indexKey);
+
+  let request = persistentCollectionIndexRequests.get(indexKey);
+  if (!request) {
+    const version = persistentDocumentVersions.get(key) || 0;
+    request = readPersistentJson(filePath, fallback, readLocal)
+      .then((collection) => {
+        if (!Array.isArray(collection)) {
+          throw new TypeError(`Persistent JSON document "${key}" is not an array.`);
+        }
+        if (collection.length > PERSISTED_COLLECTION_INDEX_MAX_ITEMS) {
+          return { collection, items: null };
+        }
+        const items = new Map();
+        collection.forEach((item) => {
+          if (item && !items.has(item[idField])) items.set(item[idField], item);
+        });
+
+        if ((persistentDocumentVersions.get(key) || 0) === version) {
+          persistentCollectionIndexCache.set(indexKey, {
+            items,
+            expiresAt: Date.now() + PERSISTED_DOCUMENT_CACHE_TTL_MS,
+          });
+        }
+        return { collection: null, items };
+      })
+      .finally(() => {
+        if (persistentCollectionIndexRequests.get(indexKey) === request) {
+          persistentCollectionIndexRequests.delete(indexKey);
+        }
+      });
+    persistentCollectionIndexRequests.set(indexKey, request);
+  }
+
+  const { collection, items } = await request;
+  const item = items
+    ? items.get(itemId)
+    : collection.find((entry) => entry?.[idField] === itemId);
+  return structuredClone(item ?? null);
+}
+
+export async function readPersistentJsonItemsByField(
+  filePath,
+  fieldValue,
+  fallback,
+  readLocal,
+  fieldName = 'seriesId',
+) {
+  const key = basename(filePath);
+  if (!PERSISTED_DOCUMENTS.has(key)) {
+    const collection = await readLocal();
+    return collection.filter((item) => item?.[fieldName] === fieldValue);
+  }
+  if (!isSupabaseConfigured() && process.env.NODE_ENV === 'production') requireSupabaseConfig();
+
+  const indexKey = `${key}:${fieldName}`;
+  const cached = persistentCollectionIndexCache.get(indexKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return structuredClone(cached.items.get(fieldValue) || []);
+  }
+  if (cached) persistentCollectionIndexCache.delete(indexKey);
+
+  let request = persistentCollectionIndexRequests.get(indexKey);
+  if (!request) {
+    const version = persistentDocumentVersions.get(key) || 0;
+    request = readPersistentJson(filePath, fallback, readLocal)
+      .then((collection) => {
+        if (!Array.isArray(collection)) {
+          throw new TypeError(`Persistent JSON document "${key}" is not an array.`);
+        }
+        if (collection.length > PERSISTED_COLLECTION_INDEX_MAX_ITEMS) {
+          return { collection, items: null };
+        }
+        const items = new Map();
+        collection.forEach((item) => {
+          if (!item || !Object.hasOwn(item, fieldName)) return;
+          const matchingItems = items.get(item[fieldName]) || [];
+          matchingItems.push(item);
+          items.set(item[fieldName], matchingItems);
+        });
+
+        if ((persistentDocumentVersions.get(key) || 0) === version) {
+          persistentCollectionIndexCache.set(indexKey, {
+            items,
+            expiresAt: Date.now() + PERSISTED_DOCUMENT_CACHE_TTL_MS,
+          });
+        }
+        return { collection: null, items };
+      })
+      .finally(() => {
+        if (persistentCollectionIndexRequests.get(indexKey) === request) {
+          persistentCollectionIndexRequests.delete(indexKey);
+        }
+      });
+    persistentCollectionIndexRequests.set(indexKey, request);
+  }
+
+  const { collection, items } = await request;
+  const matchingItems = items
+    ? items.get(fieldValue) || []
+    : collection.filter((item) => item?.[fieldName] === fieldValue);
+  return structuredClone(matchingItems);
+}
+
+function invalidatePersistentCollectionIndexes(key) {
+  const indexKeyPrefix = `${key}:`;
+  for (const indexKey of persistentCollectionIndexCache.keys()) {
+    if (indexKey.startsWith(indexKeyPrefix)) persistentCollectionIndexCache.delete(indexKey);
+  }
+  for (const indexKey of persistentCollectionIndexRequests.keys()) {
+    if (indexKey.startsWith(indexKeyPrefix)) persistentCollectionIndexRequests.delete(indexKey);
+  }
+}
+
 export async function writePersistentJson(filePath, data, writeLocal) {
   const key = basename(filePath);
   if (!PERSISTED_DOCUMENTS.has(key)) return writeLocal();
+  invalidatePersistentCollectionIndexes(key);
   if (key === 'admin-state.json' && normalizedQuestionStorageEnabled()) {
     requireSupabaseConfig();
     persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
@@ -333,12 +565,15 @@ export async function writePersistentJson(filePath, data, writeLocal) {
     await writeNormalizedAdminState(data);
     persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
     cachePersistentDocument(key, data);
+    invalidatePersistentCollectionIndexes(key);
     return;
   }
 
   if (!isSupabaseConfigured()) {
     if (process.env.NODE_ENV === 'production') requireSupabaseConfig();
-    return writeLocal();
+    await writeLocal();
+    invalidatePersistentCollectionIndexes(key);
+    return;
   }
 
   persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
@@ -359,6 +594,7 @@ export async function writePersistentJson(filePath, data, writeLocal) {
 
   persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
   cachePersistentDocument(key, restorePersistedDocument(key, data));
+  invalidatePersistentCollectionIndexes(key);
 }
 
 export async function storeUploadedImage(filename, contentType, buffer, writeLocal) {

@@ -290,6 +290,24 @@ export async function createCustomTestQuestions(payload) {
   return Array.isArray(data?.questions) ? data.questions : [];
 }
 
+export async function loadQuestionVersions(references) {
+  if (!Array.isArray(references) || references.length === 0) return [];
+  const accessToken = await getAccessToken();
+  const questions = [];
+  for (let offset = 0; offset < references.length; offset += 100) {
+    const data = await requestJsonOrThrow('/questions/versions', {
+      method: 'POST',
+      body: JSON.stringify({ references: references.slice(offset, offset + 100) }),
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!Array.isArray(data?.questions)) {
+      throw new Error('The question-version response was invalid.');
+    }
+    questions.push(...data.questions);
+  }
+  return questions;
+}
+
 export async function loadPublicQuestionsPage(filters, page = 1, limit = 20) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   for (const key of ['exam', 'subject', 'chapter', 'difficulty', 'year']) {
