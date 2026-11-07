@@ -6,7 +6,7 @@ import Footer from '@/components/Footer.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ColoredIcon from '@/components/ColoredIcon';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { establishExamSession, loadPublicSeries, loadTests } from '@/lib/portalServer';
+import { establishExamSession, loadPublicTestSummary } from '@/lib/portalServer';
 
 export function getUnsubmittedTestSession(testId) {
   const rawSession = window.localStorage.getItem(`test_series_${testId}_sess_v1`);
@@ -68,27 +68,17 @@ function TestSeriesExamPage() {
     setIsLoading(true);
     setLoadError('');
 
-    Promise.all([loadPublicSeries(), loadTests()])
-      .then(([series, tests]) => {
+    loadPublicTestSummary(seriesId, testId)
+      .then(({ series: selectedSeries, test: selectedTest }) => {
         if (!isCurrent) return;
-        const selectedSeries = series.find((item) => item.id === seriesId && item.published);
-        const selectedTest = tests.find((item) => (
-          item.id === testId
-          && item.seriesId === seriesId
-          && item.published
-          && item.meta?.kind !== 'previous-paper'
-        ));
-        if (!selectedSeries || selectedSeries.meta?.kind === 'previous-papers' || !selectedTest) {
+        if (selectedSeries.meta?.kind === 'previous-papers' || selectedTest.meta?.kind === 'previous-paper') {
           setLoadError('This test series test is no longer available.');
           return;
         }
         setTest({
           ...selectedTest,
           series: selectedSeries,
-          questionCount: Number(selectedTest.questionCount) || (selectedTest.sections || []).reduce(
-            (count, section) => count + (section.questions || []).length,
-            0
-          ),
+          questionCount: Number(selectedTest.questionCount) || 0,
           duration: Number(selectedTest.durationMinutes)
             || Number(selectedSeries.durationMinutes)
             || (Number(selectedTest.durationSec) ? Math.round(Number(selectedTest.durationSec) / 60) : 0),
@@ -97,7 +87,9 @@ function TestSeriesExamPage() {
       .catch((error) => {
         if (!isCurrent) return;
         console.error('Could not load test-series test:', error);
-        setLoadError('Could not load this test-series test.');
+        setLoadError(error.message === 'Test series test not found.'
+          ? 'This test series test is no longer available.'
+          : 'Could not load this test-series test.');
       })
       .finally(() => {
         if (isCurrent) setIsLoading(false);

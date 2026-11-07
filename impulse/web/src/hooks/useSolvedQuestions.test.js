@@ -66,14 +66,18 @@ describe('useSolvedQuestions', () => {
 
     act(() => {
       result.current.addSolvedQuestion('physics-question', true, 18, {
+        exam: 'JEE MAINS',
         subject: 'Physics',
+        chapter: 'Thermodynamics',
         difficulty: 'Hard',
       });
     });
 
     expect(result.current.solvedQuestions[0]).toMatchObject({
       question_id: 'physics-question',
+      exam: 'JEE MAINS',
       subject: 'Physics',
+      chapter: 'Thermodynamics',
       difficulty: 'Hard',
       is_correct: true,
     });

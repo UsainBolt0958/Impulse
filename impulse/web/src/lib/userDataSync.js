@@ -7,7 +7,6 @@ const USER_DATA_KEYS = new Set([
   'impulse_marked',
   'impulse_notebooks',
   'impulse_profile_stat_visibility',
-  'impulse_custom_test_session',
   'impulse_custom_test_results',
   'impulse_quiz_player_id',
   'impulse_quiz_player_name',
@@ -23,7 +22,7 @@ const USER_DATA_KEYS = new Set([
   'jee_adv_2025_sess_v1',
   'jee_adv_2025_sess_v1_hash',
 ]);
-
+const LOCAL_ONLY_USER_DATA_KEYS = new Set(['impulse_custom_test_session']);
 export function isUserDataKey(key) {
   return USER_DATA_KEYS.has(key)
     || /^test_series_.+_(?:data|sess)_v1(?:_hash)?$/.test(key)
@@ -33,7 +32,9 @@ export function isUserDataKey(key) {
 }
 
 function isLocalUserDataKey(key) {
-  return isUserDataKey(key) || /^impulse_quiz_player_token:.+$/.test(key);
+  return isUserDataKey(key)
+    || LOCAL_ONLY_USER_DATA_KEYS.has(key)
+    || /^impulse_quiz_player_token:.+$/.test(key);
 }
 
 function readLocalValue(key) {
@@ -228,45 +229,50 @@ export function startUserDataSync(client, userId, onStatusChange) {
     if (error) throw error;
   };
 
+  const scheduleFlush = (delay) => {
+    if (timer) window.clearTimeout(timer);
+    timer = window.setTimeout(() => {
+      timer = null;
+      flush();
+    }, delay);
+  };
+
   const flush = async () => {
     if (!isActive || !isReady || isFlushing || pendingKeys.size === 0) return;
     isFlushing = true;
     try {
       while (isActive && pendingKeys.size > 0) {
-        const keys = [...pendingKeys];
+        const readyKeys = [...pendingKeys];
         pendingKeys.clear();
+
         try {
-          for (const key of keys) {
+          for (const key of readyKeys) {
             await saveKey(key, window.localStorage.getItem(key) === null);
           }
         } catch (error) {
-          keys.forEach((key) => pendingKeys.add(key));
+          readyKeys.forEach((key) => pendingKeys.add(key));
           throw error;
         }
       }
-      setStatus('synced');
+      setStatus(pendingKeys.size > 0 ? 'syncing' : 'synced');
     } catch (error) {
       console.error('Could not sync saved study data to Supabase.', error);
       setStatus('error', error);
       if (isActive) {
-        timer = window.setTimeout(() => {
-          timer = null;
-          flush();
-        }, 15000);
+        scheduleFlush(15000);
       }
     } finally {
       isFlushing = false;
+      if (isActive && pendingKeys.size > 0 && !timer) {
+        scheduleFlush(350);
+      }
     }
   };
 
   const scheduleSave = (key, removed) => {
     if (!isReady || !isActive) return;
     pendingKeys.add(key);
-    if (timer) window.clearTimeout(timer);
-    timer = window.setTimeout(() => {
-      timer = null;
-      flush();
-    }, 350);
+    scheduleFlush(350);
     if (removed) pendingKeys.add(key);
   };
 
@@ -275,7 +281,7 @@ export function startUserDataSync(client, userId, onStatusChange) {
   const initialize = () => {
     if (initializing) return initializing;
     initializing = (async () => {
-      setStatus('syncing');
+      setStatus('loading');
       const { data, error } = await client
         .from('user_data')
         .select('storage_key,value')
@@ -308,8 +314,12 @@ export function startUserDataSync(client, userId, onStatusChange) {
       }
 
       isReady = true;
-      if (pendingKeys.size > 0) await flush();
-      else setStatus('synced');
+      if (pendingKeys.size > 0) {
+        setStatus('syncing');
+        flush();
+      } else {
+        setStatus('synced');
+      }
     })().finally(() => {
       initializing = null;
     });

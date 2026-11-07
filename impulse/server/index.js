@@ -6,16 +6,57 @@ import { fileURLToPath } from 'node:url';
 import {
   createBillingOrder,
   getSeriesAccess,
+  getSeriesAccessBatch,
   handleGatewayWebhook,
   refreshBillingOrder,
   verifyCustomerAccessToken,
 } from './billing.js';
 import {
   getPersistentStorageUsage,
+  getSupabaseConnectionStatus,
+  normalizedQuestionStorageEnabled,
   readPersistentJson,
+  readNormalizedCustomTestCatalogQuestions,
+  readNormalizedQuestionCatalog,
+  readNormalizedQuestionMetadata,
+  readNormalizedQuestionPage,
+  readNormalizedQuestions,
+  readNormalizedQuestionsForSelection,
   storeUploadedImage,
   writePersistentJson,
 } from './persistence.js';
+import {
+  getOrLoadCustomTestCatalog,
+  getOrLoadQuestionCatalog,
+  getOrLoadQuestionMetadata,
+  getOrLoadQuestionPage,
+  getOrLoadPrecomputedQuestionPage,
+  getQuestionMetadataCacheVersion,
+  invalidateQuestionMetadataCache,
+} from './questionQuery.js';
+import {
+  getOrLoadQuizCatalog,
+  getOrLoadQuizQuestions,
+  getQuizCatalogCacheVersion,
+  invalidateQuizCatalogCache,
+} from './quizCatalog.js';
+import {
+  CUSTOM_DIFFICULTIES,
+  MAX_QUESTIONS_PER_SUBJECT,
+  selectCustomTestQuestionsBySubject,
+} from '../shared/customTestSelection.js';
+import {
+  getAssetMetrics,
+  recordApiRequest,
+  recordStorageMeasurement,
+  recordVisitorHeartbeat,
+} from './assetMetrics.js';
+import { getSupabaseProjectMetrics } from './supabaseProjectMetrics.js';
+import {
+  getOrLoadPublicCatalog,
+  invalidatePublicCatalogCache,
+  paginatePublicTestCatalog,
+} from './publicCatalog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -86,12 +127,25 @@ async function ensureStateFile() {
 
 async function readState() {
   await ensureStateFile();
-  return readJsonFile(STATE_FILE, DEFAULT_STATE);
+  const state = await readJsonFile(STATE_FILE, DEFAULT_STATE);
+  if (!normalizedQuestionStorageEnabled()) return state;
+  return {
+    ...state,
+    questions: await readNormalizedQuestions(),
+  };
+}
+
+async function readQuestions() {
+  if (normalizedQuestionStorageEnabled()) return readNormalizedQuestions();
+  const state = await readState();
+  return state.questions || [];
 }
 
 async function writeState(state) {
   await ensureStateFile();
   await writeJsonFile(STATE_FILE, state);
+  invalidateQuizCatalogCache();
+  invalidateQuestionMetadataCache();
 }
 
 async function readJsonFile(filePath, fallback) {
@@ -109,6 +163,7 @@ async function writeJsonFile(filePath, data) {
   await writePersistentJson(filePath, data, async () => {
     await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
   });
+  if ([SERIES_FILE, TESTS_FILE].includes(filePath)) invalidatePublicCatalogCache();
 }
 
 let quizChallenges = [];
@@ -133,64 +188,6 @@ function updateQuizChallenges(operation) {
   });
   quizChallengeOperations = result.then(() => undefined, () => undefined);
   return result;
-}
-
-function getQuizQuestion(question) {
-  if (!question || typeof question !== 'object') return null;
-  const options = question.options || {};
-  const normalizedOptions = {};
-  for (const key of ['A', 'B', 'C', 'D']) {
-    const option = options[key] ?? question[`option${key}`];
-    const text = typeof option === 'string' ? option : option?.text;
-    if (typeof text !== 'string' || !text.trim()) return null;
-    normalizedOptions[key] = {
-      text: text.trim(),
-      image: typeof option === 'object' && typeof option.image === 'string'
-        ? option.image
-        : String(question.option_images?.[key] || question[`option${key}Image`] || ''),
-    };
-  }
-
-  const questionText = question.question_text || question.question || '';
-  const correctAnswer = String(question.correct_answer || question.correctAnswer || '').toUpperCase();
-  if (
-    typeof questionText !== 'string'
-    || !questionText.trim()
-    || !['A', 'B', 'C', 'D'].includes(correctAnswer)
-  ) {
-    return null;
-  }
-
-  return {
-    id: String(question.id || randomUUID()),
-    question: questionText.trim(),
-    image: typeof question.image === 'string' ? question.image : '',
-    options: normalizedOptions,
-    correctAnswer,
-    explanation: String(question.explanation || question.solution || ''),
-  };
-}
-
-function buildQuizCatalog(questions) {
-  const subjects = new Map();
-  (Array.isArray(questions) ? questions : []).forEach((question) => {
-    if (!getQuizQuestion(question)) return;
-    const subject = String(question.subject || '').trim();
-    const chapter = String(question.chapter || '').trim();
-    if (!subject || !chapter) return;
-    if (!subjects.has(subject)) subjects.set(subject, new Map());
-    const chapters = subjects.get(subject);
-    chapters.set(chapter, (chapters.get(chapter) || 0) + 1);
-  });
-
-  return [...subjects.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, chapters]) => ({
-      name,
-      chapters: [...chapters.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([chapter, questionCount]) => ({ name: chapter, questionCount })),
-    }));
 }
 
 function advanceQuizQuestion(challenge, now = Date.now()) {
@@ -356,7 +353,7 @@ function applyCorsHeaders(request, response) {
   response.setHeader('Access-Control-Allow-Origin', origin);
   response.setHeader('Access-Control-Allow-Credentials', 'true');
   response.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Client-Session');
   response.setHeader('Vary', 'Origin');
   return true;
 }
@@ -485,16 +482,6 @@ function publicTestSummary(test) {
         : Number(section.questionCountPerSubject || section.questionCount || 0))
     ), 0),
     subjects,
-    sections: sections.map((section) => ({
-      subject: section.subject,
-      sectionName: section.sectionName,
-      name: section.name,
-      type: section.type,
-      posMarks: section.posMarks,
-      negMarks: section.negMarks,
-      questionCountPerSubject: section.questionCountPerSubject,
-      questionCount: section.questionCount,
-    })),
     meta: test.meta || {},
   };
 }
@@ -731,6 +718,35 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/billing/series-access/batch' && request.method === 'POST') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to check test-series access.' });
+        return;
+      }
+      const body = await readRequestBody(request, 16 * 1024);
+      if (!Array.isArray(body?.seriesIds) || body.seriesIds.length < 1 || body.seriesIds.length > 50) {
+        sendJson(response, 400, { error: 'Provide between 1 and 50 valid test-series IDs.' });
+        return;
+      }
+      const seriesIds = [...new Set(body.seriesIds)];
+      if (seriesIds.some((seriesId) => (
+        typeof seriesId !== 'string' || !seriesId.trim() || seriesId.trim().length > 200
+      ))) {
+        sendJson(response, 400, { error: 'Provide between 1 and 50 valid test-series IDs.' });
+        return;
+      }
+      const normalizedSeriesIds = seriesIds.map((seriesId) => seriesId.trim());
+      const accessBySeriesId = await getSeriesAccessBatch(user.id, normalizedSeriesIds);
+      sendJson(response, 200, { accessBySeriesId });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check test-series access.');
+    }
+    return;
+  }
+
   if (url.pathname === '/api/billing/exam-session' && request.method === 'DELETE') {
     const session = getExamSession(request);
     if (session) EXAM_SESSIONS.delete(session.token);
@@ -751,13 +767,78 @@ async function handleRequest(request, response) {
       return;
     }
     try {
-      sendJson(response, 200, await getPersistentStorageUsage());
+      const usage = await getPersistentStorageUsage();
+      recordStorageMeasurement(usage.uploadBytes, usage.measuredAt);
+      sendJson(response, 200, {
+        ...usage,
+        storageTrend: getAssetMetrics().storageTrend,
+      });
     } catch (error) {
       console.error('Could not load admin storage usage.', error);
       sendJson(response, error?.statusCode || 503, {
         error: error?.statusCode ? error.message : 'Could not load storage usage.',
       });
     }
+    return;
+  }
+
+  if (url.pathname === '/api/telemetry/heartbeat' && request.method === 'POST') {
+    const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+    if (!accessToken) {
+      sendJson(response, 401, { error: 'Sign in to report active-session metrics.' });
+      return;
+    }
+    try {
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to report active-session metrics.' });
+        return;
+      }
+      recordVisitorHeartbeat(request.headers['x-client-session'], user.id);
+      sendJson(response, 200, { recorded: true });
+    } catch (error) {
+      console.error('Could not validate an active-session heartbeat.', error);
+      sendJson(response, error?.statusCode || 503, {
+        error: error?.statusCode ? error.message : 'Active-session verification is unavailable.',
+      });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/admin/asset-metrics' && request.method === 'GET') {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
+    sendJson(response, 200, getAssetMetrics());
+    return;
+  }
+
+  if (url.pathname === '/api/admin/operations' && request.method === 'GET') {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
+    sendJson(response, 200, {
+      api: {
+        status: 'healthy',
+        uptimeSeconds: Math.floor(process.uptime()),
+        nodeVersion: process.version,
+        memoryBytes: process.memoryUsage().rss,
+        checkedAt: new Date().toISOString(),
+      },
+      supabase: await getSupabaseConnectionStatus(),
+      backups: { status: 'not_available', message: 'Backup status is not exposed by the configured API credentials.' },
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/admin/project-metrics' && request.method === 'GET') {
+    if (!isAdminRequest(request)) {
+      sendJson(response, 401, { error: 'Unauthorized' });
+      return;
+    }
+    sendJson(response, 200, await getSupabaseProjectMetrics());
     return;
   }
 
@@ -796,15 +877,172 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/questions/custom-test/catalog' && request.method === 'GET') {
+    const cacheVersion = getQuestionMetadataCacheVersion();
+    const exams = await getOrLoadCustomTestCatalog(async () => {
+      return normalizedQuestionStorageEnabled()
+        ? readNormalizedCustomTestCatalogQuestions()
+        : readQuestions();
+    }, cacheVersion);
+    sendJson(response, 200, {
+      exams,
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/questions/custom-test' && request.method === 'POST') {
+    let body;
+    try {
+      body = await readRequestBody(request, 64 * 1024);
+    } catch (error) {
+      sendJson(response, error?.statusCode || 400, { error: error.message });
+      return;
+    }
+
+    const subjects = body?.subjects;
+    const validSubject = (subject) => (
+      subject
+      && typeof subject.name === 'string'
+      && subject.name.trim().length > 0
+      && subject.name.length <= 100
+      && Array.isArray(subject.chapters)
+      && subject.chapters.length > 0
+      && subject.chapters.length <= 100
+      && subject.chapters.every((chapter) => (
+        typeof chapter === 'string' && chapter.trim().length > 0 && chapter.length <= 200
+      ))
+      && Number.isInteger(subject.count)
+      && subject.count >= 1
+      && subject.count <= MAX_QUESTIONS_PER_SUBJECT
+    );
+    if (
+      !body || typeof body !== 'object' || Array.isArray(body)
+      || typeof body.exam !== 'string' || !body.exam.trim() || body.exam.length > 100
+      || !Array.isArray(subjects) || subjects.length < 1 || subjects.length > 20
+      || !subjects.every(validSubject)
+      || new Set(subjects.map((subject) => subject.name.trim())).size !== subjects.length
+      || !Array.isArray(body.years) || body.years.length < 1 || body.years.length > 100
+      || !body.years.every((year) => typeof year === 'string' && year.trim().length > 0 && year.length <= 20)
+      || !CUSTOM_DIFFICULTIES.some((option) => option.id === body.difficulty)
+    ) {
+      sendJson(response, 400, { error: 'Provide a valid exam, subjects, chapters, years, and difficulty.' });
+      return;
+    }
+
+    const sourceQuestions = normalizedQuestionStorageEnabled()
+      ? await readNormalizedQuestionsForSelection({
+        exam: body.exam.trim(),
+        subjects: subjects.map((subject) => subject.name.trim()),
+        chapters: [...new Set(subjects.flatMap((subject) => subject.chapters.map((chapter) => chapter.trim())))],
+        years: body.years.map((year) => year.trim()),
+        difficulty: body.difficulty,
+      })
+      : await readQuestions();
+    const questions = selectCustomTestQuestionsBySubject({
+      questions: sourceQuestions,
+      exam: body.exam.trim(),
+      subjects: subjects.map((subject) => ({
+        ...subject,
+        name: subject.name.trim(),
+        chapters: subject.chapters.map((chapter) => chapter.trim()),
+      })),
+      years: body.years.map((year) => year.trim()),
+      difficulty: body.difficulty,
+    });
+
+    if (!questions.length) {
+      sendJson(response, 400, { error: 'There are no questions for the selected chapters and years.' });
+      return;
+    }
+
+    sendJson(response, 200, {
+      questions,
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/questions/metadata' && request.method === 'GET') {
+    const ids = url.searchParams.getAll('id');
+    if (!ids.length || ids.length > 200 || ids.some((id) => !id.trim())) {
+      sendJson(response, 400, { error: 'Provide between 1 and 200 non-empty question IDs.' });
+      return;
+    }
+
+    const cacheVersion = getQuestionMetadataCacheVersion();
+    const questions = await getOrLoadQuestionMetadata(
+      ids,
+      normalizedQuestionStorageEnabled() ? readNormalizedQuestionMetadata : readQuestions,
+      cacheVersion,
+    );
+    sendJson(response, 200, {
+      questions,
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/questions/catalog' && request.method === 'GET') {
+    const exam = url.searchParams.get('exam')?.trim();
+    const subject = url.searchParams.get('subject')?.trim();
+    if (!exam || !subject) {
+      sendJson(response, 400, { error: 'Provide both exam and subject to load the question catalog.' });
+      return;
+    }
+
+    const cacheVersion = getQuestionMetadataCacheVersion();
+    const chapters = await getOrLoadQuestionCatalog(exam, subject, async () => {
+      return normalizedQuestionStorageEnabled()
+        ? readNormalizedQuestionCatalog(exam, subject)
+        : readQuestions();
+    }, cacheVersion);
+    sendJson(response, 200, {
+      chapters,
+    });
+    return;
+  }
+
   if (url.pathname === '/api/questions' && request.method === 'GET') {
-    const state = await readState();
-    sendJson(response, 200, { questions: state.questions || [] });
+    const filters = {
+      exam: url.searchParams.getAll('exam'),
+      subject: url.searchParams.getAll('subject'),
+      chapter: url.searchParams.getAll('chapter'),
+      difficulty: url.searchParams.getAll('difficulty'),
+      year: url.searchParams.getAll('year'),
+    };
+    const hasFilters = Object.values(filters).some((values) => values.length > 0);
+    const hasPagination = url.searchParams.has('page') || url.searchParams.has('limit');
+
+    if (hasFilters || hasPagination) {
+      const page = Number(url.searchParams.get('page') || 1);
+      const limit = Number(url.searchParams.get('limit') || 20);
+      if (!Number.isInteger(page) || page < 1 || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        sendJson(response, 400, { error: 'Page must be a positive integer and limit must be between 1 and 100.' });
+        return;
+      }
+
+      const cacheVersion = getQuestionMetadataCacheVersion();
+      const questionPage = normalizedQuestionStorageEnabled()
+        ? await getOrLoadPrecomputedQuestionPage(
+          filters,
+          page,
+          limit,
+          () => readNormalizedQuestionPage(filters, page, limit),
+          cacheVersion,
+        )
+        : await getOrLoadQuestionPage(filters, page, limit, readQuestions, cacheVersion);
+      sendJson(response, 200, questionPage);
+      return;
+    }
+
+    sendJson(response, 200, { questions: await readQuestions() });
     return;
   }
 
   if (url.pathname === '/api/quiz/catalog' && request.method === 'GET') {
-    const state = await readState();
-    sendJson(response, 200, { subjects: buildQuizCatalog(state.questions || []) });
+    const cacheVersion = getQuizCatalogCacheVersion();
+    const subjects = await getOrLoadQuizCatalog(async () => {
+      return readQuestions();
+    }, cacheVersion);
+    sendJson(response, 200, { subjects });
     return;
   }
 
@@ -839,14 +1077,13 @@ async function handleRequest(request, response) {
         return;
       }
 
-      const state = await readState();
-      const availableQuestions = (state.questions || [])
-        .filter((question) => (
-          String(question?.subject || '').trim() === subject.trim()
-          && String(question?.chapter || '').trim() === chapter.trim()
-        ))
-        .map(getQuizQuestion)
-        .filter(Boolean);
+      const cacheVersion = getQuizCatalogCacheVersion();
+      const availableQuestions = await getOrLoadQuizQuestions(
+        readQuestions,
+        subject,
+        chapter,
+        cacheVersion,
+      );
       if (availableQuestions.length < questionCount) {
         sendJson(response, 400, { error: `Only ${availableQuestions.length} playable question(s) are available for this chapter.` });
         return;
@@ -1387,6 +1624,142 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/test-catalog' && request.method === 'GET') {
+    const seriesId = url.searchParams.get('seriesId')?.trim() || '';
+    const testId = url.searchParams.get('testId')?.trim() || '';
+    const kind = url.searchParams.get('kind')?.trim() || '';
+    const examKey = url.searchParams.get('examKey')?.trim() || '';
+    const hasPagination = url.searchParams.has('page') || url.searchParams.has('limit');
+    const page = Number(url.searchParams.get('page'));
+    const limit = Number(url.searchParams.get('limit'));
+    if ((!seriesId && testId) || (seriesId && !testId)
+      || seriesId.length > 200 || testId.length > 200
+      || kind.length > 40 || examKey.length > 100
+      || (kind && !['test-series', 'previous-papers'].includes(kind))
+      || (examKey && kind !== 'previous-papers')
+      || (kind === 'previous-papers' && !seriesId && !examKey)
+      || (hasPagination && (
+        kind !== 'test-series'
+        || !url.searchParams.has('page')
+        || !url.searchParams.has('limit')
+        || !Number.isInteger(page)
+        || page < 1
+        || !Number.isInteger(limit)
+        || limit < 1
+        || limit > 50
+      ))) {
+      if (hasPagination) {
+        sendJson(response, 400, {
+          error: 'Test-series pagination requires a positive page and a limit between 1 and 50.',
+        });
+        return;
+      }
+      sendJson(response, 400, { error: 'A valid series ID and test ID are required.' });
+      return;
+    }
+
+    if (!seriesId && !testId) {
+      const cacheKey = JSON.stringify([kind, examKey, hasPagination ? page : null, hasPagination ? limit : null]);
+      const catalog = await getOrLoadPublicCatalog(cacheKey, async () => {
+        const [series, tests] = await Promise.all([
+          readJsonFile(SERIES_FILE, []),
+          readJsonFile(TESTS_FILE, []),
+        ]);
+        const selectedSeries = series.filter((item) => (
+          item.published
+          && (kind === 'test-series' ? item.meta?.kind !== 'previous-papers'
+            : kind === 'previous-papers'
+              ? item.meta?.kind === 'previous-papers'
+                && (!examKey || item.meta?.examKey === examKey)
+              : true)
+        ));
+        const seriesIds = new Set(selectedSeries.map((item) => item.id));
+        const selectedTests = tests.filter((test) => (
+          test.published
+          && seriesIds.has(test.seriesId)
+          && (kind === 'test-series' ? test.meta?.kind !== 'previous-paper'
+            : kind === 'previous-papers'
+              ? test.meta?.kind === 'previous-paper'
+                && (!examKey || test.meta?.examKey === examKey)
+              : true)
+        ));
+        const seriesSummaries = selectedSeries.map(publicSeriesSummary);
+        return hasPagination
+          ? paginatePublicTestCatalog(
+            seriesSummaries,
+            selectedTests,
+            page,
+            limit,
+            publicTestSummary,
+          )
+          : { series: seriesSummaries, tests: selectedTests.map(publicTestSummary) };
+      });
+      sendJson(response, 200, catalog);
+      return;
+    }
+
+    const summaryCacheKey = JSON.stringify(['summary', seriesId, testId]);
+    const summary = await getOrLoadPublicCatalog(summaryCacheKey, async () => {
+      const [series, tests] = await Promise.all([
+        readJsonFile(SERIES_FILE, []),
+        readJsonFile(TESTS_FILE, []),
+      ]);
+      const selectedSeries = series.find((item) => item.id === seriesId && item.published);
+      const selectedTest = tests.find((item) => (
+        item.id === testId
+        && item.seriesId === seriesId
+        && item.published
+      ));
+      if (!selectedSeries || !selectedTest) {
+        const error = new Error('Test series test not found.');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      return {
+        series: publicSeriesSummary(selectedSeries),
+        test: publicTestSummary(selectedTest),
+      };
+    });
+    sendJson(response, 200, summary);
+    return;
+  }
+
+  if (url.pathname === '/api/test-launch' && request.method === 'GET') {
+    const seriesId = url.searchParams.get('seriesId')?.trim() || '';
+    const testId = url.searchParams.get('testId')?.trim() || '';
+    if (!seriesId || seriesId.length > 200 || !testId || testId.length > 200) {
+      sendJson(response, 400, { error: 'A valid series ID and test ID are required.' });
+      return;
+    }
+
+    const [series, tests] = await Promise.all([
+      readJsonFile(SERIES_FILE, []),
+      readJsonFile(TESTS_FILE, []),
+    ]);
+    const selectedSeries = series.find((item) => item.id === seriesId && item.published);
+    const selectedTest = tests.find((item) => (
+      item.id === testId
+      && item.seriesId === seriesId
+      && item.published
+    ));
+    if (!selectedSeries || !selectedTest) {
+      sendJson(response, 404, { error: 'Test series test not found.' });
+      return;
+    }
+    if (!await requestHasSeriesAccess(request, seriesId)) {
+      sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
+      return;
+    }
+
+    response.setHeader('Cache-Control', 'private, no-store');
+    sendJson(response, 200, {
+      series: publicSeriesSummary(selectedSeries),
+      test: selectedTest,
+    });
+    return;
+  }
+
   // NEW: Get all tests (admin)
   if (url.pathname === '/api/tests' && request.method === 'GET') {
     const includeAll = url.searchParams.get('all') === 'true';
@@ -1395,12 +1768,19 @@ async function handleRequest(request, response) {
       sendJson(response, 401, { error: 'Unauthorized' });
       return;
     }
-    const tests = await readJsonFile(TESTS_FILE, []);
-    // Keep answer keys and question text out of the public catalogue response.
-    const filtered = (includeAll || isAdmin)
-      ? tests
-      : tests.filter((test) => test.published).map(publicTestSummary);
-    sendJson(response, 200, { tests: filtered });
+    if (includeAll || isAdmin) {
+      const tests = await readJsonFile(TESTS_FILE, []);
+      sendJson(response, 200, { tests });
+      return;
+    }
+
+    const catalog = await getOrLoadPublicCatalog('public-tests-list', async () => {
+      const tests = await readJsonFile(TESTS_FILE, []);
+      return {
+        tests: tests.filter((test) => test.published).map(publicTestSummary),
+      };
+    });
+    sendJson(response, 200, catalog);
     return;
   }
 
@@ -1490,7 +1870,51 @@ async function handleRequest(request, response) {
   sendJson(response, 404, { error: 'Not found' });
 }
 
+function measureApiTraffic(request, response) {
+  const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+  if (
+    !url.pathname.startsWith('/api/')
+    || url.pathname === '/api/telemetry/heartbeat'
+    || url.pathname === '/api/admin/asset-metrics'
+    || url.pathname === '/api/admin/operations'
+    || url.pathname === '/api/admin/project-metrics'
+  ) {
+    return;
+  }
+
+  const startedAt = Date.now();
+  let responseBytes = 0;
+  const byteLength = (chunk, encoding) => {
+    if (chunk === undefined || chunk === null) return 0;
+    if (Buffer.isBuffer(chunk) || ArrayBuffer.isView(chunk)) return chunk.byteLength;
+    return Buffer.byteLength(String(chunk), typeof encoding === 'string' ? encoding : undefined);
+  };
+  const originalWrite = response.write;
+  const originalEnd = response.end;
+
+  response.write = function (chunk, ...args) {
+    responseBytes += byteLength(chunk, args[0]);
+    return originalWrite.call(this, chunk, ...args);
+  };
+  response.end = function (chunk, ...args) {
+    responseBytes += byteLength(chunk, args[0]);
+    return originalEnd.call(this, chunk, ...args);
+  };
+
+  response.once('finish', () => {
+    recordApiRequest({
+      sessionId: request.headers['x-client-session'],
+      pathname: url.pathname,
+      statusCode: response.statusCode || 0,
+      requestBytes: Number(request.headers['content-length']) || 0,
+      responseBytes,
+      durationMs: Date.now() - startedAt,
+    });
+  });
+}
+
 const server = createServer((request, response) => {
+  measureApiTraffic(request, response);
   handleRequest(request, response).catch((error) => {
     console.error('Unhandled API request error.', error);
     if (!response.headersSent) {

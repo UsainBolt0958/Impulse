@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { calculateScore } from './testSeriesEngine';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { calculateScore, initTestSeriesEngine } from './testSeriesEngine';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function scoreAnswer(answer, sectionType = 'NUM', correctAnswer = 3) {
   return calculateScore(
@@ -27,6 +31,35 @@ describe('calculateScore', () => {
     expect(scoreAnswer('3abc')).toMatchObject({
       totalScore: -1,
       stats: { correct: 0, wrong: 1, skipped: 0 },
+    });
+  });
+
+  describe('initTestSeriesEngine', () => {
+    it('loads series, test metadata, and template through one authorized request', async () => {
+      const series = { id: 'series-1', title: 'Series' };
+      const test = {
+        id: 'test-1',
+        seriesId: 'series-1',
+        sections: [{ subject: 'Physics', sectionName: 'A', questions: [{ id: 'q1' }] }],
+      };
+      const fetchMock = vi.fn().mockResolvedValue(new Response(
+        JSON.stringify({ series, test }),
+        { status: 200 }
+      ));
+      vi.stubGlobal('fetch', fetchMock);
+
+      await expect(initTestSeriesEngine('test-1', 'series-1')).resolves.toMatchObject({
+        series,
+        test,
+        template: test,
+        config: {
+          testId: 'test-1',
+          seriesId: 'series-1',
+          sections: { A: [1, undefined, undefined, undefined] },
+        },
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls[0][0]).toContain('/api/test-launch?testId=test-1&seriesId=series-1');
     });
   });
 

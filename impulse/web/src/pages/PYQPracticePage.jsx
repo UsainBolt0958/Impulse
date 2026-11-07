@@ -1,10 +1,10 @@
-import React, { useEffect, useLayoutEffect, useState, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import QuestionCard from '@/components/QuestionCard.jsx';
-import { useQuestions } from '@/hooks/useQuestions';
+import { loadPublicQuestionCatalog, loadPublicQuestionsPage } from '@/lib/portalServer';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -67,6 +67,7 @@ const SUBJECTS_MAP = {
 
 const YEARS = ['2020', '2021', '2022', '2023', '2024', '2025'];
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+const QUESTIONS_PAGE_SIZE = 20;
 
 const MATH_CHAPTERS = [
   'Basic Math',
@@ -307,7 +308,6 @@ function createChapterCards(chapters, subject) {
 }
 
 function PYQPracticePage() {
-  const { questions } = useQuestions();
   const { isQuestionSolved } = useSolvedQuestions();
 
   // Navigation State
@@ -317,6 +317,18 @@ function PYQPracticePage() {
   const [selectedExam, setSelectedExam] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
+  const [chapterCatalog, setChapterCatalog] = useState([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState(null);
+  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [practiceQuestions, setPracticeQuestions] = useState([]);
+  const [questionTotal, setQuestionTotal] = useState(0);
+  const [questionPage, setQuestionPage] = useState(1);
+  const [isQuestionsLoading, setIsQuestionsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [questionError, setQuestionError] = useState(null);
+  const [questionRetry, setQuestionRetry] = useState(0);
+  const questionRequestId = useRef(0);
 
   useLayoutEffect(() => {
     if (step === 4) {
@@ -426,6 +438,112 @@ function PYQPracticePage() {
     setIsFilterModalOpen(true);
   };
 
+  useEffect(() => {
+    let active = true;
+    if (!selectedExam || !selectedSubject) {
+      setChapterCatalog([]);
+      setCatalogError(null);
+      setIsCatalogLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setChapterCatalog([]);
+    setIsCatalogLoading(true);
+    setCatalogError(null);
+    loadPublicQuestionCatalog(selectedExam, selectedSubject)
+      .then((catalog) => {
+        if (active) setChapterCatalog(catalog);
+      })
+      .catch((error) => {
+        console.error('Could not load question chapter catalog.', error);
+        if (active) setCatalogError(error.message || 'Could not load chapters. Please try again.');
+      })
+      .finally(() => {
+        if (active) setIsCatalogLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedExam, selectedSubject, catalogRetry]);
+
+  useEffect(() => {
+    const requestId = ++questionRequestId.current;
+    setIsLoadingMore(false);
+    if (step !== 4 || !selectedExam || !selectedSubject) {
+      setPracticeQuestions([]);
+      setQuestionTotal(0);
+      setQuestionPage(1);
+      setQuestionError(null);
+      setIsQuestionsLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setPracticeQuestions([]);
+    setQuestionTotal(0);
+    setQuestionPage(1);
+    setQuestionError(null);
+    setIsQuestionsLoading(true);
+    loadPublicQuestionsPage({
+      exam: selectedExam,
+      subject: selectedSubject,
+      chapter: selectedChapter || undefined,
+      difficulty: appliedFilters.difficulty,
+      year: appliedFilters.year,
+    }, 1, QUESTIONS_PAGE_SIZE)
+      .then((result) => {
+        if (active && requestId === questionRequestId.current) {
+          setPracticeQuestions(result.questions);
+          setQuestionTotal(result.total);
+          setQuestionPage(result.page);
+        }
+      })
+      .catch((error) => {
+        console.error('Could not load practice questions.', error);
+        if (active && requestId === questionRequestId.current) {
+          setQuestionError(error.message || 'Could not load questions. Please try again.');
+        }
+      })
+      .finally(() => {
+        if (active && requestId === questionRequestId.current) setIsQuestionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [step, selectedExam, selectedSubject, selectedChapter, appliedFilters, questionRetry]);
+
+  const loadMoreQuestions = async () => {
+    if (isLoadingMore || isQuestionsLoading || practiceQuestions.length >= questionTotal) return;
+    const requestId = ++questionRequestId.current;
+    setIsLoadingMore(true);
+    setQuestionError(null);
+    try {
+      const result = await loadPublicQuestionsPage({
+        exam: selectedExam,
+        subject: selectedSubject,
+        chapter: selectedChapter || undefined,
+        difficulty: appliedFilters.difficulty,
+        year: appliedFilters.year,
+      }, questionPage + 1, QUESTIONS_PAGE_SIZE);
+      if (requestId === questionRequestId.current) {
+        setPracticeQuestions((current) => [...current, ...result.questions]);
+        setQuestionTotal(result.total);
+        setQuestionPage(result.page);
+      }
+    } catch (error) {
+      console.error('Could not load more practice questions.', error);
+      if (requestId === questionRequestId.current) {
+        setQuestionError(error.message || 'Could not load more questions. Please try again.');
+      }
+    } finally {
+      if (requestId === questionRequestId.current) setIsLoadingMore(false);
+    }
+  };
+
   // Derived Data
   const availableSubjects = selectedExam === 'NEET'
     ? SUBJECTS_MAP['NEET']
@@ -446,18 +564,13 @@ function PYQPracticePage() {
       Biology: BIOLOGY_CHAPTER_CARDS,
     }[selectedSubject] || [];
 
-    if (!questions || !selectedExam || !selectedSubject) {
+    if (!selectedExam || !selectedSubject) {
       return presetCards.map(({ chapter, icon }) => ({ chapter, icon, count: 0 }));
     }
 
-    const questionChapterCounts = questions
-      .filter((question) => question.exam === selectedExam && question.subject === selectedSubject)
-      .reduce((accumulator, question) => {
-        const chapter = question.chapter || 'Unspecified';
-        const current = accumulator.get(chapter) || 0;
-        accumulator.set(chapter, current + 1);
-        return accumulator;
-      }, new Map());
+    const questionChapterCounts = new Map(
+      chapterCatalog.map(({ chapter, count }) => [chapter, count])
+    );
 
     const presetChapterNames = new Set(presetCards.map(({ chapter }) => chapter));
     const chaptersWithCounts = presetCards.map(({ chapter, icon }) => ({
@@ -475,35 +588,16 @@ function PYQPracticePage() {
         icon: iconPool[(presetCards.length + index) % iconPool.length],
       }));
     return [...chaptersWithCounts, ...customChapterCards];
-  }, [questions, selectedExam, selectedSubject]);
+  }, [chapterCatalog, selectedExam, selectedSubject]);
 
-  const filteredQuestions = useMemo(() => {
-    if (!questions) return [];
-    return questions.filter(q => {
-      if (q.exam !== selectedExam) return false;
-      if (q.subject !== selectedSubject) return false;
-      if (selectedChapter && q.chapter !== selectedChapter) return false;
-      
-      if (appliedFilters.difficulty.length > 0 && !appliedFilters.difficulty.includes(q.difficulty)) return false;
-      
-      // Note: Data seed year is a number, checking against string or number
-      if (appliedFilters.year.length > 0 && !appliedFilters.year.includes(String(q.year))) return false;
-      
-      return true;
-    });
-  }, [questions, selectedExam, selectedSubject, selectedChapter, appliedFilters]);
   const availableQuestionYears = useMemo(() => {
-    const matchingQuestionYears = (questions || [])
-      .filter((question) => (
-        question.exam === selectedExam
-        && question.subject === selectedSubject
-        && (!selectedChapter || question.chapter === selectedChapter)
-      ))
-      .map((question) => String(question.year))
-      .filter((year) => /^\d{4}$/.test(year));
+    const relevantChapters = selectedChapter
+      ? chapterCatalog.filter(({ chapter }) => chapter === selectedChapter)
+      : chapterCatalog;
+    const matchingQuestionYears = relevantChapters.flatMap(({ years = [] }) => years);
     return [...new Set([...YEARS, ...matchingQuestionYears])]
       .sort((left, right) => Number(right) - Number(left));
-  }, [questions, selectedExam, selectedSubject, selectedChapter]);
+  }, [chapterCatalog, selectedChapter]);
 
   return (
     <>
@@ -583,7 +677,20 @@ function PYQPracticePage() {
                 </div>
 
                 <div className="space-y-3">
-                  {availableChapterCards.map(({ chapter, icon, count }) => (
+                  {isCatalogLoading && (
+                    <p className="text-sm font-bold text-muted-foreground" role="status">Loading available chapters...</p>
+                  )}
+                  {catalogError && (
+                    <div className="flex flex-wrap items-center justify-between gap-3" role="alert">
+                      <p className="text-sm font-semibold text-destructive">
+                        Could not load chapter counts: {catalogError}
+                      </p>
+                      <Button variant="outline" onClick={() => setCatalogRetry((retry) => retry + 1)}>
+                        Try again
+                      </Button>
+                    </div>
+                  )}
+                  {!isCatalogLoading && !catalogError && availableChapterCards.map(({ chapter, icon, count }) => (
                     <button
                       key={chapter}
                       type="button"
@@ -637,14 +744,35 @@ function PYQPracticePage() {
 
                 <div className="mb-6">
                   <p className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
-                    Showing {filteredQuestions.length} questions
+                    Showing {practiceQuestions.length} of {questionTotal} questions
                   </p>
                 </div>
 
                 {/* Questions List */}
-                {filteredQuestions.length > 0 ? (
+                {questionError && (
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-destructive/40 bg-destructive/5 p-4" role="alert">
+                    <p className="text-sm font-semibold text-destructive">{questionError}</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (practiceQuestions.length > 0) {
+                          loadMoreQuestions();
+                        } else {
+                          setQuestionRetry((retry) => retry + 1);
+                        }
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                )}
+                {isQuestionsLoading ? (
+                  <p className="py-12 text-center text-sm font-bold text-muted-foreground" role="status">
+                    Loading questions...
+                  </p>
+                ) : practiceQuestions.length > 0 ? (
                   <div className="space-y-4">
-                    {filteredQuestions.map((question, index) => (
+                    {practiceQuestions.map((question, index) => (
                       <QuestionCard
                         key={question.id}
                         question={question}
@@ -663,8 +791,15 @@ function PYQPracticePage() {
                         }}
                       />
                     ))}
+                    {practiceQuestions.length < questionTotal && (
+                      <div className="flex justify-center pt-4">
+                        <Button onClick={loadMoreQuestions} disabled={isLoadingMore}>
+                          {isLoadingMore ? 'Loading more questions...' : 'Load more questions'}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                ) : (
+                ) : !questionError && (
                   <div className="text-center py-24 border-2 border-dashed border-border bg-secondary/10">
                     <ColoredIcon icon={BookOpen} name="bookopen" size={16} className="mx-auto mb-4 text-muted-foreground opacity-50" />
                     <h3 className="text-xl font-black uppercase tracking-tight mb-2">No questions found</h3>

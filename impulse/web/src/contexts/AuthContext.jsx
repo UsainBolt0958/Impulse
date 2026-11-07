@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
       if (userChanged) {
         setProfileLoading(Boolean(nextUserId));
         setProfileError('');
-        setSyncStatus(nextSession ? 'syncing' : 'idle');
+        setSyncStatus(nextSession ? 'loading' : 'idle');
         if (!nextUserId) setProfile(null);
       }
     };

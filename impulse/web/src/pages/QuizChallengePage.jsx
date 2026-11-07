@@ -320,7 +320,7 @@ function ChallengeRoom({ challengeId }) {
   }, [challengeId]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 200);
+    const timer = window.setInterval(() => setNow(Date.now()), 1500);
     return () => window.clearInterval(timer);
   }, []);
 

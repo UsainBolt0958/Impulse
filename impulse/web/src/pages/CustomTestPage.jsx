@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header.jsx';
@@ -17,6 +17,8 @@ import {
   Target,
 } from 'lucide-react';
 import { CUSTOM_TEST_RESULTS_KEY, CUSTOM_TEST_SESSION_KEY } from '@/lib/customTest';
+import { loadCustomTestCloudSession } from '@/lib/customTestSessionSync';
+import { toast } from 'sonner';
 
 function readStoredValue(key, fallback) {
   try {
@@ -37,8 +39,44 @@ function formatDuration(seconds) {
 function CustomTestPage() {
   const navigate = useNavigate();
   const history = useMemo(() => readStoredValue(CUSTOM_TEST_RESULTS_KEY, []), []);
-  const activeSession = useMemo(() => readStoredValue(CUSTOM_TEST_SESSION_KEY, null), []);
+  const [activeSession, setActiveSession] = useState(
+    () => readStoredValue(CUSTOM_TEST_SESSION_KEY, null)
+  );
+  const localSessionAtMount = useRef(activeSession);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   const results = Array.isArray(history) ? history : [];
+
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      try {
+        const restoredSession = await loadCustomTestCloudSession(localSessionAtMount.current);
+        if (!active) return;
+        if (restoredSession) {
+          try {
+            window.localStorage.setItem(CUSTOM_TEST_SESSION_KEY, JSON.stringify(restoredSession));
+          } catch (error) {
+            console.error('Could not store restored custom test progress locally', error);
+            toast.error('The cloud test was restored, but this browser could not save a local copy.');
+          }
+        } else if (localSessionAtMount.current) {
+          window.localStorage.removeItem(CUSTOM_TEST_SESSION_KEY);
+        }
+        setActiveSession(restoredSession);
+      } catch (error) {
+        console.error('Could not restore custom test cloud checkpoint', error);
+        if (active) {
+          toast.error("Could not check cloud-saved test progress. This device's saved test is still available.");
+        }
+      } finally {
+        if (active) setIsLoadingSession(false);
+      }
+    };
+    restoreSession();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <>
@@ -56,7 +94,7 @@ function CustomTestPage() {
                 <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Custom Tests</h1>
                 <p className="mt-2 max-w-2xl text-muted-foreground">Build timed papers from PYQ chapters, then review your scorecards and question-by-question analysis.</p>
               </div>
-              <Button onClick={() => navigate('/custom-test/build')} className="h-12 rounded-2xl px-5 font-black uppercase tracking-wide">
+              <Button disabled={isLoadingSession} onClick={() => navigate('/custom-test/build')} className="h-12 rounded-2xl px-5 font-black uppercase tracking-wide">
                 <Plus className="mr-2 h-5 w-5" /> New test
               </Button>
             </div>
@@ -70,7 +108,7 @@ function CustomTestPage() {
                       {activeSession.exam} · {activeSession.questions.length} questions · timer continues while you are away
                     </p>
                   </div>
-                  <Button type="button" onClick={() => navigate('/custom-test/exam')} className="rounded-xl font-black uppercase tracking-wide">
+                  <Button type="button" disabled={isLoadingSession} onClick={() => navigate('/custom-test/exam')} className="rounded-xl font-black uppercase tracking-wide">
                     <Play className="mr-2 h-4 w-4" /> Resume test
                   </Button>
                 </CardContent>

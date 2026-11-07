@@ -357,3 +357,41 @@ export async function getSeriesAccess(userId, seriesId) {
     ? { allowed: true, reason: 'purchased' }
     : { allowed: false, reason: 'payment_required', price_inr: Number(configuredPrice.price_inr) };
 }
+
+export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAccess = false) {
+  const prices = new Map((priceRows || []).map((row) => [row.series_id, Number(row.price_inr)]));
+  const purchases = new Set((purchaseRows || []).map((row) => row.series_id));
+  return Object.fromEntries(seriesIds.map((seriesId) => {
+    if (freeAccess) return [seriesId, { allowed: true, reason: 'temporary_free_access' }];
+    const price = prices.get(seriesId);
+    if (price === undefined || price === 0) return [seriesId, { allowed: true, reason: 'free' }];
+    if (purchases.has(seriesId)) return [seriesId, { allowed: true, reason: 'purchased' }];
+    return [seriesId, { allowed: false, reason: 'payment_required', price_inr: price }];
+  }));
+}
+
+export async function getSeriesAccessBatch(userId, seriesIds) {
+  if (isFreeAccessActive()) {
+    return buildSeriesAccessMap(seriesIds, [], [], true);
+  }
+  if (seriesIds.length === 0) return {};
+
+  const postgrestInList = `(${seriesIds.map((id) => (
+    `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  )).join(',')})`;
+  const priceQuery = new URLSearchParams({
+    series_id: `in.${postgrestInList}`,
+    select: 'series_id,price_inr',
+  });
+  const purchaseQuery = new URLSearchParams({
+    user_id: `eq.${userId}`,
+    series_id: `in.${postgrestInList}`,
+    status: 'eq.active',
+    select: 'series_id',
+  });
+  const [prices, purchases] = await Promise.all([
+    supabaseRequest(`test_series_prices?${priceQuery}`),
+    supabaseRequest(`test_series_purchases?${purchaseQuery}`),
+  ]);
+  return buildSeriesAccessMap(seriesIds, prices, purchases);
+}

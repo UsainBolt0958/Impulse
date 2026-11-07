@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
-import { useQuestions } from '@/hooks/useQuestions';
+import { useAttemptQuestionMetadata } from '@/hooks/useAttemptQuestionMetadata';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 function toDateKey(date) {
@@ -23,7 +23,7 @@ function getEntryExam(entry, question) {
 
 function ActivityCalendar({ compact = false }) {
   const { solvedQuestions } = useSolvedQuestions();
-  const { questions } = useQuestions();
+  const questionMetadata = useAttemptQuestionMetadata(solvedQuestions);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -63,7 +63,7 @@ function ActivityCalendar({ compact = false }) {
     const questionIdsByExam = {};
 
     selectedEntries.forEach(entry => {
-      const question = questions.find(q => q.id === entry.question_id);
+      const question = questionMetadata[String(entry.question_id)] || {};
       const exam = getEntryExam(entry, question);
       if (!questionIdsByExam[exam]) questionIdsByExam[exam] = new Set();
       questionIdsByExam[exam].add(entry.question_id);
@@ -72,23 +72,23 @@ function ActivityCalendar({ compact = false }) {
     return Object.entries(questionIdsByExam)
       .map(([exam, questionIds]) => ({ exam, count: questionIds.size }))
       .sort((a, b) => b.count - a.count || a.exam.localeCompare(b.exam));
-  }, [selectedEntries, questions]);
+  }, [selectedEntries, questionMetadata]);
 
   const selectedExamEntries = useMemo(() => {
     if (!selectedExam) return selectedEntries;
 
     return selectedEntries.filter(entry => {
-      const question = questions.find(q => q.id === entry.question_id);
+      const question = questionMetadata[String(entry.question_id)] || {};
       return getEntryExam(entry, question) === selectedExam;
     });
-  }, [selectedEntries, questions, selectedExam]);
+  }, [selectedEntries, questionMetadata, selectedExam]);
 
   const subjectDistribution = useMemo(() => {
     const questionIdsBySubject = {};
 
     selectedExamEntries.forEach(entry => {
-      const question = questions.find(q => q.id === entry.question_id);
-      const subject = question?.subject || 'Unknown';
+      const question = questionMetadata[String(entry.question_id)] || {};
+      const subject = entry.subject || question.subject || 'Unknown';
       if (!questionIdsBySubject[subject]) questionIdsBySubject[subject] = new Set();
       questionIdsBySubject[subject].add(entry.question_id);
     });
@@ -96,7 +96,7 @@ function ActivityCalendar({ compact = false }) {
     return Object.entries(questionIdsBySubject)
       .map(([subject, questionIds]) => ({ subject, count: questionIds.size }))
       .sort((a, b) => b.count - a.count || a.subject.localeCompare(b.subject));
-  }, [selectedExamEntries, questions]);
+  }, [selectedExamEntries, questionMetadata]);
 
   const examDistribution = examBreakdown;
 
@@ -127,7 +127,7 @@ function ActivityCalendar({ compact = false }) {
     const correct = correctQuestionIds.size;
     const accuracy = total ? ((correct / total) * 100).toFixed(1) : '0.0';
     return { total, correct, accuracy };
-  }, [selectedExamEntries]);
+  }, [selectedEntries]);
 
   React.useEffect(() => {
     if (selectedDate) {

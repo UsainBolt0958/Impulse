@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addCustomTestTimeSpent,
   calculateCustomTestResults,
   selectCustomTestQuestions,
+  selectCustomTestQuestionsBySubject,
 } from './customTest';
 
 const makeQuestion = (id, chapter, difficulty, year = 2024) => ({
@@ -81,6 +83,75 @@ describe('selectCustomTestQuestions', () => {
 
     expect(selected).toHaveLength(120);
   });
+
+  it('fills missing difficulty targets without dropping uncategorized eligible questions', () => {
+    const questions = [
+      makeQuestion('selected-easy', 'Mechanics', 'Easy'),
+      makeQuestion('selected-hard', 'Mechanics', 'Hard'),
+      makeQuestion('other-medium', 'Optics', 'Medium'),
+      makeQuestion('other-uncategorized', 'Optics', 'Unrated'),
+    ];
+    const selected = selectCustomTestQuestions({
+      questions,
+      exam: 'JEE MAINS',
+      subject: 'Physics',
+      chapters: ['Mechanics'],
+      years: ['2024'],
+      count: 4,
+      difficulty: 'moderate-hard',
+      random: () => 0,
+    });
+
+    expect(selected.map(({ id }) => id).sort()).toEqual([
+      'other-medium',
+      'other-uncategorized',
+      'selected-easy',
+      'selected-hard',
+    ]);
+  });
+
+  it('groups a multi-subject bank once without changing per-subject selection results', () => {
+    const questions = [
+      makeQuestion('p-easy', 'Mechanics', 'Easy'),
+      { ...makeQuestion('chem-medium', 'Organic', 'Medium'), subject: 'Chemistry' },
+      makeQuestion('p-medium', 'Optics', 'Medium', 2025),
+      { ...makeQuestion('wrong-year', 'Mechanics', 'Hard', 2023) },
+      { ...makeQuestion('wrong-exam', 'Mechanics', 'Hard'), exam: 'NEET' },
+      { ...makeQuestion('chem-hard', 'Organic', 'Hard'), subject: 'Chemistry' },
+      makeQuestion('p-hard', 'Mechanics', 'Hard'),
+    ];
+    const subjects = [
+      { name: 'Physics', chapters: ['Mechanics'], count: 3 },
+      { name: 'Chemistry', chapters: ['Organic'], count: 2 },
+    ];
+    const createRandom = () => {
+      let state = 17;
+      return () => {
+        state = (state * 48271) % 2147483647;
+        return state / 2147483647;
+      };
+    };
+    const previousRandom = createRandom();
+    const previousSelection = subjects.flatMap((subject) => selectCustomTestQuestions({
+      questions,
+      exam: 'JEE MAINS',
+      subject: subject.name,
+      chapters: subject.chapters,
+      years: ['2024'],
+      count: subject.count,
+      difficulty: 'moderate-hard',
+      random: previousRandom,
+    }));
+
+    expect(selectCustomTestQuestionsBySubject({
+      questions,
+      exam: 'JEE MAINS',
+      subjects,
+      years: ['2024'],
+      difficulty: 'moderate-hard',
+      random: createRandom(),
+    })).toEqual(previousSelection);
+  });
 });
 
 describe('calculateCustomTestResults', () => {
@@ -113,6 +184,7 @@ describe('calculateCustomTestResults', () => {
       accuracy: 50,
       totalTimeSpent: 75,
     });
+
   });
 
   it('applies the no-negative-mark default to a wrong numerical response', () => {
@@ -136,5 +208,27 @@ describe('calculateCustomTestResults', () => {
     }, 13_000);
 
     expect(result).toMatchObject({ score: 0, negativeMarks: 0, wrongCount: 1 });
+  });
+});
+
+describe('addCustomTestTimeSpent', () => {
+  it('merges elapsed question time without mutating existing time totals', () => {
+    const existing = { question1: 12 };
+    const elapsed = { question1: 3, question2: 5 };
+
+    expect(addCustomTestTimeSpent(existing, elapsed)).toEqual({
+      question1: 15,
+      question2: 5,
+    });
+    expect(existing).toEqual({ question1: 12 });
+    expect(elapsed).toEqual({ question1: 3, question2: 5 });
+  });
+
+  it('ignores invalid or non-positive elapsed values', () => {
+    expect(addCustomTestTimeSpent({ question1: 4 }, {
+      question1: 0,
+      question2: -1,
+      question3: 'not-a-number',
+    })).toEqual({ question1: 4 });
   });
 });

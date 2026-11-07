@@ -11,6 +11,11 @@ const PERSISTED_DOCUMENTS = new Set([
   'series.json',
   'tests.json',
 ]);
+const PERSISTED_DOCUMENT_CACHE_TTL_MS = 15_000;
+const PERSISTED_DOCUMENT_CACHE_MAX_BYTES = 5 * 1024 * 1024;
+const persistentDocumentCache = new Map();
+const persistentDocumentRequests = new Map();
+const persistentDocumentVersions = new Map();
 
 function isSupabaseConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
@@ -24,12 +29,248 @@ function requireSupabaseConfig() {
   }
 }
 
+export function normalizedQuestionStorageEnabled() {
+  return process.env.SUPABASE_NORMALIZED_QUESTIONS === 'true';
+}
+
+function compactTestQuestionSolutions(tests) {
+  if (!Array.isArray(tests)) return tests;
+  return tests.map((test) => ({
+    ...test,
+    sections: Array.isArray(test.sections)
+      ? test.sections.map((section) => ({
+        ...section,
+        questions: Array.isArray(section.questions)
+          ? section.questions.map((question) => {
+            if (
+              typeof question?.solution !== 'string'
+              || question.explanation !== question.solution
+            ) return question;
+            const { explanation, ...compactQuestion } = question;
+            return compactQuestion;
+          })
+          : section.questions,
+      }))
+      : test.sections,
+  }));
+}
+
+function restoreTestQuestionSolutions(tests) {
+  if (!Array.isArray(tests)) return tests;
+  return tests.map((test) => ({
+    ...test,
+    sections: Array.isArray(test.sections)
+      ? test.sections.map((section) => ({
+        ...section,
+        questions: Array.isArray(section.questions)
+          ? section.questions.map((question) => (
+            typeof question?.solution === 'string' && question.explanation === undefined
+              ? { ...question, explanation: question.solution }
+              : question
+          ))
+          : section.questions,
+      }))
+      : test.sections,
+  }));
+}
+
+function restorePersistedDocument(key, content) {
+  return key === 'tests.json' ? restoreTestQuestionSolutions(content) : content;
+}
+
 function getHeaders(extra = {}) {
   return {
     apikey: SUPABASE_SERVICE_ROLE_KEY,
     Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
     ...extra,
   };
+}
+
+function getInFilter(values) {
+  const escapedValues = values.map((value) => (
+    `"${String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  ));
+  return `in.(${escapedValues.join(',')})`;
+}
+
+function addNormalizedQuestionFilters(query, filters = {}) {
+  for (const field of ['exam', 'subject', 'chapter', 'difficulty', 'year']) {
+    const values = [...new Set((filters[field] || []).map((value) => String(value).trim()).filter(Boolean))];
+    if (values.length === 1) query.set(field, `eq.${values[0]}`);
+    else if (values.length > 1) query.set(field, getInFilter(values));
+  }
+}
+
+async function fetchNormalizedQuestionRows(query, { start = 0, end = 999 } = {}) {
+  requireSupabaseConfig();
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/question_versions?${query}`, {
+    headers: getHeaders({ Range: `${start}-${end}`, 'Range-Unit': 'items' }),
+  });
+  if (!response.ok) throw await getResponseError(response);
+  return response.json();
+}
+
+export async function readNormalizedQuestions() {
+  const rows = [];
+  for (let start = 0; ; start += 1000) {
+    const query = new URLSearchParams({
+      select: 'content',
+      is_current: 'eq.true',
+      order: 'position.asc',
+    });
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    rows.push(...batch.map((row) => row.content));
+    if (batch.length < 1000) return rows;
+  }
+}
+
+export async function readNormalizedQuestionPage(filters, page, limit) {
+  const query = new URLSearchParams({
+    select: 'content',
+    is_current: 'eq.true',
+    order: 'position.asc',
+  });
+  addNormalizedQuestionFilters(query, filters);
+  const start = (page - 1) * limit;
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/question_versions?${query}`,
+    {
+      headers: getHeaders({
+        Prefer: 'count=exact',
+        Range: `${start}-${start + limit - 1}`,
+        'Range-Unit': 'items',
+      }),
+    },
+  );
+  if (!response.ok) throw await getResponseError(response);
+  const questions = (await response.json()).map((row) => row.content);
+  const contentRange = response.headers.get('content-range') || '';
+  const total = Number(contentRange.match(/\/(\d+)$/)?.[1]);
+  if (!Number.isInteger(total)) {
+    const error = new Error('Supabase did not return an exact question count.');
+    error.statusCode = 503;
+    throw error;
+  }
+  return {
+    questions,
+    total,
+    page,
+    limit,
+    hasMore: start + questions.length < total,
+  };
+}
+
+export async function readNormalizedQuestionMetadata() {
+  const query = new URLSearchParams({
+    select: 'question_id,position,exam,subject,chapter,difficulty',
+    is_current: 'eq.true',
+    order: 'position.asc',
+  });
+  const rows = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    rows.push(...batch.map(({ question_id, exam, subject, chapter, difficulty }) => ({
+      id: question_id,
+      exam,
+      subject,
+      chapter,
+      difficulty,
+    })));
+    if (batch.length < 1000) return rows;
+  }
+}
+
+export async function readNormalizedQuestionCatalog(exam, subject) {
+  const query = new URLSearchParams({
+    select: 'exam,subject,chapter,year',
+    is_current: 'eq.true',
+    exam: `eq.${exam}`,
+    subject: `eq.${subject}`,
+    order: 'position.asc',
+  });
+  const rows = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    rows.push(...batch);
+    if (batch.length < 1000) return rows;
+  }
+}
+
+export async function readNormalizedCustomTestCatalogQuestions() {
+  const query = new URLSearchParams({
+    select: 'exam,subject,chapter,year,question_type,correct_answer,options',
+    is_current: 'eq.true',
+    order: 'position.asc',
+  });
+  const rows = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    rows.push(...batch);
+    if (batch.length < 1000) return rows;
+  }
+}
+
+export async function readNormalizedQuestionsForSelection({
+  exam,
+  subjects,
+  chapters,
+  years,
+  difficulty,
+}) {
+  const query = new URLSearchParams({
+    select: 'content',
+    is_current: 'eq.true',
+    exam: `eq.${exam}`,
+    year: getInFilter(years),
+    subject: getInFilter(subjects),
+    chapter: getInFilter(chapters),
+    difficulty: `eq.${difficulty}`,
+    order: 'position.asc',
+  });
+  const rows = [];
+  for (let start = 0; ; start += 1000) {
+    const batch = await fetchNormalizedQuestionRows(query, {
+      start,
+      end: start + 999,
+    });
+    rows.push(...batch.map((row) => row.content));
+    if (batch.length < 1000) return rows;
+  }
+}
+
+async function writeNormalizedAdminState(data) {
+  requireSupabaseConfig();
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/rpc/save_admin_state_and_question_versions`,
+    {
+      method: 'POST',
+      headers: getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ p_content: data }),
+    },
+  );
+  if (!response.ok) throw await getResponseError(response);
+}
+
+function cachePersistentDocument(key, content) {
+  const contentBytes = Buffer.byteLength(JSON.stringify(content), 'utf8');
+  if (contentBytes > PERSISTED_DOCUMENT_CACHE_MAX_BYTES) return;
+
+  persistentDocumentCache.set(key, {
+    content: structuredClone(content),
+    expiresAt: Date.now() + PERSISTED_DOCUMENT_CACHE_TTL_MS,
+  });
 }
 
 async function getResponseError(response) {
@@ -47,33 +288,77 @@ export async function readPersistentJson(filePath, fallback, readLocal) {
     return readLocal();
   }
 
-  const query = new URLSearchParams({ key: `eq.${key}`, select: 'content', limit: '1' });
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/admin_content?${query}`, {
-    headers: getHeaders(),
-  });
-  if (!response.ok) throw await getResponseError(response);
+  const cached = persistentDocumentCache.get(key);
+  if (cached && Date.now() < cached.expiresAt) {
+    return structuredClone(cached.content);
+  }
 
-  const rows = await response.json();
-  return rows.length ? rows[0].content : fallback;
+  const existingRequest = persistentDocumentRequests.get(key);
+  if (existingRequest) return structuredClone(await existingRequest);
+
+  const version = persistentDocumentVersions.get(key) || 0;
+  const query = new URLSearchParams({ key: `eq.${key}`, select: 'content', limit: '1' });
+  const request = (async () => {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/admin_content?${query}`, {
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw await getResponseError(response);
+
+    const rows = await response.json();
+    const storedContent = rows.length ? rows[0].content : fallback;
+    const content = restorePersistedDocument(key, storedContent);
+    if ((persistentDocumentVersions.get(key) || 0) === version) {
+      cachePersistentDocument(key, content);
+    }
+    return content;
+  })();
+  persistentDocumentRequests.set(key, request);
+
+  try {
+    return structuredClone(await request);
+  } finally {
+    if (persistentDocumentRequests.get(key) === request) {
+      persistentDocumentRequests.delete(key);
+    }
+  }
 }
 
 export async function writePersistentJson(filePath, data, writeLocal) {
   const key = basename(filePath);
   if (!PERSISTED_DOCUMENTS.has(key)) return writeLocal();
+  if (key === 'admin-state.json' && normalizedQuestionStorageEnabled()) {
+    requireSupabaseConfig();
+    persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
+    persistentDocumentCache.delete(key);
+    await writeNormalizedAdminState(data);
+    persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
+    cachePersistentDocument(key, data);
+    return;
+  }
+
   if (!isSupabaseConfigured()) {
     if (process.env.NODE_ENV === 'production') requireSupabaseConfig();
     return writeLocal();
   }
 
+  persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
+  persistentDocumentCache.delete(key);
   const response = await fetch(`${SUPABASE_URL}/rest/v1/admin_content?on_conflict=key`, {
     method: 'POST',
     headers: getHeaders({
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates,return=minimal',
     }),
-    body: JSON.stringify({ key, content: data, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({
+      key,
+      content: key === 'tests.json' ? compactTestQuestionSolutions(data) : data,
+      updated_at: new Date().toISOString(),
+    }),
   });
   if (!response.ok) throw await getResponseError(response);
+
+  persistentDocumentVersions.set(key, (persistentDocumentVersions.get(key) || 0) + 1);
+  cachePersistentDocument(key, restorePersistedDocument(key, data));
 }
 
 export async function storeUploadedImage(filename, contentType, buffer, writeLocal) {
@@ -151,5 +436,53 @@ export async function getPersistentStorageUsage() {
     adminContentBytes,
     trackedBytes: uploadBytes + adminContentBytes,
     measuredAt: new Date().toISOString(),
+  };
+}
+
+export async function getSupabaseConnectionStatus() {
+  if (!isSupabaseConfigured()) {
+    return {
+      configured: false,
+      database: { status: 'not_configured' },
+      storage: { status: 'not_configured' },
+      checkedAt: new Date().toISOString(),
+    };
+  }
+
+  const checkService = async (label, url) => {
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    try {
+      const response = await fetch(url, {
+        headers: getHeaders(),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        console.error(`Supabase ${label} health check returned HTTP ${response.status}.`);
+        return { status: 'error', statusCode: response.status, latencyMs: Date.now() - startedAt };
+      }
+      return { status: 'healthy', latencyMs: Date.now() - startedAt };
+    } catch (error) {
+      console.error(`Supabase ${label} health check failed.`, error);
+      return {
+        status: 'error',
+        message: error?.name === 'AbortError' ? 'Health check timed out.' : 'Connection failed.',
+        latencyMs: Date.now() - startedAt,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const [database, storage] = await Promise.all([
+    checkService('database API', `${SUPABASE_URL}/rest/v1/admin_content?select=key&limit=1`),
+    checkService('storage API', `${SUPABASE_URL}/storage/v1/bucket/${STORAGE_BUCKET}`),
+  ]);
+  return {
+    configured: true,
+    database,
+    storage,
+    checkedAt: new Date().toISOString(),
   };
 }

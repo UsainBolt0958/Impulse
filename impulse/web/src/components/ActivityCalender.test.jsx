@@ -47,13 +47,11 @@ vi.mock('@/hooks/useSolvedQuestions', () => ({
   useSolvedQuestions: () => ({ solvedQuestions: activityAttempts }),
 }));
 
-vi.mock('@/hooks/useQuestions', () => ({
-  useQuestions: () => ({
-    questions: [
-      { id: 'jee-question-1', exam: 'JEE MAINS', subject: 'Physics' },
-      { id: 'jee-question-2', exam: 'JEE MAINS', subject: 'Chemistry' },
-      { id: 'jee-question-3', exam: 'JEE MAINS', subject: 'Mathematics' },
-    ],
+vi.mock('@/hooks/useAttemptQuestionMetadata', () => ({
+  useAttemptQuestionMetadata: () => ({
+    'jee-question-1': { id: 'jee-question-1', exam: 'JEE MAINS', subject: 'Physics' },
+    'jee-question-2': { id: 'jee-question-2', exam: 'JEE MAINS', subject: 'Chemistry' },
+    'jee-question-3': { id: 'jee-question-3', exam: 'JEE MAINS', subject: 'Mathematics' },
   }),
 }));
 

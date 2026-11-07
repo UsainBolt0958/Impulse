@@ -51,7 +51,9 @@ export function useSolvedQuestions() {
   const addSolvedQuestion = (questionId, isCorrect, timeTaken, question = {}) => {
     const newSolved = {
       question_id: questionId,
+      exam: question.exam,
       subject: question.subject,
+      chapter: question.chapter,
       difficulty: question.difficulty,
       is_correct: isCorrect,
       time_taken: timeTaken,
