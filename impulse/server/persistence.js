@@ -7,7 +7,6 @@ const STORAGE_BUCKET = 'admin-uploads';
 const PERSISTED_DOCUMENTS = new Set([
   'admin-state.json',
   'engine-questions.json',
-  'quiz-challenges.json',
   'series.json',
   'tests.json',
 ]);
@@ -242,23 +241,6 @@ export async function readNormalizedCustomTestCatalogQuestions() {
   }
 }
 
-export async function readNormalizedQuizCatalogQuestions() {
-  const query = new URLSearchParams({
-    select: 'subject,chapter,options,correct_answer,question_text:content->>question_text,question:content->>question',
-    is_current: 'eq.true',
-    order: 'position.asc',
-  });
-  const questions = [];
-  for (let start = 0; ; start += 1000) {
-    const batch = await fetchNormalizedQuestionRows(query, {
-      start,
-      end: start + 999,
-    });
-    questions.push(...batch);
-    if (batch.length < 1000) return questions;
-  }
-}
-
 export async function readNormalizedQuestionsForSelection({
   exam,
   subjects,
@@ -333,25 +315,6 @@ export async function readNormalizedQuestionVersions(references) {
     }
   }
   return rows;
-}
-
-export async function readNormalizedQuizQuestions(subject, chapter) {
-  const query = new URLSearchParams({
-    select: 'content',
-    is_current: 'eq.true',
-    subject: `eq.${subject.trim()}`,
-    chapter: `eq.${chapter.trim()}`,
-    order: 'position.asc',
-  });
-  const questions = [];
-  for (let start = 0; ; start += 1000) {
-    const batch = await fetchNormalizedQuestionRows(query, {
-      start,
-      end: start + 999,
-    });
-    questions.push(...batch.map((row) => row.content));
-    if (batch.length < 1000) return questions;
-  }
 }
 
 async function writeNormalizedAdminState(data) {

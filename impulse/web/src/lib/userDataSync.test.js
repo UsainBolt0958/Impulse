@@ -48,8 +48,6 @@ describe('user data sync keys', () => {
       'impulse_notebooks',
       'impulse_profile_stat_visibility',
       'impulse_custom_test_results',
-      'impulse_quiz_player_id',
-      'impulse_quiz_player_name',
       'theme',
       'solve_font_size',
       'custom_test_font_size',
@@ -75,7 +73,6 @@ describe('user data sync keys', () => {
       'impulse_admin_exams',
       'impulse_questions',
       'impulse_custom_test_session',
-      'impulse_quiz_player_token:challenge-1',
       'exam_hidden_warning',
     ].forEach((key) => expect(isUserDataKey(key)).toBe(false));
   });
@@ -86,7 +83,6 @@ describe('user data sync keys', () => {
     window.localStorage.setItem('impulse_custom_test_session', '{"id":"active-test"}');
     window.localStorage.setItem('impulse_admin_exams', '[]');
     window.localStorage.setItem('theme', 'dark');
-    window.localStorage.setItem('impulse_quiz_player_token:challenge-1', 'private-token');
 
     await clearLocalUserData();
 
@@ -95,7 +91,6 @@ describe('user data sync keys', () => {
     expect(window.localStorage.getItem('impulse_custom_test_session')).toBeNull();
     expect(window.localStorage.getItem('impulse_admin_exams')).toBe('[]');
     expect(window.localStorage.getItem('theme')).toBeNull();
-    expect(window.localStorage.getItem('impulse_quiz_player_token:challenge-1')).toBeNull();
   });
 
   it('imports browser study history and syncs later browser changes', async () => {

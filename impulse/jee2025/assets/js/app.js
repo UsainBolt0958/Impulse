@@ -1877,45 +1877,34 @@ try{
 
         function updateImageLoadingProgress(loaded, total) {
             const progressEl = document.querySelector('#img-loading-overlay .img-loading-progress');
-            if (progressEl) {
-                progressEl.textContent = Math.round((loaded / total) * 100) + '%';
-            }
+            if (progressEl) progressEl.textContent = Math.round((loaded / total) * 100) + '%';
         }
 
         async function preloadExamImages() {
             if (!sess || !sess.data) return;
-
-            const imagesToPreload = [];
-            S.forEach(subject => {
-                SEC.forEach(section => {
-                    if (sess.data[subject] && sess.data[subject][section]) {
-                        sess.data[subject][section].forEach(question => {
-                            if (question.img) imagesToPreload.push(question.img);
-                        });
-                    }
-                });
-            });
-
+            const imagesToPreload = Object.keys(sess.data).flatMap(subject => (
+                Object.keys(sess.data[subject] || {}).flatMap(section => (
+                    (sess.data[subject][section] || []).map(question => question.img).filter(Boolean)
+                ))
+            ));
             if (imagesToPreload.length === 0) return;
 
-            console.log(`🖼️ Preloading ${imagesToPreload.length} exam images...`);
             let loaded = 0;
             await Promise.all(imagesToPreload.map(src => new Promise(resolve => {
                 const image = new Image();
                 image.onload = () => {
                     loaded++;
                     updateImageLoadingProgress(loaded, imagesToPreload.length);
-                    resolve({ success: true, src });
+                    resolve();
                 };
                 image.onerror = () => {
                     loaded++;
                     updateImageLoadingProgress(loaded, imagesToPreload.length);
                     console.warn('Failed to preload image:', src);
-                    resolve({ success: false, src });
+                    resolve();
                 };
                 image.src = src;
             })));
-            console.log('✅ Image preloading complete');
         }
 
         async function proceedStartExam(paper, isResume = false) {
@@ -2043,7 +2032,6 @@ try{
             showImageLoadingOverlay();
             await preloadExamImages();
             hideImageLoadingOverlay();
-
             saveSess(true); // Immediate save
             navTo('exam');
             initExamUI();

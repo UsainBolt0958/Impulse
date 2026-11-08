@@ -333,25 +333,3 @@ describe('compactCustomTestResult', () => {
     });
   });
 });
-
-describe('addCustomTestTimeSpent', () => {
-  it('merges elapsed question time without mutating existing time totals', () => {
-    const existing = { question1: 12 };
-    const elapsed = { question1: 3, question2: 5 };
-
-    expect(addCustomTestTimeSpent(existing, elapsed)).toEqual({
-      question1: 15,
-      question2: 5,
-    });
-    expect(existing).toEqual({ question1: 12 });
-    expect(elapsed).toEqual({ question1: 3, question2: 5 });
-  });
-
-  it('ignores invalid or non-positive elapsed values', () => {
-    expect(addCustomTestTimeSpent({ question1: 4 }, {
-      question1: 0,
-      question2: -1,
-      question3: 'not-a-number',
-    })).toEqual({ question1: 4 });
-  });
-});

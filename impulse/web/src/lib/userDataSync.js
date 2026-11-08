@@ -8,8 +8,6 @@ const USER_DATA_KEYS = new Set([
   'impulse_notebooks',
   'impulse_profile_stat_visibility',
   'impulse_custom_test_results',
-  'impulse_quiz_player_id',
-  'impulse_quiz_player_name',
   'theme',
   'solve_font_size',
   'custom_test_font_size',
@@ -46,8 +44,7 @@ export function isUserDataKey(key) {
 
 function isLocalUserDataKey(key) {
   return isUserDataKey(key)
-    || LOCAL_ONLY_USER_DATA_KEYS.has(key)
-    || /^impulse_quiz_player_token:.+$/.test(key);
+    || LOCAL_ONLY_USER_DATA_KEYS.has(key);
 }
 
 function readLocalValue(key) {

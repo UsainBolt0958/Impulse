@@ -15,7 +15,6 @@ const ExamPlayer = lazy(() => import('./pages/ExamPlayer'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const FriendsPage = lazy(() => import('./pages/FriendsPage'));
-const QuizChallengePage = lazy(() => import('./pages/QuizChallengePage'));
 const NotebookPage = lazy(() => import('./pages/NotebookPage'));
 const CalendarPage = lazy(() => import('./pages/CalendarPage'));
 const PreviousPapersPage = lazy(() => import('./pages/PreviousPapersPage'));
@@ -92,8 +91,6 @@ function AppContent() {
             <Route path="/payments/return" element={<PaymentReturnPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/friends/:friendId" element={<FriendsPage />} />
-            <Route path="/quiz-challenge" element={<QuizChallengePage />} />
-            <Route path="/quiz-challenge/:challengeId" element={<QuizChallengePage />} />
             <Route path="/notebook" element={<NotebookPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/previous-papers" element={<PreviousPapersPage />} />

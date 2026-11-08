@@ -2018,3 +2018,338 @@
             margin-bottom: 6px;
             white-space: normal;
         }
+        #scr-exam,
+        #scr-exam *,
+        #scr-result,
+        #scr-result * {
+            scrollbar-width: thin;
+            scrollbar-color: #fff #e5e7eb;
+        }
+        #scr-exam::-webkit-scrollbar,
+        #scr-exam *::-webkit-scrollbar,
+        #scr-result::-webkit-scrollbar,
+        #scr-result *::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        #scr-exam::-webkit-scrollbar-track,
+        #scr-exam *::-webkit-scrollbar-track,
+        #scr-result::-webkit-scrollbar-track,
+        #scr-result *::-webkit-scrollbar-track {
+            background: #e5e7eb;
+        }
+        #scr-exam::-webkit-scrollbar-thumb,
+        #scr-exam *::-webkit-scrollbar-thumb,
+        #scr-result::-webkit-scrollbar-thumb,
+        #scr-result *::-webkit-scrollbar-thumb {
+            background: #fff;
+            border: 1px solid #fff;
+            border-radius: 5px;
+        }
+        #scr-exam.exam-dark,
+        #scr-exam.exam-dark *,
+        #scr-result.analysis-dark,
+        #scr-result.analysis-dark * {
+            scrollbar-color: #555 #0a0a0a;
+        }
+        #scr-exam.exam-dark::-webkit-scrollbar-track,
+        #scr-exam.exam-dark *::-webkit-scrollbar-track,
+        #scr-result.analysis-dark::-webkit-scrollbar-track,
+        #scr-result.analysis-dark *::-webkit-scrollbar-track {
+            background: #0a0a0a;
+        }
+        #scr-exam.exam-dark::-webkit-scrollbar-thumb,
+        #scr-exam.exam-dark *::-webkit-scrollbar-thumb,
+        #scr-result.analysis-dark::-webkit-scrollbar-thumb,
+        #scr-result.analysis-dark *::-webkit-scrollbar-thumb {
+            background: #555;
+            border-color: #0a0a0a;
+        }
+        #scr-result.analysis-dark {
+            color: #e5e5e5;
+            background: #000;
+        }
+        #scr-result.analysis-dark .comparison-score {
+            color: #fff !important;
+        }
+        #scr-result.analysis-dark .home-header,
+        #scr-result.analysis-dark .result-sidebar,
+        #scr-result.analysis-dark .result-content,
+        #scr-result.analysis-dark .sidebar-header,
+        #scr-result.analysis-dark .section-header {
+            color: #f5f5f5;
+            background: #0a0a0a;
+            border-color: #333;
+        }
+        #scr-result.analysis-dark .result-layout { background: #000; }
+        #scr-result.analysis-dark .home-brand,
+        #scr-result.analysis-dark .sidebar-header h3,
+        #scr-result.analysis-dark .sidebar-header p,
+        #scr-result.analysis-dark .section-header h2,
+        #scr-result.analysis-dark .result-content h1,
+        #scr-result.analysis-dark .result-content h2,
+        #scr-result.analysis-dark .result-content h3,
+        #scr-result.analysis-dark .result-content h4,
+        #scr-result.analysis-dark .result-content p,
+        #scr-result.analysis-dark .result-content li,
+        #scr-result.analysis-dark .result-content th,
+        #scr-result.analysis-dark .result-content td,
+        #scr-result.analysis-dark .result-content label,
+        #scr-result.analysis-dark .analysis-section-title,
+        #scr-result.analysis-dark .chart-title,
+        #scr-result.analysis-dark .metric-label,
+        #scr-result.analysis-dark .metric-hint,
+        #scr-result.analysis-dark .qtype-label,
+        #scr-result.analysis-dark .qtype-detail,
+        #scr-result.analysis-dark .error-label,
+        #scr-result.analysis-dark .error-score { color: #e5e5e5 !important; }
+        #scr-result.analysis-dark .nav-item:not(.active) {
+            color: #d4d4d4;
+            background: #111;
+            border-color: #333;
+        }
+        #scr-result.analysis-dark .nav-item:not(.active):hover,
+        #scr-result.analysis-dark .nav-item.active:not(#review-mode-btn) {
+            color: #fff;
+            background: #303030;
+            border-color: #444;
+        }
+        #scr-result.analysis-dark .analysis-section,
+        #scr-result.analysis-dark .score-comparison-card,
+        #scr-result.analysis-dark .score-card,
+        #scr-result.analysis-dark .score-card-full,
+        #scr-result.analysis-dark .detailed-analysis-card,
+        #scr-result.analysis-dark .metric-box,
+        #scr-result.analysis-dark .qtype-card,
+        #scr-result.analysis-dark .pattern-box,
+        #scr-result.analysis-dark .streak-box,
+        #scr-result.analysis-dark .calibration-box,
+        #scr-result.analysis-dark .negative-impact-box,
+        #scr-result.analysis-dark .impact-item,
+        #scr-result.analysis-dark .table-container,
+        #scr-result.analysis-dark .comparison-metrics,
+        #scr-result.analysis-dark .score-metric {
+            color: #e5e5e5;
+            background: #111 !important;
+            border-color: #333 !important;
+            box-shadow: none;
+        }
+        #scr-result.analysis-dark .result-content [style*="background:#fff"],
+        #scr-result.analysis-dark .result-content [style*="background: #fff"],
+        #scr-result.analysis-dark .result-content [style*="background:#ffffff"],
+        #scr-result.analysis-dark .result-content [style*="background: #ffffff"],
+        #scr-result.analysis-dark .result-content [style*="background:#f8f9fa"],
+        #scr-result.analysis-dark .result-content [style*="background: #f8f9fa"],
+        #scr-result.analysis-dark .result-content [style*="background:#f0f2f5"],
+        #scr-result.analysis-dark .result-content [style*="background: #f0f2f5"] {
+            color: #e5e5e5 !important;
+            background: #171717 !important;
+            border-color: #333 !important;
+        }
+        #scr-result.analysis-dark .chart-box,
+        #scr-result.analysis-dark .comparison-bar-container,
+        #scr-result.analysis-dark .percentile-orb,
+        #scr-result.analysis-dark .heatmap-full-container,
+        #scr-result.analysis-dark .heatmap-container,
+        #scr-result.analysis-dark .heatmap-questions-grid,
+        #scr-result.analysis-dark .histogram-container,
+        #scr-result.analysis-dark .insights-box,
+        #scr-result.analysis-dark .insight-badge,
+        #scr-result.analysis-dark .consistency-meter,
+        #scr-result.analysis-dark .half-box,
+        #scr-result.analysis-dark .projection-box,
+        #scr-result.analysis-dark .partial-box,
+        #scr-result.analysis-dark .error-bar-wrapper,
+        #scr-result.analysis-dark .sc-row-total {
+            color: #e5e5e5 !important;
+            background: #171717 !important;
+            border-color: #333 !important;
+            box-shadow: none;
+        }
+        #scr-result.analysis-dark .percentile-orb::after {
+            background: #171717;
+        }
+        #scr-result.analysis-dark .percentile-value {
+            color: #93c5fd;
+        }
+        #scr-result.analysis-dark .percentile-range,
+        #scr-result.analysis-dark .comparison-label {
+            color: #d4d4d4;
+        }
+        #scr-result.analysis-dark .result-content [style*="background:#f0f0f0"],
+        #scr-result.analysis-dark .result-content [style*="background: #f0f0f0"],
+        #scr-result.analysis-dark .result-content [style*="background:#f3f4f6"],
+        #scr-result.analysis-dark .result-content [style*="background: #f3f4f6"],
+        #scr-result.analysis-dark .result-content [style*="background:#f9fafb"],
+        #scr-result.analysis-dark .result-content [style*="background: #f9fafb"],
+        #scr-result.analysis-dark .result-content [style*="background:#e5e7eb"],
+        #scr-result.analysis-dark .result-content [style*="background: #e5e7eb"] {
+            color: #e5e5e5 !important;
+            background: #171717 !important;
+            border-color: #333 !important;
+        }
+        #scr-result.analysis-dark .result-content [style*="background:#fef2f2"],
+        #scr-result.analysis-dark .result-content [style*="background: #fef2f2"],
+        #scr-result.analysis-dark .result-content [style*="background:#fee2e2"],
+        #scr-result.analysis-dark .result-content [style*="background: #fee2e2"] {
+            color: #fecaca !important;
+            background: #2b1515 !important;
+            border-color: #7f1d1d !important;
+        }
+        #scr-result.analysis-dark .result-content [style*="background:#fff3cd"],
+        #scr-result.analysis-dark .result-content [style*="background: #fff3cd"],
+        #scr-result.analysis-dark .result-content [style*="background:#fef3c7"],
+        #scr-result.analysis-dark .result-content [style*="background: #fef3c7"],
+        #scr-result.analysis-dark .result-content [style*="background:#fff7ed"],
+        #scr-result.analysis-dark .result-content [style*="background: #fff7ed"],
+        #scr-result.analysis-dark .result-content [style*="background:#ffedd5"],
+        #scr-result.analysis-dark .result-content [style*="background: #ffedd5"] {
+            color: #fed7aa !important;
+            background: #2b2110 !important;
+            border-color: #713f12 !important;
+        }
+        #scr-result.analysis-dark #section-accuracy .mark-item {
+            color: #e5e5e5;
+            background: #171717 !important;
+            border-color: #333 !important;
+        }
+        #scr-result.analysis-dark #section-accuracy [style*="color:#999"],
+        #scr-result.analysis-dark #section-accuracy [style*="color: #999"] {
+            color: #a3a3a3 !important;
+        }
+        #scr-result.analysis-dark #section-accuracy #risk-ratio {
+            color: #93c5fd !important;
+        }
+        #scr-result.analysis-dark .analysis-table th,
+        #scr-result.analysis-dark .sc-table th,
+        #scr-result.analysis-dark .result-content table th {
+            color: #f5f5f5 !important;
+            background: #222 !important;
+            border-color: #444 !important;
+        }
+        #scr-result.analysis-dark .analysis-table td,
+        #scr-result.analysis-dark .sc-table td,
+        #scr-result.analysis-dark .result-content table td { border-color: #333 !important; }
+        #scr-result.analysis-dark .analysis-table tbody tr:hover,
+        #scr-result.analysis-dark .result-content tbody tr:hover { background: #1a1a1a !important; }
+        #scr-result.analysis-dark .analysis-theme-toggle,
+        #scr-result.analysis-dark .header-right .btn {
+            color: #f5f5f5;
+            background: #171717;
+            border-color: #555;
+        }
+        #scr-result.analysis-dark .analysis-theme-toggle:hover,
+        #scr-result.analysis-dark .header-right .btn:hover { background: #303030; }
+        #scr-exam.exam-dark {
+            color: #f5f5f5;
+            background: #000;
+        }
+        #scr-exam.exam-dark .top-bar,
+        #scr-exam.exam-dark .q-header,
+        #scr-exam.exam-dark .q-scroll,
+        #scr-exam.exam-dark .foot-bar,
+        #scr-exam.exam-dark .user-info,
+        #scr-exam.exam-dark .leg-grid,
+        #scr-exam.exam-dark .submit-area {
+            color: #f5f5f5;
+            background-color: #0a0a0a;
+            border-color: #333;
+        }
+        #scr-exam.exam-dark .brand-title,
+        #scr-exam.exam-dark .q-header,
+        #scr-exam.exam-dark #q-text {
+            color: #f5f5f5;
+        }
+        #scr-exam.exam-dark .timer-badge {
+            background: #050505;
+            color: #fca5a5;
+            border-color: #f87171;
+        }
+        #scr-exam.exam-dark .nav-strip,
+        #scr-exam.exam-dark .section-nav,
+        #scr-exam.exam-dark .side-panel {
+            color: #e5e5e5;
+            background-color: #111;
+            border-color: #333;
+        }
+        #scr-exam.exam-dark .nav-title,
+        #scr-exam.exam-dark .nav-btn,
+        #scr-exam.exam-dark .section-btn {
+            color: #e5e5e5;
+            border-color: #333;
+        }
+        #scr-exam.exam-dark .nav-title {
+            background: #111;
+        }
+        #scr-exam.exam-dark .nav-btn:hover,
+        #scr-exam.exam-dark .section-btn:hover {
+            background: #222;
+        }
+        #scr-exam.exam-dark .nav-btn.active,
+        #scr-exam.exam-dark .section-btn.active,
+        #scr-exam.exam-dark .pal-head {
+            color: #fff;
+            background: #303030;
+        }
+        #scr-exam.exam-dark .q-section {
+            border-color: #333;
+        }
+        #scr-exam.exam-dark .leg-item,
+        #scr-exam.exam-dark .user-info {
+            color: #d4d4d4;
+        }
+        #scr-exam.exam-dark .user-icon {
+            color: #d4d4d4;
+            background: #292929;
+        }
+        #scr-exam.exam-dark .pal-scroll {
+            background: #111;
+        }
+        #scr-exam.exam-dark .opt-label {
+            color: #f5f5f5;
+            background: #151515;
+            border-color: #444;
+        }
+        #scr-exam.exam-dark .opt-label:hover {
+            background: #222;
+            border-color: #888;
+        }
+        #scr-exam.exam-dark .opt-label.selected {
+            color: #fff;
+            background: #303030;
+            border-color: #aaa;
+        }
+        #scr-exam.exam-dark .opt-label.correct-answer {
+            color: #dcfce7;
+            background: #14532d !important;
+            border-color: #22c55e !important;
+        }
+        #scr-exam.exam-dark .opt-label.correct-answer > span {
+            color: #bbf7d0 !important;
+        }
+        #scr-exam.exam-dark .opt-label input {
+            accent-color: #d4d4d4;
+        }
+        #scr-exam.exam-dark .q-btn:not(.ans):not(.nans):not(.mark):not(.mark-ans) {
+            color: #f5f5f5;
+            background: #0a0a0a;
+            border-color: #666;
+        }
+        #scr-exam.exam-dark .q-btn.active {
+            border-color: #fff;
+        }
+        #scr-exam.exam-dark .btn:not(.btn-pri),
+        #scr-exam.exam-dark .btn-toggle {
+            color: #f5f5f5;
+            background: #171717;
+            border-color: #555;
+        }
+        #scr-exam.exam-dark .btn:not(.btn-pri):hover,
+        #scr-exam.exam-dark .btn-toggle:hover {
+            background: #303030;
+        }
+        #scr-exam.exam-dark .s-gry {
+            color: #f5f5f5;
+            background: #303030;
+            border-color: #666;
+        }

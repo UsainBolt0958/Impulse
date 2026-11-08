@@ -13,7 +13,6 @@ let loadPublicSeries;
 let loadPublicTestCatalog;
 let loadPublicTestSummary;
 let getSeriesBillingAccessBatch;
-let loadQuizCatalog;
 let loadAdminAssetMetrics;
 let loadAdminOperations;
 let loadAdminProjectMetrics;
@@ -52,7 +51,6 @@ beforeEach(async () => {
     loadPublicTestCatalog,
     loadPublicTestSummary,
     getSeriesBillingAccessBatch,
-    loadQuizCatalog,
     loadAdminAssetMetrics,
     loadAdminOperations,
     loadAdminProjectMetrics,
@@ -773,59 +771,4 @@ describe('portal server requests', () => {
     );
   });
 
-  it('coalesces and caches the quiz catalog for 60 seconds', async () => {
-    fetchMock.mockImplementationOnce(async () => new Response(
-      JSON.stringify({
-        subjects: [{ name: 'Physics', chapters: [{ name: 'Mechanics', questionCount: 10 }] }],
-      }),
-      { status: 200 }
-    ));
-
-    const [first, second] = await Promise.all([loadQuizCatalog(), loadQuizCatalog()]);
-    expect(first).toEqual([
-      { name: 'Physics', chapters: [{ name: 'Mechanics', questionCount: 10 }] },
-    ]);
-    expect(second).toEqual(first);
-    expect(first).not.toBe(second);
-    await loadQuizCatalog();
-    expect(fetchMock).toHaveBeenCalledOnce();
-
-    vi.advanceTimersByTime(60_000);
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ subjects: [] }), { status: 200 }));
-    await expect(loadQuizCatalog()).resolves.toEqual([]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('retries a failed quiz catalog request instead of caching the failure', async () => {
-    fetchMock
-      .mockRejectedValueOnce(new Error('Network unavailable'))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ subjects: [{ name: 'Physics' }] }), { status: 200 }));
-
-    await expect(loadQuizCatalog()).rejects.toThrow('Network unavailable');
-    await expect(loadQuizCatalog()).resolves.toEqual([{ name: 'Physics' }]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('invalidates the quiz catalog after a successful question-library update', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ subjects: [{ name: 'Physics' }] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ questions: [], exams: [], profile: {}, activity: [] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ subjects: [{ name: 'Chemistry' }] }), { status: 200 }));
-
-    await expect(loadQuizCatalog()).resolves.toEqual([{ name: 'Physics' }]);
-    await savePortalStateToServer({ questions: [], exams: [], profile: {}, activity: [] });
-    await expect(loadQuizCatalog()).resolves.toEqual([{ name: 'Chemistry' }]);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-  });
-
-  it('keeps the quiz catalog cache when an admin-state update fails', async () => {
-    fetchMock
-      .mockResolvedValueOnce(new Response(JSON.stringify({ subjects: [{ name: 'Physics' }] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Save failed' }), { status: 500 }));
-
-    await expect(loadQuizCatalog()).resolves.toEqual([{ name: 'Physics' }]);
-    await expect(savePortalStateToServer({})).rejects.toThrow('Save failed');
-    await expect(loadQuizCatalog()).resolves.toEqual([{ name: 'Physics' }]);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
 });

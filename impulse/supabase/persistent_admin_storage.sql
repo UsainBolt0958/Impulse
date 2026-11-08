@@ -2,7 +2,6 @@ create table if not exists public.admin_content (
   key text primary key check (key in (
     'admin-state.json',
     'engine-questions.json',
-    'quiz-challenges.json',
     'series.json',
     'tests.json'
   )),
