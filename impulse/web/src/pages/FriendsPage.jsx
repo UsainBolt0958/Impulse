@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { Check, Clock3, Search, Swords, UserPlus, UsersRound, X } from 'lucide-react';
+import { Check, Clock3, Search, UserPlus, UsersRound, X } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -167,12 +167,6 @@ function FriendsPage() {
                   Find people by username and connect with other learners.
                 </p>
               </div>
-              <Link to="/quiz-challenge">
-                <Button className="rounded-full px-5 font-black uppercase tracking-[0.14em]">
-                  <Swords className="mr-2 h-4 w-4" />
-                  Challenge a friend
-                </Button>
-              </Link>
             </section>
 
             <Card>

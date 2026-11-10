@@ -54,7 +54,6 @@ export function getPlanLimitText(plan) {
     text.push('JEE Advanced 2025 + one JEE Main and one NEET paper');
     text.push('Up to 2 attempts per included paper');
     text.push(`${limits.custom_test_lifetime ?? 0} custom-test creations for the account lifetime`);
-    text.push(`${limits.quiz_challenge_lifetime ?? 0} quiz challenges for the account lifetime`);
   } else {
     text.push(limits.previous_paper_daily == null
       ? 'Unlimited previous-paper tests'
@@ -62,9 +61,6 @@ export function getPlanLimitText(plan) {
     text.push(limits.custom_test_daily == null
       ? 'Unlimited custom tests'
       : `${limits.custom_test_daily} custom tests per day`);
-    text.push(limits.quiz_challenge_daily == null
-      ? 'Unlimited quiz challenges'
-      : `${limits.quiz_challenge_daily} quiz challenges per day`);
   }
 
   text.push('All PYQ question practice');

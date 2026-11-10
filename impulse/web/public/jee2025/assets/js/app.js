@@ -2548,45 +2548,34 @@ try{
 
         function updateImageLoadingProgress(loaded, total) {
             const progressEl = document.querySelector('#img-loading-overlay .img-loading-progress');
-            if (progressEl) {
-                progressEl.textContent = Math.round((loaded / total) * 100) + '%';
-            }
+            if (progressEl) progressEl.textContent = Math.round((loaded / total) * 100) + '%';
         }
 
         async function preloadExamImages() {
             if (!sess || !sess.data) return;
-
-            const imagesToPreload = [];
-            getSessionSubjects().forEach(subject => {
-                getSessionSections(subject).forEach(section => {
-                    if (sess.data[subject] && sess.data[subject][section]) {
-                        sess.data[subject][section].forEach(question => {
-                            if (question.img) imagesToPreload.push(question.img);
-                        });
-                    }
-                });
-            });
-
+            const imagesToPreload = Object.keys(sess.data).flatMap(subject => (
+                Object.keys(sess.data[subject] || {}).flatMap(section => (
+                    (sess.data[subject][section] || []).map(question => question.img).filter(Boolean)
+                ))
+            ));
             if (imagesToPreload.length === 0) return;
 
-            console.log(`🖼️ Preloading ${imagesToPreload.length} exam images...`);
             let loaded = 0;
             await Promise.all(imagesToPreload.map(src => new Promise(resolve => {
                 const image = new Image();
                 image.onload = () => {
                     loaded++;
                     updateImageLoadingProgress(loaded, imagesToPreload.length);
-                    resolve({ success: true, src });
+                    resolve();
                 };
                 image.onerror = () => {
                     loaded++;
                     updateImageLoadingProgress(loaded, imagesToPreload.length);
                     console.warn('Failed to preload image:', src);
-                    resolve({ success: false, src });
+                    resolve();
                 };
                 image.src = src;
             })));
-            console.log('✅ Image preloading complete');
         }
 
         async function proceedStartExam(paper, isResume = false) {
@@ -2685,7 +2674,6 @@ try{
             showImageLoadingOverlay();
             await preloadExamImages();
             hideImageLoadingOverlay();
-
             saveSess(true); // Immediate save
             navTo('exam');
             initExamUI();
@@ -3865,15 +3853,9 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                     acc[normalizeSubjectKey(sub)] = sub;
                     return acc;
                 }, {});
-                const sections = Array.from(new Set(
-                    res.solutions
-                        .filter(sol => sol && sol.sub && sol.sec)
-                        .map(sol => String(sol.sec).toUpperCase())
-                ));
 
                 const data = subjects.reduce((acc, sub) => {
                     acc[sub] = { attempted: 0, correct: 0 };
-                    sections.forEach(sec => { acc[sub][sec] = 0; });
                     return acc;
                 }, {});
 
@@ -3978,7 +3960,8 @@ document.getElementById('val-un').innerText = comb.acc.un || 0; document.getElem
                                 </span>
                             </td>`;
                         sections.forEach(sec => {
-                            html += `<td>${row[sec] || 0}</td>`;
+                            const hasSection = Object.prototype.hasOwnProperty.call(row, sec);
+                            html += `<td>${hasSection ? row[sec] : '&mdash;'}</td>`;
                         });
                         html += `<td style="font-weight:700; color:#4c80b8;">${row.attempted}</td>
                             <td>${accuracy}%</td>

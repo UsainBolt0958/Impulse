@@ -281,6 +281,17 @@
                 <div style="background:#333; color:#fff; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:700;" id="paper-label">Paper 1</div>
             </div>
             <div style="display:flex; align-items:center; gap:15px;">
+                <button
+                    class="btn-toggle"
+                    id="exam-theme-toggle"
+                    type="button"
+                    aria-label="Switch to dark mode"
+                    title="Switch to dark mode"
+                    aria-pressed="false"
+                    onclick="toggleExamTheme()"
+                >
+                    <i data-lucide="moon" aria-hidden="true"></i>
+                </button>
                 <button class="btn-toggle" type="button" onclick="togglePanel()">
                     <i data-lucide="panel-right-close" aria-hidden="true"></i>
                 </button>
@@ -361,10 +372,13 @@
         <header class="home-header result-page-header">
             <div class="header-left"></div>
             <div class="header-center">
-                <img src="/logo2.png" alt="Logo" class="header-logo" loading="eager" style="margin-right: 12px;">
+                <img src="/logo2.png" alt="Logo" class="header-logo" data-theme-logo loading="eager" style="margin-right: 12px;">
                 <div class="home-brand"><strong>IMPULSE</strong> - RESULT</div>
             </div>
             <div class="header-right">
+                <button class="btn analysis-theme-toggle" id="analysis-theme-toggle" type="button" onclick="toggleAnalysisTheme()" aria-label="Switch to dark mode" title="Switch to dark mode" aria-pressed="false">
+                    <i class="fa-solid fa-moon" aria-hidden="true"></i>
+                </button>
                 <button class="btn" onclick="goToPortalHome()">Back to Portal Home</button>
             </div>
         </header>
@@ -1212,7 +1226,7 @@
                 // Update logo images if provided
                 if(logoUrl){
                     const logoEls = document.querySelectorAll('.logo-img, .header-logo, img.logo');
-                    logoEls.forEach(img=>{ try{ img.src = logoUrl; }catch(e){} });
+                    logoEls.forEach(img=>{ try{ img.removeAttribute('data-theme-logo'); img.src = logoUrl; }catch(e){} });
                 }
 
                 // Update per-test card names/durations if test object available
@@ -1311,6 +1325,41 @@
                 window.location.href = '../index.html';
             }
         }
+        function setAnalysisTheme(isDark) {
+            const resultScreen = document.getElementById('scr-result');
+            const themeButton = document.getElementById('analysis-theme-toggle');
+            if (!resultScreen || !themeButton) return;
+
+            resultScreen.classList.toggle('analysis-dark', isDark);
+            resultScreen.querySelectorAll('.header-logo[data-theme-logo]').forEach((logo) => {
+                logo.src = isDark ? '/logo.png' : '/logo2.png';
+            });
+            const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+            themeButton.setAttribute('aria-label', label);
+            themeButton.setAttribute('title', label);
+            themeButton.setAttribute('aria-pressed', String(isDark));
+            themeButton.innerHTML = `<i class="fa-solid fa-${isDark ? 'sun' : 'moon'}" aria-hidden="true"></i>`;
+        }
+
+        function toggleAnalysisTheme() {
+            const isDark = !document.getElementById('scr-result')?.classList.contains('analysis-dark');
+            setAnalysisTheme(isDark);
+            try {
+                window.localStorage.setItem('analysis-theme', isDark ? 'dark' : 'light');
+            } catch (error) {
+                console.warn('Could not save analysis theme preference.', error);
+            }
+        }
+
+        (function initializeAnalysisTheme() {
+            try {
+                setAnalysisTheme(window.localStorage.getItem('analysis-theme') === 'dark');
+            } catch (error) {
+                console.warn('Could not load analysis theme preference.', error);
+                setAnalysisTheme(false);
+            }
+        })();
+
         function showResultSection(sectionId) {
             document.querySelectorAll('.result-section').forEach(s => s.classList.remove('active'));
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
@@ -1356,6 +1405,42 @@
                 }catch(e){ console.warn('Brand override failed', e); }
             }, 100);
         });
+    </script>
+    <script>
+        function setExamTheme(isDark) {
+            const examScreen = document.getElementById('scr-exam');
+            const themeButton = document.getElementById('exam-theme-toggle');
+            if (!examScreen || !themeButton) return;
+
+            examScreen.classList.toggle('exam-dark', isDark);
+            const label = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+            themeButton.setAttribute('aria-label', label);
+            themeButton.setAttribute('title', label);
+            themeButton.setAttribute('aria-pressed', String(isDark));
+            themeButton.innerHTML = `<i data-lucide="${isDark ? 'sun' : 'moon'}" aria-hidden="true"></i>`;
+            if (window.lucide) window.lucide.createIcons();
+        }
+
+        function toggleExamTheme() {
+            const isDark = !document.getElementById('scr-exam')?.classList.contains('exam-dark');
+            setExamTheme(isDark);
+            try {
+                window.localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            } catch (error) {
+                console.warn('Could not save exam theme preference.', error);
+            }
+        }
+
+        (function initializeExamTheme() {
+            try {
+                const storedTheme = window.localStorage.getItem('theme');
+                const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+                setExamTheme(storedTheme === 'dark' || (storedTheme !== 'light' && prefersDark));
+            } catch (error) {
+                console.warn('Could not load exam theme preference.', error);
+                setExamTheme(false);
+            }
+        })();
     </script>
 </body>
 </html>

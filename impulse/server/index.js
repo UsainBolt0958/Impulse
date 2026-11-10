@@ -24,8 +24,6 @@ import {
   readNormalizedQuestionPage,
   readCurrentNormalizedQuestionVersions,
   readNormalizedQuestionVersions,
-  readNormalizedQuizCatalogQuestions,
-  readNormalizedQuizQuestions,
   readNormalizedQuestions,
   readNormalizedQuestionsForSelection,
   storeUploadedImage,
@@ -45,13 +43,6 @@ import {
   getQuestionMetadataCacheVersion,
   invalidateQuestionMetadataCache,
 } from './questionQuery.js';
-import {
-  getOrLoadQuizCatalog,
-  getOrLoadQuizQuestions,
-  getOrLoadQuizQuestionsForChapter,
-  getQuizCatalogCacheVersion,
-  invalidateQuizCatalogCache,
-} from './quizCatalog.js';
 import {
   CUSTOM_DIFFICULTIES,
   MAX_QUESTIONS_PER_SUBJECT,
@@ -97,7 +88,6 @@ const STATE_FILE = resolve(DATA_DIR, 'admin-state.json');
 const SERIES_FILE = resolve(DATA_DIR, 'series.json');
 const TESTS_FILE = resolve(DATA_DIR, 'tests.json');
 const QUESTIONS_FILE = resolve(DATA_DIR, 'engine-questions.json');
-const QUIZ_CHALLENGES_FILE = resolve(DATA_DIR, 'quiz-challenges.json');
 const UPLOADS_DIR = resolve(DATA_DIR, 'uploads');
 
 const DEFAULT_STATE = {
@@ -157,7 +147,6 @@ async function readQuestions() {
 async function writeState(state) {
   await ensureStateFile();
   await writeJsonFile(STATE_FILE, state);
-  invalidateQuizCatalogCache();
   invalidateQuestionMetadataCache();
 }
 
@@ -223,97 +212,6 @@ async function writeJsonFile(filePath, data) {
   if ([SERIES_FILE, TESTS_FILE].includes(filePath)) invalidatePublicCatalogCache();
 }
 
-let quizChallenges = [];
-let quizChallengesLoaded = false;
-let quizChallengeOperations = Promise.resolve();
-
-function updateQuizChallenges(operation) {
-  const result = quizChallengeOperations.then(async () => {
-    if (!quizChallengesLoaded) {
-      await mkdir(DATA_DIR, { recursive: true });
-      const saved = await readJsonFile(QUIZ_CHALLENGES_FILE, []);
-      quizChallenges = Array.isArray(saved) ? saved : [];
-      quizChallengesLoaded = true;
-    }
-
-    const previousState = JSON.stringify(quizChallenges);
-    const value = await operation(quizChallenges);
-    if (JSON.stringify(quizChallenges) !== previousState) {
-      await writeJsonFile(QUIZ_CHALLENGES_FILE, quizChallenges);
-    }
-    return value;
-  });
-  quizChallengeOperations = result.then(() => undefined, () => undefined);
-  return result;
-}
-
-function advanceQuizQuestion(challenge, now = Date.now()) {
-  if (challenge.status !== 'playing') return false;
-  const answers = challenge.answers[challenge.questionIndex] || {};
-  const allAnswered = challenge.players.every((player) => Boolean(answers[player.id]));
-  const timedOut = now >= challenge.questionStartedAt + challenge.secondsPerQuestion * 1000;
-  if (!allAnswered && !timedOut) return false;
-
-  if (challenge.questionIndex + 1 >= challenge.questions.length) {
-    challenge.status = 'completed';
-    challenge.completedAt = now;
-  } else {
-    challenge.questionIndex += 1;
-    challenge.questionStartedAt = now;
-  }
-  return true;
-}
-
-function serializeQuizChallenge(challenge, playerId, now = Date.now()) {
-  const currentQuestion = challenge.status === 'playing'
-    ? challenge.questions[challenge.questionIndex]
-    : null;
-  const answers = challenge.answers[challenge.questionIndex] || {};
-  const currentPlayer = challenge.players.find((player) => player.id === playerId);
-
-  return {
-    id: challenge.id,
-    playerToken: currentPlayer?.token || null,
-    status: challenge.status,
-    subject: challenge.subject,
-    chapter: challenge.chapter,
-    questionCount: challenge.questions.length,
-    secondsPerQuestion: challenge.secondsPerQuestion,
-    questionIndex: challenge.questionIndex,
-    questionStartedAt: challenge.questionStartedAt,
-    serverTime: now,
-    inviteeName: challenge.inviteeName,
-    players: challenge.players.map((player) => ({
-      id: player.id,
-      name: player.name,
-      score: player.score,
-      correctAnswers: player.correctAnswers,
-      answered: Boolean(answers[player.id]),
-      isCurrentPlayer: player.id === playerId,
-    })),
-    currentQuestion: currentQuestion ? {
-      id: currentQuestion.id,
-      question: currentQuestion.question,
-      image: currentQuestion.image,
-      options: currentQuestion.options,
-    } : null,
-    completedAt: challenge.completedAt || null,
-  };
-}
-
-function findQuizChallenge(challenges, id) {
-  return challenges.find((challenge) => challenge.id === id);
-}
-
-function shuffle(items) {
-  const shuffled = [...items];
-  for (let index = shuffled.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
-  }
-  return shuffled;
-}
-
 async function readRequestBody(request, maxBytes = Infinity) {
   const chunks = [];
   let bytesRead = 0;
@@ -334,15 +232,6 @@ async function readRequestBody(request, maxBytes = Infinity) {
     error.statusCode = 400;
     throw error;
   }
-}
-
-function sendQuizRequestError(response, error, message) {
-  if (error?.statusCode === 400) {
-    sendJson(response, 400, { error: error.message });
-    return;
-  }
-  console.error(message, error);
-  sendJson(response, 500, { error: message });
 }
 
 function sendFile(response, filePath, contentType = 'application/octet-stream') {
@@ -1157,245 +1046,6 @@ async function handleRequest(request, response) {
 
     sendJson(response, 200, { questions: await readQuestions() });
     return;
-  }
-
-  if (url.pathname === '/api/quiz/catalog' && request.method === 'GET') {
-    const cacheVersion = getQuizCatalogCacheVersion();
-    const subjects = await getOrLoadQuizCatalog(async () => {
-      return normalizedQuestionStorageEnabled()
-        ? readNormalizedQuizCatalogQuestions()
-        : readQuestions();
-    }, cacheVersion);
-    sendJson(response, 200, { subjects });
-    return;
-  }
-
-  if (url.pathname === '/api/quiz/challenges' && request.method === 'POST') {
-    try {
-      const body = await readRequestBody(request);
-      if (!body || typeof body !== 'object' || Array.isArray(body)) {
-        sendJson(response, 400, { error: 'The request body must be a JSON object.' });
-        return;
-      }
-
-      const {
-        hostId,
-        hostName,
-        inviteeName,
-        subject,
-        chapter,
-        questionCount,
-        secondsPerQuestion,
-      } = body;
-
-      if (
-        typeof hostId !== 'string' || !hostId.trim()
-        || typeof hostName !== 'string' || !hostName.trim()
-        || typeof inviteeName !== 'string' || !inviteeName.trim()
-        || typeof subject !== 'string' || !subject.trim()
-        || typeof chapter !== 'string' || !chapter.trim()
-        || !Number.isInteger(questionCount) || questionCount < 1 || questionCount > 50
-        || !Number.isInteger(secondsPerQuestion) || secondsPerQuestion < 10 || secondsPerQuestion > 120
-      ) {
-        sendJson(response, 400, { error: 'Provide valid players, subject, chapter, question count, and timer settings.' });
-        return;
-      }
-
-      const cacheVersion = getQuizCatalogCacheVersion();
-      const availableQuestions = normalizedQuestionStorageEnabled()
-        ? await getOrLoadQuizQuestionsForChapter(
-          () => readNormalizedQuizQuestions(subject, chapter),
-          subject,
-          chapter,
-          cacheVersion,
-        )
-        : await getOrLoadQuizQuestions(
-          readQuestions,
-          subject,
-          chapter,
-          cacheVersion,
-        );
-      if (availableQuestions.length < questionCount) {
-        sendJson(response, 400, { error: `Only ${availableQuestions.length} playable question(s) are available for this chapter.` });
-        return;
-      }
-
-      const selectedQuestions = shuffle(availableQuestions).slice(0, questionCount);
-      const challenge = {
-        id: randomUUID(),
-        status: 'waiting',
-        subject: subject.trim(),
-        chapter: chapter.trim(),
-        inviteeName: inviteeName.trim().slice(0, 60),
-        secondsPerQuestion,
-        questionIndex: 0,
-        questionStartedAt: null,
-        questions: selectedQuestions,
-        answers: [],
-        players: [{
-          id: hostId.trim().slice(0, 100),
-          token: randomUUID(),
-          name: hostName.trim().slice(0, 60),
-          score: 0,
-          correctAnswers: 0,
-        }],
-        createdAt: Date.now(),
-      };
-
-      await updateQuizChallenges((challenges) => {
-        challenges.push(challenge);
-      });
-      sendJson(response, 201, serializeQuizChallenge(challenge, challenge.players[0].id));
-    } catch (error) {
-      sendQuizRequestError(response, error, 'The quiz challenge could not be created.');
-    }
-    return;
-  }
-
-  const quizChallengeRoute = url.pathname.match(/^\/api\/quiz\/challenges\/([^/]+)(?:\/(join|answer))?$/);
-  if (quizChallengeRoute) {
-    let challengeId;
-    try {
-      challengeId = decodeURIComponent(quizChallengeRoute[1]);
-    } catch {
-      sendJson(response, 400, { error: 'Invalid challenge id.' });
-      return;
-    }
-    const action = quizChallengeRoute[2];
-
-    if (action === 'join' && request.method === 'POST') {
-      try {
-        const body = await readRequestBody(request);
-        if (!body || typeof body !== 'object' || Array.isArray(body)) {
-          sendJson(response, 400, { error: 'The request body must be a JSON object.' });
-          return;
-        }
-        if (typeof body.playerId !== 'string' || !body.playerId.trim()) {
-          sendJson(response, 400, { error: 'A player id is required to join the challenge.' });
-          return;
-        }
-        const result = await updateQuizChallenges((challenges) => {
-          const challenge = findQuizChallenge(challenges, challengeId);
-          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
-          const existingPlayer = challenge.players.find((player) => player.id === body.playerId.trim());
-          if (existingPlayer) {
-            if (existingPlayer.token !== body.playerToken) {
-              return { statusCode: 403, error: 'This player session is not authorized for the challenge.' };
-            }
-            return { challenge };
-          }
-          if (challenge.status !== 'waiting' || challenge.players.length >= 2) {
-            return { statusCode: 409, error: 'This challenge is no longer waiting for a player.' };
-          }
-          if (typeof body.playerToken !== 'string' || !body.playerToken.trim()) {
-            return { statusCode: 400, error: 'A private player token is required to join the challenge.' };
-          }
-
-          challenge.players.push({
-            id: body.playerId.trim().slice(0, 100),
-            token: body.playerToken.trim().slice(0, 100),
-            name: String(body.name || challenge.inviteeName).trim().slice(0, 60) || challenge.inviteeName,
-            score: 0,
-            correctAnswers: 0,
-          });
-          challenge.status = 'playing';
-          challenge.questionStartedAt = Date.now();
-          return { challenge };
-        });
-        if (result.statusCode) {
-          sendJson(response, result.statusCode, { error: result.error });
-          return;
-        }
-        sendJson(response, 200, serializeQuizChallenge(result.challenge, body.playerId.trim()));
-      } catch (error) {
-        sendQuizRequestError(response, error, 'The quiz challenge could not be joined.');
-      }
-      return;
-    }
-
-    if (action === 'answer' && request.method === 'POST') {
-      try {
-        const body = await readRequestBody(request);
-        if (!body || typeof body !== 'object' || Array.isArray(body)) {
-          sendJson(response, 400, { error: 'The request body must be a JSON object.' });
-          return;
-        }
-        const result = await updateQuizChallenges((challenges) => {
-          const challenge = findQuizChallenge(challenges, challengeId);
-          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
-          const player = challenge.players.find((item) => (
-            item.id === body.playerId && item.token === body.playerToken
-          ));
-          if (!player) return { statusCode: 403, error: 'You are not a player in this challenge.' };
-          advanceQuizQuestion(challenge);
-          if (challenge.status !== 'playing' || body.questionIndex !== challenge.questionIndex) {
-            return { statusCode: 409, error: 'This question is no longer active.' };
-          }
-          if (!['A', 'B', 'C', 'D'].includes(body.answer)) {
-            return { statusCode: 400, error: 'Choose one of the four answer options.' };
-          }
-
-          const now = Date.now();
-          if (now >= challenge.questionStartedAt + challenge.secondsPerQuestion * 1000) {
-            advanceQuizQuestion(challenge, now);
-            return { statusCode: 409, error: 'The time for this question has expired.' };
-          }
-
-          const answers = challenge.answers[challenge.questionIndex] || {};
-          if (answers[player.id]) return { statusCode: 409, error: 'You have already answered this question.' };
-          const question = challenge.questions[challenge.questionIndex];
-          const isCorrect = body.answer === question.correctAnswer;
-          const elapsed = Math.max(0, now - challenge.questionStartedAt);
-          const points = isCorrect
-            ? Math.max(1, Math.ceil(1000 * (1 - elapsed / (challenge.secondsPerQuestion * 1000))))
-            : 0;
-          answers[player.id] = {
-            answer: body.answer,
-            isCorrect,
-            points,
-            answeredAt: now,
-          };
-          challenge.answers[challenge.questionIndex] = answers;
-          player.score += points;
-          if (isCorrect) player.correctAnswers += 1;
-          advanceQuizQuestion(challenge, now);
-          return { challenge };
-        });
-
-        if (result.statusCode) {
-          sendJson(response, result.statusCode, { error: result.error });
-          return;
-        }
-        sendJson(response, 200, serializeQuizChallenge(result.challenge, body.playerId));
-      } catch (error) {
-        sendQuizRequestError(response, error, 'Your answer could not be submitted.');
-      }
-      return;
-    }
-
-    if (!action && request.method === 'GET') {
-      const playerId = url.searchParams.get('playerId') || '';
-      const playerToken = url.searchParams.get('playerToken') || '';
-      try {
-        const result = await updateQuizChallenges((challenges) => {
-          const challenge = findQuizChallenge(challenges, challengeId);
-          if (!challenge) return { statusCode: 404, error: 'Challenge not found.' };
-          if (!challenge.players.some((player) => player.id === playerId && player.token === playerToken)) {
-            return { statusCode: 403, error: 'You are not a player in this challenge.' };
-          }
-          advanceQuizQuestion(challenge);
-          return { challenge };
-        });
-        if (result.statusCode) {
-          sendJson(response, result.statusCode, { error: result.error });
-          return;
-        }
-        sendJson(response, 200, serializeQuizChallenge(result.challenge, playerId));
-      } catch (error) {
-        sendQuizRequestError(response, error, 'The quiz challenge could not be loaded.');
-      }
-      return;
-    }
   }
 
   // Serve uploaded files

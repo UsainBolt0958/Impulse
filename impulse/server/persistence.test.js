@@ -15,8 +15,6 @@ const {
   readNormalizedQuestionPage,
   readCurrentNormalizedQuestionVersions,
   readNormalizedQuestionVersions,
-  readNormalizedQuizCatalogQuestions,
-  readNormalizedQuizQuestions,
   readNormalizedQuestions,
   readNormalizedQuestionsForSelection,
   storeUploadedImage,
@@ -375,55 +373,6 @@ describe('persistent admin storage', () => {
     expect(options.headers.Prefer).toBe('count=exact');
   });
 
-  it('loads only the requested normalized quiz chapter in position order', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
-      { content: { id: 'question-1' } },
-      { content: { id: 'question-2' } },
-    ]), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(readNormalizedQuizQuestions(' Physics ', 'Mechanics ')).resolves.toEqual([
-      { id: 'question-1' },
-      { id: 'question-2' },
-    ]);
-
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, options] = fetchMock.mock.calls[0];
-    const query = new URL(url).searchParams;
-    expect(query.get('is_current')).toBe('eq.true');
-    expect(query.get('subject')).toBe('eq.Physics');
-    expect(query.get('chapter')).toBe('eq.Mechanics');
-    expect(query.get('order')).toBe('position.asc');
-    expect(options.headers.Range).toBe('0-999');
-  });
-
-  it('loads only quiz catalog fields from normalized question rows', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify([
-      {
-        subject: 'Physics',
-        chapter: 'Mechanics',
-        options: { A: 'A', B: 'B', C: 'C', D: 'D' },
-        correct_answer: 'A',
-        question_text: 'Question',
-        question: null,
-      },
-    ]), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(readNormalizedQuizCatalogQuestions()).resolves.toMatchObject([
-      { subject: 'Physics', chapter: 'Mechanics', question_text: 'Question' },
-    ]);
-
-    const [url, options] = fetchMock.mock.calls[0];
-    const query = new URL(url).searchParams;
-    expect(query.get('select')).toBe(
-      'subject,chapter,options,correct_answer,question_text:content->>question_text,question:content->>question',
-    );
-    expect(query.get('is_current')).toBe('eq.true');
-    expect(query.get('order')).toBe('position.asc');
-    expect(options.headers.Range).toBe('0-999');
-  });
-
   it('uses the successful write to refresh the cached document', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify([{ content: [{ id: 'old' }] }]), { status: 200 }))
@@ -487,14 +436,19 @@ describe('persistent admin storage', () => {
   });
 
   it('does not retain a large document in the process cache', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{}', { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(writePersistentJson('server/data/engine-questions.json', [], vi.fn()))
+      .rejects.toThrow();
+
+    fetchMock.mockClear();
+    fetchMock.mockImplementation(async () => new Response(
       JSON.stringify([{ content: { payload: 'x'.repeat(5 * 1024 * 1024 + 1) } }]),
       { status: 200 }
     ));
-    vi.stubGlobal('fetch', fetchMock);
 
-    await readPersistentJson('server/data/quiz-challenges.json', {}, vi.fn());
-    await readPersistentJson('server/data/quiz-challenges.json', {}, vi.fn());
+    await readPersistentJson('server/data/engine-questions.json', {}, vi.fn());
+    await readPersistentJson('server/data/engine-questions.json', {}, vi.fn());
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

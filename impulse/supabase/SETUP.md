@@ -93,7 +93,7 @@ The API also uses Supabase Auth to validate customer sessions. For local `npm ru
 
 ## What syncs
 
-After sign-in, the app imports applicable study data already in that browser and syncs solved-question attempts (which drive the study calendar and analysis), bookmarks, notebooks, profile visibility, custom-test results, test-series sessions, and exam analytics. Active custom tests use a separate user-owned snapshot/checkpoint table: question content is uploaded once per active test, and compact answer/time/navigation progress is checkpointed every 90 seconds and when leaving the test. The Google account name/avatar and the editable profile name are stored in `profiles`. Public question content, admin content, theme preferences, and quiz invitation tokens are not copied as user data.
+After sign-in, the app imports applicable study data already in that browser and syncs solved-question attempts (which drive the study calendar and analysis), bookmarks, notebooks, profile visibility, custom-test results, test-series sessions, and exam analytics. Active custom tests use a separate user-owned snapshot/checkpoint table: question content is uploaded once per active test, and compact answer/time/navigation progress is checkpointed every 90 seconds and when leaving the test. The Google account name/avatar and the editable profile name are stored in `profiles`. Public question content, admin content, and theme preferences are not copied as user data.
 
 Data remains in the browser while signed out. On sign-out, the account-linked browser keys are cleared to avoid showing one user's records to another person using the same browser; the cloud copy is retained.
 

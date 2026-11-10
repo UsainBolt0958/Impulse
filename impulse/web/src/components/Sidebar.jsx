@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, BookOpen, ClipboardList, BarChart3, Bookmark, Calendar, FileText, FilePlus2, UsersRound, Trophy, Crown } from 'lucide-react';
+import { Home, BookOpen, ClipboardList, BarChart3, Bookmark, Calendar, FileText, FilePlus2, UsersRound, Crown } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 
 function Sidebar() {
@@ -14,7 +14,6 @@ function Sidebar() {
     { path: '/custom-test', icon: FilePlus2, label: 'Custom Test' },
     { path: '/analysis', icon: BarChart3, label: 'Analysis' },
     { path: '/friends', icon: UsersRound, label: 'Friends' },
-    { path: '/quiz-challenge', icon: Trophy, label: 'Quiz Challenge' },
     { path: '/premium', icon: Crown, label: 'Premium' },
     { path: '/notebook', icon: Bookmark, label: 'Notebook' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' }

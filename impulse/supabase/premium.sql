@@ -402,25 +402,25 @@ values
   (
     'free', 'Free', 'Explore core practice before upgrading.',
     '[]'::jsonb,
-    '{"friends":1,"previous_paper_daily":null,"included_paper_attempts":2,"custom_test_lifetime":3,"custom_test_daily":0,"quiz_challenge_lifetime":3,"quiz_challenge_daily":0}'::jsonb,
+    '{"friends":1,"previous_paper_daily":null,"included_paper_attempts":2,"custom_test_lifetime":3,"custom_test_daily":0}'::jsonb,
     0
   ),
   (
     'lite', 'Impulse Lite', 'More daily practice and room for a small study circle.',
     '[]'::jsonb,
-    '{"friends":3,"previous_paper_daily":1,"custom_test_daily":3,"quiz_challenge_daily":3}'::jsonb,
+    '{"friends":3,"previous_paper_daily":1,"custom_test_daily":3}'::jsonb,
     1
   ),
   (
     'gold', 'Impulse Gold', 'For regular preparation and frequent mock practice.',
     '[]'::jsonb,
-    '{"friends":5,"previous_paper_daily":3,"custom_test_daily":10,"quiz_challenge_daily":10}'::jsonb,
+    '{"friends":5,"previous_paper_daily":3,"custom_test_daily":10}'::jsonb,
     2
   ),
   (
     'ultimate', 'Impulse Ultimate', 'The highest limits for intensive preparation.',
     '[]'::jsonb,
-    '{"friends":null,"previous_paper_daily":null,"custom_test_daily":null,"quiz_challenge_daily":null}'::jsonb,
+    '{"friends":null,"previous_paper_daily":null,"custom_test_daily":null}'::jsonb,
     3
   )
 on conflict (plan_code) do update set

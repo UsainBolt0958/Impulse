@@ -22,7 +22,6 @@ import {
   Edit3,
   Flame,
   Gauge,
-  Gamepad2,
   HardDrive,
   LayoutDashboard,
   PencilLine,
@@ -80,7 +79,6 @@ import {
 } from '@/lib/portalServer';
 import TestSeriesManager from '@/admin/TestSeriesManager';
 import BillingAdminPanel from '@/admin/BillingAdminPanel';
-import QuizQuestionImporter from '@/admin/QuizQuestions/QuizQuestionImporter';
 import PYQImportDialog from '@/admin/PYQImport/PYQImportDialog';
 import PaperImportDialog from '@/admin/PYQImport/PaperImportDialog';
 import { buildDynamicPaperSections } from '@/admin/PYQImport/paperImportFormat';
@@ -1582,38 +1580,6 @@ function AdminPortalPage() {
     toast.success(`Added ${importedQuestions.length} PYQ question(s) to ${target.exam} / ${target.subject} / ${target.chapter}.`);
   };
 
-  const handleQuizQuestionImport = async (questions) => {
-    const timestamp = new Date().toISOString();
-    const importedQuestions = questions.map((question) => normalizeQuestion({
-      ...question,
-      id: generateId('quiz-question'),
-      exam: 'Quiz Challenge',
-      exam_slug: 'quiz-challenge',
-      year: new Date().getFullYear(),
-      shift: 'Quiz bank',
-      type: 'MCQ',
-      created_at: timestamp,
-      updated_at: timestamp,
-      contributed_by: portal.profile.name,
-    }));
-    const importedActivity = importedQuestions.map((question) => createActivityEntry({
-      type: 'question.created',
-      title: `Imported quiz question: ${question.chapter}`,
-      description: `${question.subject} / ${question.chapter}`,
-      exam: 'Quiz Challenge',
-      questionId: question.id,
-      source: 'quiz-json-import',
-    }));
-    const nextPortal = {
-      ...portal,
-      questions: [...importedQuestions, ...portal.questions],
-      activity: [...importedActivity, ...portal.activity],
-    };
-    const savedPortal = await savePortalState(nextPortal);
-    syncPortal(savedPortal);
-    toast.success(`Added ${importedQuestions.length} quiz question(s).`);
-  };
-
   const handlePaperImport = async (questions, paper) => {
     const timestamp = new Date().toISOString();
     const paperImportId = getPaperImportId(paper);
@@ -2109,10 +2075,6 @@ function AdminPortalPage() {
                         <button type="button" onClick={() => setTab('questions')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'questions' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <PencilLine className="h-4 w-4" />
                           {!collapsed && 'Questions'}
-                        </button>
-                        <button type="button" onClick={() => setTab('quiz')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'quiz' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
-                          <Gamepad2 className="h-4 w-4" />
-                          {!collapsed && 'Quiz questions'}
                         </button>
                         <button type="button" onClick={() => setTab('papers')} className={`flex ${collapsed ? 'justify-center' : 'items-center'} w-full gap-3 rounded-xl ${collapsed ? 'px-0 py-2' : 'px-4 py-3'} text-left text-sm font-black uppercase tracking-[0.18em] ${tab === 'papers' ? 'bg-background text-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                           <ClipboardList className="h-4 w-4" />
@@ -2704,10 +2666,6 @@ function AdminPortalPage() {
                   </Card>
                 </div>
                 </div>
-              )}
-
-              {tab === 'quiz' && (
-                <QuizQuestionImporter onImport={handleQuizQuestionImport} />
               )}
 
               {tab === 'papers' && (

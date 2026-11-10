@@ -13,14 +13,12 @@ describe('premium catalog presentation', () => {
       limits: {
         friends: 1,
         custom_test_lifetime: 3,
-        quiz_challenge_lifetime: 3,
       },
     })).toEqual([
       'Up to 1 friend',
       'JEE Advanced 2025 + one JEE Main and one NEET paper',
       'Up to 2 attempts per included paper',
       '3 custom-test creations for the account lifetime',
-      '3 quiz challenges for the account lifetime',
       'All PYQ question practice',
       'Test series sold separately',
     ]);
@@ -33,17 +31,27 @@ describe('premium catalog presentation', () => {
         friends: 5,
         previous_paper_daily: 3,
         custom_test_daily: 10,
-        quiz_challenge_daily: 10,
       },
-    })).toContain('10 custom tests per day');
+    })).toEqual([
+      'Up to 5 friends',
+      '3 previous-paper tests per day',
+      '10 custom tests per day',
+      'All PYQ question practice',
+      'Test series sold separately',
+    ]);
     expect(getPlanLimitText({
       plan_code: 'ultimate',
       limits: {
         friends: null,
         previous_paper_daily: null,
         custom_test_daily: null,
-        quiz_challenge_daily: null,
       },
-    })).toContain('Unlimited quiz challenges');
+    })).toEqual([
+      'Unlimited friends',
+      'Unlimited previous-paper tests',
+      'Unlimited custom tests',
+      'All PYQ question practice',
+      'Test series sold separately',
+    ]);
   });
 });

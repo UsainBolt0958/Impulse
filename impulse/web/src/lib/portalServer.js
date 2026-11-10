@@ -5,7 +5,6 @@ const PUBLIC_QUESTIONS_CACHE_TTL_MS = 60_000;
 const CUSTOM_TEST_CATALOG_CACHE_TTL_MS = 60_000;
 const PUBLIC_TEST_CATALOG_CACHE_TTL_MS = 30_000;
 const PUBLIC_TEST_CATALOG_CACHE_MAX_ENTRIES = 50;
-const QUIZ_CATALOG_CACHE_TTL_MS = 60_000;
 const QUESTION_CATALOG_CACHE_TTL_MS = 30_000;
 const QUESTION_CATALOG_CACHE_MAX_ENTRIES = 100;
 const PUBLIC_TEST_SUMMARY_CACHE_TTL_MS = 30_000;
@@ -19,10 +18,6 @@ let publicQuestionsRequest = null;
 let cachedCustomTestCatalog = null;
 let customTestCatalogExpiresAt = 0;
 let customTestCatalogRequest = null;
-let cachedQuizCatalog = null;
-let quizCatalogExpiresAt = 0;
-let quizCatalogRequest = null;
-let quizCatalogVersion = 0;
 const questionCatalogCache = new Map();
 const questionCatalogRequests = new Map();
 let questionCatalogVersion = 0;
@@ -359,61 +354,6 @@ export async function loadPublicQuestionsPage(filters, page = 1, limit = 20) {
   return structuredClone(await request);
 }
 
-export async function loadQuizCatalog() {
-  if (cachedQuizCatalog && Date.now() < quizCatalogExpiresAt) {
-    return [...cachedQuizCatalog];
-  }
-
-  if (!quizCatalogRequest) {
-    const requestVersion = quizCatalogVersion;
-    const request = requestJsonOrThrow('/quiz/catalog', {
-      method: 'GET',
-      cache: 'no-store',
-    }).then((data) => {
-      const catalog = Array.isArray(data?.subjects) ? data.subjects : [];
-      if (requestVersion === quizCatalogVersion) {
-        cachedQuizCatalog = catalog;
-        quizCatalogExpiresAt = Date.now() + QUIZ_CATALOG_CACHE_TTL_MS;
-      }
-      return catalog;
-    }).finally(() => {
-      if (quizCatalogRequest === request) quizCatalogRequest = null;
-    });
-    quizCatalogRequest = request;
-  }
-
-  return [...await quizCatalogRequest];
-}
-
-export async function createQuizChallenge(payload) {
-  return requestJsonOrThrow('/quiz/challenges', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function joinQuizChallenge(challengeId, payload) {
-  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}/join`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function loadQuizChallenge(challengeId, playerId, playerToken) {
-  const params = new URLSearchParams({ playerId, playerToken });
-  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}?${params}`, {
-    method: 'GET',
-    cache: 'no-store',
-  });
-}
-
-export async function answerQuizChallenge(challengeId, payload) {
-  return requestJsonOrThrow(`/quiz/challenges/${encodeURIComponent(challengeId)}/answer`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function loadAdminSessionFromServer() {
   return requestJson('/admin-session', { method: 'GET' });
 }
@@ -518,10 +458,6 @@ export async function savePortalStateToServer(state) {
     method: 'PUT',
     body: JSON.stringify(state),
   });
-  quizCatalogVersion += 1;
-  cachedQuizCatalog = null;
-  quizCatalogExpiresAt = 0;
-  quizCatalogRequest = null;
   questionCatalogVersion += 1;
   questionCatalogCache.clear();
   questionCatalogRequests.clear();
