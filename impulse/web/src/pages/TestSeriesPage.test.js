@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getSeriesBillingAccessBatch, loadPublicTestCatalog, loadTestSeriesPriceMap } = vi.hoisted(() => ({
+const { getSeriesBillingAccessBatch, loadPublicTestCatalog } = vi.hoisted(() => ({
   getSeriesBillingAccessBatch: vi.fn(),
   loadPublicTestCatalog: vi.fn(),
-  loadTestSeriesPriceMap: vi.fn(),
 }));
 
 vi.mock('@/lib/portalServer', () => ({
@@ -15,16 +15,11 @@ vi.mock('@/lib/portalServer', () => ({
   getSeriesBillingAccessBatch,
   loadPublicTestCatalog,
 }));
-vi.mock('@/lib/premiumCatalog', () => ({
-  formatPriceInr: (price) => `₹${price}`,
-  loadTestSeriesPriceMap,
-}));
-vi.mock('@/lib/freeAccess', () => ({
-  FREE_ACCESS_END_LABEL: 'test date',
-  useFreeAccessActive: () => false,
-}));
 vi.mock('@/components/Header.jsx', () => ({ default: () => null }));
 vi.mock('@/components/Footer.jsx', () => ({ default: () => null }));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'student-1' } }),
+}));
 
 import TestSeriesPage, { getTestSeriesDashboardUrl } from './TestSeriesPage';
 
@@ -32,10 +27,6 @@ describe('test series dashboard entry', () => {
   beforeEach(() => {
     loadPublicTestCatalog.mockReset();
     getSeriesBillingAccessBatch.mockReset();
-    loadTestSeriesPriceMap.mockReset();
-    loadTestSeriesPriceMap.mockResolvedValue(new Map([
-      ['series-one', { enabled: true, price_inr: 500 }],
-    ]));
     getSeriesBillingAccessBatch.mockResolvedValue({
       'series-one': { allowed: true, reason: 'purchased' },
     });
@@ -79,7 +70,11 @@ describe('test series dashboard entry', () => {
         pageInfo: { page: 2, limit: 18, total: 2, hasMore: false },
       });
 
-    render(React.createElement(TestSeriesPage));
+    render(React.createElement(
+      MemoryRouter,
+      null,
+      React.createElement(TestSeriesPage)
+    ));
 
     expect(await screen.findByText('Test One')).toBeInTheDocument();
     expect(screen.getByText('2 tests')).toBeInTheDocument();

@@ -25,11 +25,13 @@ const CustomTestResultsPage = lazy(() => import('./pages/CustomTestResultsPage')
 const CustomTestPage = lazy(() => import('./pages/CustomTestPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const PremiumPage = lazy(() => import('./pages/PremiumPage'));
-const PaymentReturnPage = lazy(() => import('./pages/PaymentReturnPage'));
+const LegalPages = lazy(() => import('./pages/LegalPages'));
+const AboutPage = lazy(() => import('./pages/AboutPage'));
 
 function AppContent() {
   const location = useLocation();
   const { user, profile, authLoading, profileLoading, syncStatus } = useAuth();
+  const isPublicPage = ['/about', '/privacy', '/terms'].includes(location.pathname);
   React.useEffect(() => {
     if (authLoading || !user) return undefined;
     return startClientSessionHeartbeat();
@@ -37,7 +39,7 @@ function AppContent() {
   // Determine if we are on a full-screen route (like the solving interface)
   const isFullScreen = location.pathname.startsWith('/solve') || location.pathname === '/custom-test/exam';
 
-  if (authLoading || (user && (profileLoading || syncStatus === 'loading'))) {
+  if (!isPublicPage && (authLoading || (user && (profileLoading || syncStatus === 'loading')))) {
     return (
       <main
         role="status"
@@ -52,13 +54,13 @@ function AppContent() {
     );
   }
 
-  if (!user || !profile?.username) return <LoginPage />;
+  if ((!user || !profile?.username) && !isPublicPage) return <LoginPage />;
 
   return (
-    <div className={isFullScreen ? "flex h-[100dvh] w-full overflow-hidden bg-background" : "app-layout"}>
-      {!isFullScreen && <Sidebar />}
+    <div className={isPublicPage ? "min-h-screen bg-background" : isFullScreen ? "flex h-[100dvh] w-full overflow-hidden bg-background" : "app-layout"}>
+      {!isPublicPage && !isFullScreen && <Sidebar />}
       
-      <div className={isFullScreen ? "flex-1 min-w-0 flex flex-col relative" : "main-content"}>
+      <div className={isPublicPage ? "min-h-screen" : isFullScreen ? "flex-1 min-w-0 flex flex-col relative" : "main-content"}>
         <Suspense
           fallback={(
             <main role="status" aria-label="Loading page" className="flex min-h-[50vh] items-center justify-center">
@@ -67,6 +69,9 @@ function AppContent() {
           )}
         >
           <Routes>
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/privacy" element={<LegalPages />} />
+            <Route path="/terms" element={<LegalPages />} />
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="/account" element={<Navigate to="/profile" replace />} />
@@ -88,7 +93,6 @@ function AppContent() {
             <Route path="/analysis" element={<AnalysisPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/premium" element={<PremiumPage />} />
-            <Route path="/payments/return" element={<PaymentReturnPage />} />
             <Route path="/friends" element={<FriendsPage />} />
             <Route path="/friends/:friendId" element={<FriendsPage />} />
             <Route path="/notebook" element={<NotebookPage />} />

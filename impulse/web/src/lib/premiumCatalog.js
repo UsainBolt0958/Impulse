@@ -30,6 +30,24 @@ export async function loadPremiumCatalog() {
   }));
 }
 
+export async function updateProAnnualPrice(priceInr) {
+  if (!Number.isSafeInteger(priceInr) || priceInr < 1) {
+    throw new Error('Enter a whole-rupee Pro price greater than zero.');
+  }
+  if (!supabase) throw new Error('Supabase is not configured for this website.');
+
+  const { data, error } = await supabase
+    .from('premium_plan_prices')
+    .update({ price_inr: priceInr })
+    .eq('plan_code', 'pro')
+    .eq('duration_months', 12)
+    .select('price_inr')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('The Pro annual price is not configured in Supabase.');
+  return data.price_inr;
+}
+
 export async function loadTestSeriesPriceMap() {
   if (!supabase) throw new Error('Supabase is not configured for this website.');
   const { data, error } = await supabase
@@ -50,20 +68,17 @@ export function getPlanLimitText(plan) {
     ? 'Unlimited friends'
     : `Up to ${limits.friends} ${limits.friends === 1 ? 'friend' : 'friends'}`);
 
-  if (plan.plan_code === 'free') {
-    text.push('JEE Advanced 2025 + one JEE Main and one NEET paper');
-    text.push('Up to 2 attempts per included paper');
-    text.push(`${limits.custom_test_lifetime ?? 0} custom-test creations for the account lifetime`);
+  text.push(limits.previous_paper_daily == null
+    ? 'Unlimited previous papers'
+    : `${limits.previous_paper_daily} previous papers per day`);
+  text.push(limits.custom_test_daily == null
+    ? 'Unlimited custom tests'
+    : `${limits.custom_test_daily} custom tests per day`);
+  text.push('Unlimited PYQ practice');
+  if (plan.plan_code === 'pro') {
+    text.push('Complete access with no usage restrictions');
   } else {
-    text.push(limits.previous_paper_daily == null
-      ? 'Unlimited previous-paper tests'
-      : `${limits.previous_paper_daily} previous-paper ${limits.previous_paper_daily === 1 ? 'test' : 'tests'} per day`);
-    text.push(limits.custom_test_daily == null
-      ? 'Unlimited custom tests'
-      : `${limits.custom_test_daily} custom tests per day`);
+    text.push('Test-series access requires Pro');
   }
-
-  text.push('All PYQ question practice');
-  text.push('Test series sold separately');
   return text;
 }

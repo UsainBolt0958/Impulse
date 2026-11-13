@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let fetchMock;
 let createCustomTestQuestions;
+let establishExamSession;
 let createTest;
 let loadCustomTestCatalog;
 let loadPublicQuestionCatalog;
@@ -40,6 +41,7 @@ beforeEach(async () => {
   }));
   ({
     createCustomTestQuestions,
+    establishExamSession,
     createTest,
     loadCustomTestCatalog,
     loadPublicQuestionCatalog,
@@ -767,6 +769,31 @@ describe('portal server requests', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify(selection),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }),
+      })
+    );
+  });
+
+  it('creates a Google-authenticated session scoped to a previous paper', async () => {
+    vi.stubGlobal('window', {
+      location: { origin: 'https://impulse.test' },
+      localStorage: { getItem: () => null, setItem: vi.fn() },
+      sessionStorage: { setItem: vi.fn() },
+    });
+    fetchMock.mockImplementationOnce(async () => new Response(
+      JSON.stringify({ authorized: true }),
+      { status: 200 }
+    ));
+
+    await expect(establishExamSession('paper-series', 'paper-one')).resolves.toEqual({
+      authorized: true,
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/billing/exam-session'),
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ seriesId: 'paper-series', testId: 'paper-one' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer test-access-token' }),
       })
     );
   });

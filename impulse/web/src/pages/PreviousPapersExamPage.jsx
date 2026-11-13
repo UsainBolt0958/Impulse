@@ -28,7 +28,7 @@ function PreviousPapersExamPage() {
     event.preventDefault();
     setLaunchError('');
     try {
-      await establishExamSession(paper.seriesId);
+      await establishExamSession(paper.seriesId, paper.id);
       window.location.assign(examUrl);
     } catch (error) {
       console.error('Could not authorize the previous-paper session.', error);

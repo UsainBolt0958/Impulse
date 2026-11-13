@@ -12,11 +12,14 @@ function Footer() {
           </div>
 
           <div className="flex items-center gap-6">
+            <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">
+              About
+            </Link>
             <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">
               Privacy Policy
             </Link>
             <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors duration-200">
-              Terms of Service
+              Terms &amp; Conditions
             </Link>
           </div>
         </div>

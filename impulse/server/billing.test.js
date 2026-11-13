@@ -2,32 +2,26 @@ import { describe, expect, it } from 'vitest';
 import { buildSeriesAccessMap } from './billing.js';
 
 describe('batched test-series access', () => {
-  it('preserves free, purchased, and unpaid access decisions', () => {
+  it('preserves purchased access and locks series for Basic users', () => {
     expect(buildSeriesAccessMap(
-      ['free-series', 'owned-series', 'paid-series', 'unconfigured-series'],
-      [
-        { series_id: 'free-series', price_inr: 0 },
-        { series_id: 'owned-series', price_inr: 500 },
-        { series_id: 'paid-series', price_inr: 750 },
-      ],
+      ['owned-series', 'paid-series', 'unconfigured-series'],
       [{ series_id: 'owned-series' }]
     )).toEqual({
-      'free-series': { allowed: true, reason: 'free' },
       'owned-series': { allowed: true, reason: 'purchased' },
-      'paid-series': { allowed: false, reason: 'payment_required', price_inr: 750 },
-      'unconfigured-series': { allowed: true, reason: 'free' },
+      'paid-series': { allowed: false, reason: 'pro_required' },
+      'unconfigured-series': { allowed: false, reason: 'pro_required' },
     });
   });
 
-  it('applies temporary free access to every requested series', () => {
+  it('grants every requested series to an active Pro member', () => {
     expect(buildSeriesAccessMap(
       ['series-one', 'series-two'],
       [],
-      [],
       true
     )).toEqual({
-      'series-one': { allowed: true, reason: 'temporary_free_access' },
-      'series-two': { allowed: true, reason: 'temporary_free_access' },
+      'series-one': { allowed: true, reason: 'pro_membership' },
+      'series-two': { allowed: true, reason: 'pro_membership' },
     });
   });
+
 });
