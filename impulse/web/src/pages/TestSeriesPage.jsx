@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
@@ -9,12 +8,14 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Clock, Target } from 'lucide-react';
 import ColoredIcon from '@/components/ColoredIcon';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
 import {
   establishExamSession,
   getSeriesBillingAccessBatch,
   loadPublicTestCatalog,
 } from '@/lib/portalServer';
+import { formatPriceInr, loadTestSeriesPriceMap } from '@/lib/premiumCatalog';
+import CheckoutControl from '@/components/CheckoutControl.jsx';
+import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
 
 const TEST_SERIES_PAGE_SIZE = 18;
 
@@ -23,13 +24,14 @@ export function getTestSeriesDashboardUrl(testId, seriesId) {
 }
 
 function TestSeriesPage() {
-  const { user } = useAuth();
+  const freeAccessActive = useFreeAccessActive();
   const [seriesList, setSeriesList] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [loadMoreError, setLoadMoreError] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [catalogPageInfo, setCatalogPageInfo] = useState(null);
+  const [priceLoadError, setPriceLoadError] = useState(false);
   const [accessLoadError, setAccessLoadError] = useState(false);
 
   useEffect(() => {
@@ -43,27 +45,39 @@ function TestSeriesPage() {
           page: 1,
           limit: TEST_SERIES_PAGE_SIZE,
         });
+        let pricesBySeries = new Map();
+        let pricingFailed = false;
         let accessFailed = false;
+        try {
+          pricesBySeries = await loadTestSeriesPriceMap();
+        } catch (priceError) {
+          console.error('Could not load test-series prices from Supabase.', priceError);
+          pricingFailed = true;
+        }
         const accessBySeries = new Map();
-        if (user && series.length > 0) {
-          try {
-            const accessBatches = await Promise.all(
-              Array.from({ length: Math.ceil(series.length / 50) }, (_, index) => (
-                getSeriesBillingAccessBatch(
-                  series.slice(index * 50, (index + 1) * 50).map((item) => item.id)
-                )
-              ))
-            );
-            accessBatches.forEach((batch) => {
-              Object.entries(batch).forEach(([seriesId, access]) => {
-                accessBySeries.set(seriesId, access);
+        if (!pricingFailed && !freeAccessActive) {
+          const paidSeries = series.filter((item) => Number(pricesBySeries.get(item.id)?.price_inr) > 0);
+          if (paidSeries.length > 0) {
+            try {
+              const accessBatches = await Promise.all(
+                Array.from({ length: Math.ceil(paidSeries.length / 50) }, (_, index) => (
+                  getSeriesBillingAccessBatch(
+                    paidSeries.slice(index * 50, (index + 1) * 50).map((item) => item.id)
+                  )
+                ))
+              );
+              accessBatches.forEach((batch) => {
+                Object.entries(batch).forEach(([seriesId, access]) => {
+                  accessBySeries.set(seriesId, access);
+                });
               });
-            });
-          } catch (accessError) {
-            console.error('Could not check access for published test series.', accessError);
-            accessFailed = true;
+            } catch (accessError) {
+              console.error('Could not check access for published test series.', accessError);
+              accessFailed = true;
+            }
           }
         }
+        setPriceLoadError(pricingFailed);
         setAccessLoadError(accessFailed);
         const testsBySeries = new Map();
         tests.forEach((test) => {
@@ -77,6 +91,8 @@ function TestSeriesPage() {
           .map((item) => ({
             ...item,
             testCount: testCountsBySeries?.[item.id] ?? testsBySeries.get(item.id)?.length ?? 0,
+            priceConfig: pricesBySeries.get(item.id) || null,
+            price: pricesBySeries.get(item.id)?.enabled ? pricesBySeries.get(item.id).price_inr : null,
             access: accessBySeries.get(item.id) || null,
             tests: (testsBySeries.get(item.id) || [])
               .map((test) => {
@@ -100,7 +116,7 @@ function TestSeriesPage() {
     };
 
     fetchSeries();
-  }, [user?.id]);
+  }, [freeAccessActive]);
 
   const loadMoreTests = async () => {
     if (!catalogPageInfo?.hasMore || isLoadingMore) return;
@@ -190,7 +206,12 @@ function TestSeriesPage() {
                       <div className="flex flex-wrap gap-2">
                         <Badge variant="default">{series.testCount} tests</Badge>
                         <Badge variant="secondary">Published</Badge>
-                        <Badge variant="outline">Pro access</Badge>
+                        {series.price !== null && (
+                          <Badge variant="outline">
+                            {formatPriceInr(series.price)}
+                            {freeAccessActive ? ` · free through ${FREE_ACCESS_END_LABEL}` : ' · sold separately'}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -230,17 +251,23 @@ function TestSeriesPage() {
                               )}
                             </div>
 
-                            {accessLoadError ? (
+                            {!freeAccessActive && (priceLoadError || accessLoadError) ? (
                               <Button className="w-full font-bold" disabled>
                                 Access unavailable
                               </Button>
-                            ) : series.access?.allowed ? (
+                            ) : freeAccessActive || series.access?.allowed || !series.priceConfig || Number(series.priceConfig.price_inr) === 0 ? (
                               <Button onClick={() => handleStartTest(test.id, series.id)} className="w-full font-bold">
                                 Start Test
                               </Button>
+                            ) : series.priceConfig.enabled && Number(series.priceConfig.price_inr) > 0 ? (
+                              <CheckoutControl
+                                productType="test_series"
+                                seriesId={series.id}
+                                priceInr={series.priceConfig.price_inr}
+                              />
                             ) : (
-                              <Button asChild className="w-full font-bold">
-                                <Link to="/premium">Apply for Pro</Link>
+                              <Button className="w-full font-bold" disabled>
+                                Not available for purchase
                               </Button>
                             )}
                           </CardContent>
@@ -261,7 +288,14 @@ function TestSeriesPage() {
                 ) : null}
               </div>
             )}
-            {accessLoadError ? (
+            {priceLoadError && (
+              <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
+                {freeAccessActive
+                  ? 'Test-series prices could not be loaded. Free test access remains available during this offer.'
+                  : 'Test-series pricing could not be verified. Test access is temporarily unavailable.'}
+              </p>
+            )}
+            {accessLoadError && !priceLoadError ? (
               <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
                 Test-series access could not be verified. Please refresh and try again.
               </p>

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { ArrowRight, BookOpenCheck, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,6 @@ function LoginPage() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
-  const [acceptedLegalTerms, setAcceptedLegalTerms] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -34,7 +33,6 @@ function LoginPage() {
   }, [profile?.display_name, profile?.username, user?.id]);
 
   const handleSignIn = async () => {
-    if (!acceptedLegalTerms) return;
     setIsSigningIn(true);
     try {
       await signInWithGoogle();
@@ -206,32 +204,12 @@ function LoginPage() {
                       {authError}
                     </p>
                   )}
-                  <label htmlFor="accept-legal-terms" className="mt-4 flex cursor-pointer items-start gap-3 text-sm leading-6 text-white/65">
-                    <input
-                      id="accept-legal-terms"
-                      type="checkbox"
-                      checked={acceptedLegalTerms}
-                      onChange={(event) => setAcceptedLegalTerms(event.target.checked)}
-                      className="mt-1 h-4 w-4 shrink-0 accent-violet-500"
-                    />
-                    <span>
-                      I agree to the{' '}
-                      <Link className="font-semibold text-violet-300 underline underline-offset-2 hover:text-violet-200" to="/terms">
-                        Terms &amp; Conditions
-                      </Link>
-                      {' '}and acknowledge the{' '}
-                      <Link className="font-semibold text-violet-300 underline underline-offset-2 hover:text-violet-200" to="/privacy">
-                        Privacy Policy
-                      </Link>
-                      .
-                    </span>
-                  </label>
                   <Button
                     type="button"
                     variant="outline"
-                    className="mt-4 h-12 w-full justify-center gap-3 border-white/15 bg-white text-sm font-bold text-zinc-900 hover:bg-white/90 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="mt-4 h-12 w-full justify-center gap-3 border-white/15 bg-white text-sm font-bold text-zinc-900 hover:bg-white/90 hover:text-zinc-900"
                     onClick={handleSignIn}
-                    disabled={isSigningIn || !acceptedLegalTerms}
+                    disabled={isSigningIn}
                   >
                     <GoogleMark />
                     {isSigningIn ? 'Connecting to Google...' : 'Continue with Google'}
@@ -248,11 +226,6 @@ function LoginPage() {
             </span>
             <span>Impulse ©</span>
           </footer>
-          <nav aria-label="About and legal" className="mt-3 flex justify-center gap-5 text-xs text-white/45">
-            <Link className="transition hover:text-white" to="/about">About</Link>
-            <Link className="transition hover:text-white" to="/privacy">Privacy Policy</Link>
-            <Link className="transition hover:text-white" to="/terms">Terms &amp; Conditions</Link>
-          </nav>
         </div>
       </main>
     </>

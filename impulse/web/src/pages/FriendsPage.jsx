@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Link, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { Check, Clock3, Search, UserPlus, UsersRound, X } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import ProfilePage from '@/pages/ProfilePage.jsx';
 
 function FriendsPage() {
   const { friendId } = useParams();
@@ -21,9 +20,6 @@ function FriendsPage() {
   const [isLoadingConnections, setIsLoadingConnections] = useState(false);
   const [connectionsError, setConnectionsError] = useState('');
   const [busyUserId, setBusyUserId] = useState('');
-  const [friendProfile, setFriendProfile] = useState(null);
-  const [isLoadingFriendProfile, setIsLoadingFriendProfile] = useState(false);
-  const [friendProfileError, setFriendProfileError] = useState('');
 
   const loadConnections = useCallback(async () => {
     if (!supabase || !user) return;
@@ -46,48 +42,6 @@ function FriendsPage() {
   useEffect(() => {
     loadConnections();
   }, [loadConnections]);
-
-  useEffect(() => {
-    if (!friendId) {
-      setFriendProfile(null);
-      setFriendProfileError('');
-      setIsLoadingFriendProfile(false);
-      return undefined;
-    }
-    if (!supabase || !user) {
-      setFriendProfile(null);
-      setFriendProfileError('This friend profile is unavailable.');
-      setIsLoadingFriendProfile(false);
-      return undefined;
-    }
-
-    let active = true;
-    setFriendProfile(null);
-    setFriendProfileError('');
-    setIsLoadingFriendProfile(true);
-    const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    supabase.rpc('get_friend_dashboard', {
-      target_user_id: friendId,
-      client_time_zone: clientTimeZone,
-    }).then(({ data, error }) => {
-      if (!active) return;
-      if (error) {
-        setFriendProfileError(error.message || 'This friend profile could not be loaded.');
-      } else if (!data || typeof data !== 'object' || !data.dashboard || !data.visibleStats) {
-        setFriendProfileError('This friend profile could not be loaded.');
-      } else {
-        setFriendProfile(data);
-      }
-    }).catch((error) => {
-      if (active) setFriendProfileError(error.message || 'This friend profile could not be loaded.');
-    }).finally(() => {
-      if (active) setIsLoadingFriendProfile(false);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [friendId, user]);
 
   useEffect(() => {
     const searchTerm = query.trim().replace(/^@/, '').toLowerCase();
@@ -190,34 +144,7 @@ function FriendsPage() {
     }
   };
 
-  if (friendId && friendProfile) return <ProfilePage profile={friendProfile} />;
-  if (friendId) {
-    return (
-      <>
-        <Helmet>
-          <title>Friend profile - Impulse</title>
-        </Helmet>
-        <div className="min-h-screen flex flex-col bg-background">
-          <Header />
-          <main className="flex-1 px-4 py-12">
-            <div className="mx-auto max-w-3xl space-y-4">
-              {isLoadingFriendProfile ? (
-                <p role="status" className="text-sm text-muted-foreground">Loading friend profile...</p>
-              ) : (
-                <p role="alert" className="text-sm text-destructive">
-                  {friendProfileError || 'This friend profile is unavailable.'}
-                </p>
-              )}
-              <Link className="inline-flex items-center gap-2 text-sm font-semibold underline" to="/friends">
-                <UsersRound className="h-4 w-4" />
-                Back to friends
-              </Link>
-            </div>
-          </main>
-        </div>
-      </>
-    );
-  }
+  if (friendId) return <Navigate to="/friends" replace />;
 
   return (
     <>
@@ -382,23 +309,17 @@ function FriendsPage() {
                     <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {friends.map((friend) => (
                         <li key={friend.user_id}>
-                          <Link
-                            to={`/friends/${friend.user_id}`}
-                            aria-label={`View ${friend.display_name || friend.username}'s profile`}
-                            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground"
-                          >
-                            <Card className="transition-colors hover:border-foreground/30">
-                              <CardContent className="flex items-center gap-4 p-5">
-                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-black text-background">
-                                  {(friend.display_name || friend.username || '?').slice(0, 1).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="truncate font-black">{friend.display_name || friend.username}</p>
-                                  <p className="truncate text-sm text-muted-foreground">@{friend.username}</p>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </Link>
+                          <Card>
+                            <CardContent className="flex items-center gap-4 p-5">
+                              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-lg font-black text-background">
+                                {(friend.display_name || friend.username || '?').slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-black">{friend.display_name || friend.username}</p>
+                                <p className="truncate text-sm text-muted-foreground">@{friend.username}</p>
+                              </div>
+                            </CardContent>
+                          </Card>
                         </li>
                       ))}
                     </ul>

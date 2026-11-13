@@ -71,7 +71,7 @@ async function getAccessToken() {
   if (!supabase) throw new Error('Supabase is not configured for this website.');
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  if (!data.session?.access_token) throw new Error('Sign in with Google before starting a test.');
+  if (!data.session?.access_token) throw new Error('Sign in before starting checkout or a test.');
   return data.session.access_token;
 }
 
@@ -278,7 +278,7 @@ export async function loadCustomTestCatalog() {
 }
 
 export async function createCustomTestQuestions(payload) {
-  const data = await requestWithUserAuth('/questions/custom-test', {
+  const data = await requestJsonOrThrow('/questions/custom-test', {
     method: 'POST',
     body: JSON.stringify(payload || {}),
   });
@@ -402,6 +402,20 @@ export async function logoutFromAdminServer() {
   });
 }
 
+export async function createBillingOrder(payload) {
+  return requestWithUserAuth('/billing/orders', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getBillingOrderStatus(orderId) {
+  return requestWithUserAuth(`/billing/orders/${encodeURIComponent(orderId)}`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+}
+
 export async function getSeriesBillingAccess(seriesId) {
   const params = new URLSearchParams({ seriesId });
   return requestWithUserAuth(`/billing/series-access?${params}`, {
@@ -426,12 +440,12 @@ export async function getSeriesBillingAccessBatch(seriesIds) {
   return result.accessBySeriesId;
 }
 
-export async function establishExamSession(seriesId, testId) {
+export async function establishExamSession(seriesId) {
   const apiUrl = new URL(API_BASE, window.location.origin);
   window.sessionStorage.setItem('impulse_api_origin', apiUrl.origin);
   return requestWithUserAuth('/billing/exam-session', {
     method: 'POST',
-    body: JSON.stringify({ seriesId, ...(testId ? { testId } : {}) }),
+    body: JSON.stringify({ seriesId }),
   });
 }
 

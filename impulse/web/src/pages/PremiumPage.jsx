@@ -1,261 +1,127 @@
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { Check, LogIn, Sparkles } from 'lucide-react';
+import { Check, Crown, Sparkles } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase';
-import { formatPriceInr, loadPremiumCatalog } from '@/lib/premiumCatalog';
-
-const BASIC_FEATURES = [
-  'Unlimited PYQ practice',
-  '2 previous papers per day',
-  '5 custom tests per day',
-  'Up to 3 friends',
-];
-
-const PRO_FEATURES = [
-  'Complete access to all practice and test-series content',
-  'Unlimited previous papers and custom tests',
-  'Unlimited friends',
-  'No usage restrictions',
-];
+import CheckoutControl from '@/components/CheckoutControl.jsx';
+import { loadPremiumCatalog, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
+import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
 
 function PremiumPage() {
-  const { user, profile, signInWithGoogle } = useAuth();
-  const [fullName, setFullName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [application, setApplication] = useState(null);
-  const [proAnnualPrice, setProAnnualPrice] = useState(null);
-  const [isPriceLoading, setIsPriceLoading] = useState(true);
-  const [priceError, setPriceError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const freeAccessActive = useFreeAccessActive();
+  const [plans, setPlans] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-
-  useEffect(() => {
-    const metadata = user?.user_metadata || {};
-    setFullName(profile?.display_name || metadata.full_name || metadata.name || '');
-  }, [profile?.display_name, user?.id]);
 
   useEffect(() => {
     let active = true;
-    setIsPriceLoading(true);
-    setPriceError('');
     loadPremiumCatalog()
-      .then((plans) => {
-        const price = plans
-          .find((plan) => plan.plan_code === 'pro')
-          ?.prices.find((item) => item.duration_months === 12)?.price_inr;
-        if (!Number.isSafeInteger(price) || price < 0) {
-          throw new Error('The Pro annual price is not available.');
-        }
-        if (active) setProAnnualPrice(price);
+      .then((catalog) => {
+        if (active) setPlans(catalog);
       })
-      .catch((catalogError) => {
-        console.error('Could not load the current Pro price.', catalogError);
-        if (active) setPriceError(catalogError.message || 'Could not load the current Pro price.');
-      })
-      .finally(() => {
-        if (active) setIsPriceLoading(false);
-      });
-
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!user || !supabase) {
-      setApplication(null);
-      return undefined;
-    }
-
-    let active = true;
-    setIsLoading(true);
-    setError('');
-    supabase.rpc('get_my_pro_application_status')
-      .then(({ data, error: statusError }) => {
-        if (statusError) throw statusError;
-        if (active) setApplication(data);
-      })
-      .catch((statusError) => {
-        console.error('Could not load Pro application status.', statusError);
-        if (active) setError(statusError.message || 'Could not load your Pro application status.');
+      .catch((loadError) => {
+        console.error('Could not load subscription pricing.', loadError);
+        if (active) setError('Subscription plans could not be loaded. Please try again later.');
       })
       .finally(() => {
         if (active) setIsLoading(false);
       });
 
     return () => { active = false; };
-  }, [user?.id]);
-
-  const handleSignIn = async () => {
-    setError('');
-    try {
-      await signInWithGoogle();
-    } catch (signInError) {
-      console.error('Could not start Google sign-in for a Pro application.', signInError);
-      setError(signInError.message || 'Google sign-in could not be started.');
-    }
-  };
-
-  const handleApplicationSubmit = async (event) => {
-    event.preventDefault();
-    if (!user || !supabase) {
-      setError('Sign in with Google before applying for Pro.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError('');
-    setNotice('');
-    try {
-      const { data, error: submitError } = await supabase.rpc('submit_pro_application', {
-        p_full_name: fullName.trim(),
-        p_phone_number: phoneNumber.trim(),
-      });
-      if (submitError) throw submitError;
-      setApplication(data);
-      setNotice('Application received. We will contact you to arrange checkout.');
-    } catch (submitError) {
-      console.error('Could not submit the Pro application.', submitError);
-      setError(submitError.message || 'Your application could not be submitted. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const currentStatus = application?.status;
-  const activeMembership = currentStatus === 'approved'
-    && application?.expires_at
-    && new Date(application.expires_at) > new Date();
-  const canApply = !application || ['rejected', 'removed', 'expired'].includes(currentStatus);
+  }, []);
 
   return (
     <>
       <Helmet>
-        <title>Basic and Pro plans - Impulse</title>
-        <meta name="description" content="Compare Basic and Pro access on Impulse." />
+        <title>Impulse Premium - Impulse</title>
+        <meta name="description" content="Compare Impulse subscription plans and features." />
       </Helmet>
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 py-12">
-          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto mb-10 max-w-3xl text-center">
-              <Sparkles className="mx-auto mb-3 h-7 w-7 text-primary" />
-              <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Choose your plan</h1>
+              <Badge variant="outline" className="mb-4 gap-2 rounded-full px-4 py-2">
+                <Sparkles className="h-4 w-4" /> Impulse subscriptions
+              </Badge>
+              <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Choose your pace</h1>
               <p className="mt-4 text-muted-foreground">
-                Pro is an annual membership. Apply here and we will contact you to arrange checkout.
+                {freeAccessActive
+                  ? `All subscription plans and test series are free through ${FREE_ACCESS_END_LABEL}. Listed prices are unchanged.`
+                  : 'PYQ practice is available on every plan. Test series are separate purchases and are not included.'}
               </p>
             </div>
 
-            <div className="grid items-stretch gap-5 md:grid-cols-2">
-              {[
-                { title: 'Basic', price: 'Free', features: BASIC_FEATURES },
-                {
-                  title: 'Pro',
-                  price: proAnnualPrice === null
-                    ? (isPriceLoading ? 'Loading price…' : 'Price unavailable')
-                    : `${formatPriceInr(proAnnualPrice)} / year`,
-                  features: PRO_FEATURES,
-                },
-              ].map((plan) => (
-                <Card key={plan.title} className={`flex flex-col border-border ${plan.title === 'Pro' ? 'ring-2 ring-primary' : ''}`}>
-                  <CardHeader>
-                    <CardTitle className="text-2xl font-black">{plan.title}</CardTitle>
-                    <p className="text-3xl font-black">{plan.price}</p>
-                  </CardHeader>
-                  <CardContent className="flex-1">
-                    <ul className="space-y-3">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-sm">
-                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            {priceError ? <p role="alert" className="mt-4 text-center text-sm text-destructive">{priceError}</p> : null}
-
-            <Card className="mx-auto mt-8 max-w-2xl border-border">
-              <CardHeader>
-                <CardTitle>Apply for Pro</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Submit your name and phone number. We will contact you to arrange checkout.
-                  Pro access starts after payment is confirmed and an administrator approves the application.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {user ? (
-                  <p className="break-all text-sm text-muted-foreground">
-                    Google account: {user.email || 'Email unavailable'}
-                  </p>
-                ) : (
-                  <Button type="button" onClick={handleSignIn} disabled={!supabase}>
-                    <LogIn className="h-4 w-4" /> Sign in with Google to apply
-                  </Button>
-                )}
-
-                {isLoading ? <p role="status" className="text-sm text-muted-foreground">Checking application status…</p> : null}
-                {activeMembership ? (
-                  <p role="status" className="rounded-lg border border-primary/40 p-3 text-sm">
-                    Pro is active until {new Date(application.expires_at).toLocaleDateString()}.
-                  </p>
-                ) : null}
-                {currentStatus === 'pending' ? (
-                  <p role="status" className="rounded-lg border border-border p-3 text-sm">
-                    Your application is pending. We will contact you using the phone number you provided.
-                  </p>
-                ) : null}
-                {currentStatus === 'suspended' ? (
-                  <p role="status" className="rounded-lg border border-destructive/40 p-3 text-sm">
-                    Your Pro membership is suspended. Contact support if you think this is a mistake.
-                  </p>
-                ) : null}
-                {notice ? <p role="status" className="text-sm text-primary">{notice}</p> : null}
-                {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-
-                {user && canApply ? (
-                  <form className="space-y-4" onSubmit={handleApplicationSubmit}>
-                    <label className="block space-y-1 text-sm font-medium">
-                      Full name
-                      <input
-                        autoComplete="name"
-                        required
-                        minLength={2}
-                        maxLength={100}
-                        value={fullName}
-                        onChange={(event) => setFullName(event.target.value)}
-                        className="h-10 w-full rounded-md border border-input bg-background px-3"
-                      />
-                    </label>
-                    <label className="block space-y-1 text-sm font-medium">
-                      Indian mobile number
-                      <input
-                        autoComplete="tel-national"
-                        type="tel"
-                        inputMode="numeric"
-                        pattern="[6-9][0-9]{9}"
-                        maxLength={10}
-                        required
-                        value={phoneNumber}
-                        onChange={(event) => setPhoneNumber(event.target.value.replace(/\D/g, '').slice(0, 10))}
-                        placeholder="10-digit mobile number"
-                        className="h-10 w-full rounded-md border border-input bg-background px-3"
-                      />
-                    </label>
-                    <Button type="submit" disabled={isSubmitting || isLoading}>
-                      {isSubmitting ? 'Submitting…' : 'Submit Pro application'}
-                    </Button>
-                  </form>
-                ) : null}
-              </CardContent>
-            </Card>
+            {isLoading ? (
+              <p className="py-16 text-center text-muted-foreground">Loading plans…</p>
+            ) : error ? (
+              <p role="alert" className="py-16 text-center text-destructive">{error}</p>
+            ) : (
+              <div className="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
+                {plans.map((plan) => (
+                  <Card key={plan.plan_code} className={`flex flex-col border-border ${plan.plan_code === 'gold' ? 'ring-2 ring-primary' : ''}`}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle className="text-2xl font-black">{plan.name}</CardTitle>
+                        {plan.plan_code === 'gold' && <Badge>Popular</Badge>}
+                        {plan.plan_code === 'ultimate' && <Crown className="h-5 w-5 text-primary" aria-label="Ultimate" />}
+                      </div>
+                      <p className="text-sm text-muted-foreground">{plan.description}</p>
+                    </CardHeader>
+                    <CardContent className="flex flex-1 flex-col">
+                      <ul className="mb-6 space-y-3">
+                        {getPlanLimitText(plan).map((feature) => (
+                          <li key={feature} className="flex items-start gap-2 text-sm">
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                        {(plan.features || []).map((feature) => (
+                          <li key={feature} className="flex items-start gap-2 text-sm">
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-auto space-y-2 border-t border-border pt-4">
+                        {plan.prices.map((price) => (
+                          <div key={price.duration_months} className="space-y-2 rounded-md border border-border p-3">
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                              <span>{price.duration_months === 0 ? 'Free' : `${price.duration_months} months`}</span>
+                              <span className={freeAccessActive && price.price_inr > 0 ? 'font-bold line-through text-muted-foreground' : 'font-bold'}>
+                                {formatPriceInr(price.price_inr)}
+                              </span>
+                            </div>
+                            {freeAccessActive && plan.plan_code !== 'free' && price.price_inr > 0 ? (
+                              <p className="text-right text-xs font-semibold text-primary">
+                                Free through {FREE_ACCESS_END_LABEL}
+                              </p>
+                            ) : null}
+                            {plan.plan_code !== 'free' && price.price_inr > 0 ? (
+                              freeAccessActive ? null : (
+                                <CheckoutControl
+                                  productType="subscription"
+                                  planCode={plan.plan_code}
+                                  durationMonths={price.duration_months}
+                                  priceInr={price.price_inr}
+                                />
+                              )
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+            <p className="mt-8 text-center text-xs text-muted-foreground">
+              {freeAccessActive
+                ? `No payment is required through ${FREE_ACCESS_END_LABEL}; listed prices are retained for reference.`
+                : 'Checkout uses the current server-side catalog price. Enter your Indian mobile number to continue with UPI.'}
+            </p>
           </div>
         </main>
         <Footer />
