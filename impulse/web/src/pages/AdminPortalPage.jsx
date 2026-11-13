@@ -54,8 +54,6 @@ import {
   normalizeExam,
   normalizeQuestion,
   readAdminPortalState,
-  loginAdmin,
-  logoutAdmin,
   savePortalState,
   slugify,
   titleCase,
@@ -309,8 +307,6 @@ function AdminPortalPage() {
   const [portal, setPortal] = React.useState(() => readAdminPortalState());
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
   const [authReady, setAuthReady] = React.useState(false);
-  const [adminPassword, setAdminPassword] = React.useState('');
-  const [authError, setAuthError] = React.useState('');
   const [tab, setTab] = React.useState('overview');
   const [collapsed, setCollapsed] = React.useState(false);
   const [questionDraft, setQuestionDraft] = React.useState(() => createQuestionDraft());
@@ -495,34 +491,6 @@ function AdminPortalPage() {
       active = false;
     };
   }, []);
-
-  const handleAdminLogin = async (event) => {
-    event.preventDefault();
-    setAuthError('');
-
-    const result = await loginAdmin(adminPassword);
-
-    if (!result?.authenticated) {
-      setAuthError('Invalid password.');
-      return;
-    }
-
-    setIsAuthenticated(true);
-    setAuthReady(true);
-    const remote = await loadAdminPortalState();
-    if (remote) {
-      setPortal(remote);
-      setProfileDraft(remote.profile);
-    }
-    setAdminPassword('');
-  };
-
-  const handleAdminLogout = async () => {
-    await logoutAdmin();
-    setIsAuthenticated(false);
-    setAuthReady(true);
-    setAuthError('');
-  };
 
   const examCards = React.useMemo(() => buildExamCards(portal.questions, portal.exams), [portal.questions, portal.exams]);
   const examOptions = React.useMemo(() => examCards.map((exam) => exam.label), [examCards]);
@@ -812,29 +780,9 @@ function AdminPortalPage() {
           <CardContent className="space-y-6 p-6 sm:p-8">
             <div className="space-y-2 text-center">
               <Badge className="rounded-full bg-foreground px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.24em] text-background">Admin access</Badge>
-              <h1 className="text-3xl font-black uppercase tracking-tight">Impulse admin login</h1>
-              <p className="text-sm text-muted-foreground">Enter the admin password to open the portal.</p>
+              <h1 className="text-3xl font-black uppercase tracking-tight">Checking admin access</h1>
+              <p role="status" className="text-sm text-muted-foreground">Verifying your approved Google sign-in.</p>
             </div>
-
-            <form className="space-y-4" onSubmit={handleAdminLogin}>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Password</label>
-                <Input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(event) => setAdminPassword(event.target.value)}
-                  placeholder="Admin password"
-                  className="rounded-2xl border-border"
-                />
-              </div>
-
-              {authError ? <p className="text-sm font-medium text-destructive">{authError}</p> : null}
-
-              <Button type="submit" className="w-full rounded-full px-5 font-black uppercase tracking-[0.18em]">
-                <Shield className="mr-2 h-4 w-4" />
-                Open portal
-              </Button>
-            </form>
           </CardContent>
         </Card>
       </div>
@@ -848,29 +796,12 @@ function AdminPortalPage() {
           <CardContent className="space-y-6 p-6 sm:p-8">
             <div className="space-y-2 text-center">
               <Badge variant="outline" className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.24em]">Locked</Badge>
-              <h1 className="text-3xl font-black uppercase tracking-tight">Admin portal locked</h1>
-              <p className="text-sm text-muted-foreground">This portal is protected. Sign in to manage questions, exams, and the profile tracker.</p>
+              <h1 className="text-3xl font-black uppercase tracking-tight">Admin session unavailable</h1>
+              <p className="text-sm text-muted-foreground">Refresh the portal and sign in with an approved Google account to continue.</p>
             </div>
-
-            <form className="space-y-4" onSubmit={handleAdminLogin}>
-              <div className="space-y-2">
-                <label className="text-[11px] font-black uppercase tracking-[0.24em] text-muted-foreground">Password</label>
-                <Input
-                  type="password"
-                  value={adminPassword}
-                  onChange={(event) => setAdminPassword(event.target.value)}
-                  placeholder="Admin password"
-                  className="rounded-2xl border-border"
-                />
-              </div>
-
-              {authError ? <p className="text-sm font-medium text-destructive">{authError}</p> : null}
-
-              <Button type="submit" className="w-full rounded-full px-5 font-black uppercase tracking-[0.18em]">
-                <Shield className="mr-2 h-4 w-4" />
-                Sign in
-              </Button>
-            </form>
+            <Button className="w-full rounded-full px-5 font-black uppercase tracking-[0.18em]" onClick={() => window.location.reload()}>
+              Reload portal
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -933,9 +864,6 @@ function AdminPortalPage() {
               <Badge className={`rounded-full px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] ${statusTone}`}>
                 {summary.todayContributions > 0 ? 'Live today' : 'Idle today'}
               </Badge>
-              <Button variant="outline" onClick={handleAdminLogout} className="rounded-full border-border px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em]">
-                Logout
-              </Button>
             </div>
           </div>
         </header>
