@@ -63,7 +63,7 @@ function CustomTestBuilderPage() {
   const [selectedChapters, setSelectedChapters] = useState({});
   const [questionCounts, setQuestionCounts] = useState({});
   const [difficulty, setDifficulty] = useState('moderate-hard');
-  const [durationMinutes, setDurationMinutes] = useState(null);
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [selectedYears, setSelectedYears] = useState(null);
   const [showYears, setShowYears] = useState(false);
   const [marks, setMarks] = useState(DEFAULT_MARKS);
@@ -100,13 +100,10 @@ function CustomTestBuilderPage() {
   const selectedQuestionCount = selectedSubjects.reduce(
     (total, name) => total + Math.min(
       MAX_QUESTIONS_PER_SUBJECT,
-      Math.max(1, Math.floor(Number(questionCounts[name]) || 10)),
+      Math.max(1, Number(questionCounts[name]) || 10),
     ),
     0,
   );
-  const defaultDurationMinutes = Math.max(1, selectedQuestionCount * 2);
-  const maxDurationMinutes = Math.max(360, defaultDurationMinutes);
-  const displayedDurationMinutes = durationMinutes ?? defaultDurationMinutes;
   const questionTypes = useMemo(() => {
     const types = new Set();
     subjects
@@ -123,7 +120,6 @@ function CustomTestBuilderPage() {
     setSelectedChapters({});
     setQuestionCounts({});
     setSelectedYears(null);
-    setDurationMinutes(null);
     setMarks(DEFAULT_MARKS);
   };
 
@@ -160,14 +156,7 @@ function CustomTestBuilderPage() {
 
   const updateMark = (type, field, value) => {
     if (value === '' || !Number.isFinite(Number(value))) return;
-    const numericValue = Number(value);
-    setMarks((current) => ({
-      ...current,
-      [type]: {
-        ...current[type],
-        [field]: field === 'wrong' ? -Math.abs(numericValue) : numericValue,
-      },
-    }));
+    setMarks((current) => ({ ...current, [type]: { ...current[type], [field]: Number(value) } }));
   };
 
   const continueBuilder = () => {
@@ -215,7 +204,6 @@ function CustomTestBuilderPage() {
       }
 
       const startedAt = Date.now();
-      const testDurationMinutes = durationMinutes ?? Math.max(1, testQuestions.length * 2);
       const session = {
         id: window.crypto?.randomUUID?.() || `custom-${startedAt}`,
         exam: selectedExam,
@@ -223,8 +211,8 @@ function CustomTestBuilderPage() {
         difficultyId: difficulty,
         startedAt,
         updatedAt: new Date(startedAt).toISOString(),
-        endsAt: startedAt + testDurationMinutes * 60 * 1000,
-        durationSeconds: testDurationMinutes * 60,
+        endsAt: startedAt + Math.max(1, Number(durationMinutes) || 60) * 60 * 1000,
+        durationSeconds: Math.max(1, Number(durationMinutes) || 60) * 60,
         subjects: selectedSubjects.map((name) => ({
           name,
           chapters: selectedChapters[name] || [],
@@ -476,7 +464,7 @@ function CustomTestBuilderPage() {
                   <Card className="rounded-3xl">
                     <CardHeader><CardTitle className="flex items-center gap-2 text-base font-black uppercase tracking-wide"><Timer className="h-4 w-4" /> Duration</CardTitle></CardHeader>
                     <CardContent className="flex items-center gap-3">
-                      <Input type="number" min="1" max={maxDurationMinutes} value={displayedDurationMinutes} onChange={(event) => setDurationMinutes(Math.min(maxDurationMinutes, Math.max(1, Number(event.target.value) || 1)))} className="h-12 rounded-2xl text-lg font-black" aria-label="Test duration in minutes" />
+                      <Input type="number" min="1" max="360" value={durationMinutes} onChange={(event) => setDurationMinutes(Math.min(360, Math.max(1, Number(event.target.value) || 1)))} className="h-12 rounded-2xl text-lg font-black" aria-label="Test duration in minutes" />
                       <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">minutes</span>
                     </CardContent>
                   </Card>
@@ -545,7 +533,7 @@ function CustomTestBuilderPage() {
                 <div className="flex flex-wrap items-center gap-4 text-xs font-black uppercase tracking-wide text-muted-foreground">
                   <span>{selectedSubjects.length} subjects</span>
                   <span>Up to {selectedQuestionCount} questions</span>
-                  {step === 4 && <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {displayedDurationMinutes} min</span>}
+                  {step === 4 && <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {durationMinutes} min</span>}
                 </div>
                 {step < 4 ? (
                   <Button onClick={continueBuilder} disabled={isLoading || (step === 1 && !selectedExam)} className="rounded-xl px-6 font-black uppercase tracking-wide">

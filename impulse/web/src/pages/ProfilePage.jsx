@@ -162,135 +162,6 @@ function getActivityData(attempts, now) {
   };
 }
 
-function getSharedActivityData(activityData, now) {
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-  const rangeStart = new Date(end);
-  rangeStart.setDate(rangeStart.getDate() - 364);
-  rangeStart.setHours(0, 0, 0, 0);
-  const start = new Date(rangeStart);
-  start.setDate(start.getDate() - start.getDay());
-  const dailyActivity = new Map((activityData.days || []).map((day) => [day.date, day]));
-  const weeks = [];
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    const week = [];
-    for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
-      const date = new Date(cursor);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      const daily = dailyActivity.get(key);
-      week.push({
-        key,
-        count: daily?.attempts || 0,
-        solved: daily?.solved || 0,
-        date,
-        inRange: date >= rangeStart && date <= end,
-        dateLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-
-  const monthLabels = [];
-  weeks.forEach((week, weekIndex) => {
-    const firstDay = week.find((day) => day.inRange);
-    if (!firstDay) return;
-    const date = firstDay.date;
-    const label = date.toLocaleDateString('en-US', { month: 'short' });
-    if (!monthLabels.some((item) => item.label === label && item.month === date.getMonth())) {
-      monthLabels.push({ label, month: date.getMonth(), weekIndex });
-    }
-  });
-
-  return {
-    weeks,
-    monthLabels,
-    activeDays: activityData.activeDays,
-    longestStreak: activityData.longestStreak,
-    attempts: activityData.attempts,
-  };
-}
-
-function getSharedRatingHistory(dashboard, now) {
-  const events = dashboard.ratingEvents || [];
-  const yearStart = new Date(now.getFullYear(), 0, 1).getTime();
-  const currentRating = dashboard.currentRating;
-  const ratingAtYearStart = events
-    .filter((event) => event.timestamp < yearStart)
-    .at(-1)?.rating ?? INITIAL_RATING;
-  const yearly = [
-    { timestamp: yearStart, rating: ratingAtYearStart },
-    ...events.filter((event) => event.timestamp >= yearStart && event.timestamp <= now.getTime()),
-  ];
-  if (yearly[yearly.length - 1].timestamp < now.getTime()) {
-    yearly.push({ timestamp: now.getTime(), rating: currentRating });
-  }
-  return { currentRating, yearly, events };
-}
-
-function buildSharedRatingPeriodHistory(events, period, now) {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  if (period === 'week') {
-    const daysSinceMonday = (start.getDay() + 6) % 7;
-    start.setDate(start.getDate() - daysSinceMonday);
-  }
-
-  const beforePeriod = events.filter((event) => event.timestamp < start.getTime()).at(-1);
-  let rating = beforePeriod?.rating ?? INITIAL_RATING;
-  const history = [{ timestamp: start.getTime(), rating }];
-  const periodEvents = events.filter((event) => (
-    event.timestamp >= start.getTime() && event.timestamp <= now.getTime()
-  ));
-
-  if (period === 'today') {
-    if (periodEvents.length) {
-      const chartStart = new Date(periodEvents[0].timestamp);
-      chartStart.setMinutes(0, 0, 0);
-      history[0] = { timestamp: chartStart.getTime(), rating };
-      history.push(...periodEvents);
-    }
-  } else {
-    let eventIndex = 0;
-    for (let day = 0; day < 7; day += 1) {
-      const dayStart = new Date(start);
-      dayStart.setDate(dayStart.getDate() + day);
-      const nextDay = new Date(dayStart);
-      nextDay.setDate(nextDay.getDate() + 1);
-      while (
-        eventIndex < periodEvents.length
-        && periodEvents[eventIndex].timestamp < nextDay.getTime()
-      ) {
-        rating = periodEvents[eventIndex].rating;
-        eventIndex += 1;
-      }
-      if (dayStart <= now) {
-        history.push({ timestamp: Math.min(nextDay.getTime(), now.getTime()), rating });
-      }
-    }
-  }
-
-  if (history[history.length - 1].timestamp < now.getTime()) {
-    history.push({ timestamp: now.getTime(), rating: period === 'today'
-      ? periodEvents.at(-1)?.rating ?? rating
-      : rating });
-  }
-
-  return {
-    history,
-    currentRating: dashboardCurrentRating(events, now),
-    chartStart: period === 'today' && periodEvents.length
-      ? new Date(history[0].timestamp)
-      : start,
-  };
-}
-
-function dashboardCurrentRating(events, now) {
-  return events.filter((event) => event.timestamp <= now.getTime()).at(-1)?.rating ?? INITIAL_RATING;
-}
-
 function RatingTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -316,18 +187,15 @@ function ProfilePage({ profile = null }) {
   const { user, profile: accountProfile } = useAuth();
   const { solvedQuestions: ownSolvedQuestions } = useSolvedQuestions();
   const { questions: ownQuestions } = useQuestions();
-  const isSharedProfile = Boolean(profile?.dashboard);
-  const solvedQuestions = isSharedProfile ? [] : profile?.solvedQuestions || ownSolvedQuestions;
-  const questions = isSharedProfile ? [] : profile?.questions || ownQuestions;
+  const solvedQuestions = profile?.solvedQuestions || ownSolvedQuestions;
+  const questions = profile?.questions || ownQuestions;
   const now = useMemo(() => new Date(), []);
   const [ratingPeriod, setRatingPeriod] = useState('today');
   const [selectedActivityDay, setSelectedActivityDay] = useState(null);
   const [profileVisibility, setProfileVisibility] = useState(() => readProfileVisibility());
   const isOwnProfile = !profile;
   const visibleStats = profile?.visibleStats || profileVisibility;
-  const profileName = profile?.name || (isOwnProfile
-    ? accountProfile?.display_name || user?.user_metadata?.full_name || 'You'
-    : profile?.username || 'Friend');
+  const profileName = profile?.name || accountProfile?.display_name || user?.user_metadata?.full_name || 'You';
 
   useEffect(() => {
     if (!isOwnProfile) return undefined;
@@ -368,45 +236,25 @@ function ProfilePage({ profile = null }) {
     [questions],
   );
   const ratingHistory = useMemo(
-    () => (isSharedProfile
-      ? getSharedRatingHistory(profile.dashboard, now)
-      : buildRatingHistory(solvedQuestions, questions, now)),
-    [isSharedProfile, profile?.dashboard, solvedQuestions, questions, now],
+    () => buildRatingHistory(solvedQuestions, questions, now),
+    [solvedQuestions, questions, now],
   );
   const selectedRatingHistory = useMemo(() => {
     if (ratingPeriod === 'year') {
       return { history: ratingHistory.yearly, currentRating: ratingHistory.currentRating };
     }
-    if (isSharedProfile) {
-      return buildSharedRatingPeriodHistory(ratingHistory.events, ratingPeriod, now);
-    }
     return buildRatingPeriodHistory(solvedQuestions, questions, ratingPeriod, now);
-  }, [isSharedProfile, ratingPeriod, ratingHistory, solvedQuestions, questions, now]);
+  }, [ratingPeriod, ratingHistory, solvedQuestions, questions, now]);
   const periodRatingChange = selectedRatingHistory.history.length > 0
     ? selectedRatingHistory.history.at(-1).rating - selectedRatingHistory.history[0].rating
     : 0;
-  const activity = useMemo(
-    () => (isSharedProfile
-      ? getSharedActivityData(profile.dashboard.activity || {}, now)
-      : getActivityData(solvedQuestions, now)),
-    [isSharedProfile, profile?.dashboard, solvedQuestions, now],
-  );
+  const activity = useMemo(() => getActivityData(solvedQuestions, now), [solvedQuestions, now]);
   const earnedBadges = useMemo(
-    () => (isSharedProfile ? [] : getEarnedProfileBadges(solvedQuestions, questions)),
-    [isSharedProfile, solvedQuestions, questions],
+    () => getEarnedProfileBadges(solvedQuestions, questions),
+    [solvedQuestions, questions],
   );
 
   const profileStats = useMemo(() => {
-    if (isSharedProfile) {
-      const sharedStats = profile.dashboard.profileStats || {};
-      return {
-        ...sharedStats,
-        byDifficulty: sharedStats.byDifficulty?.map((item) => ({
-          ...item,
-          color: DIFFICULTIES.find(({ name }) => name === item.name)?.color,
-        })),
-      };
-    }
     const subjectPoints = new Map(SUBJECTS.map((subject) => [subject, 0]));
     let correctAttempts = 0;
     let incorrectAttempts = 0;
@@ -444,7 +292,7 @@ function ProfilePage({ profile = null }) {
     }));
 
     return { solved, correctAttempts, incorrectAttempts, byDifficulty, bySubject };
-  }, [isSharedProfile, profile?.dashboard, solvedQuestions, questionById]);
+  }, [solvedQuestions, questionById]);
 
   const ratingDelta = ratingHistory.currentRating - INITIAL_RATING;
   const positiveDelta = ratingDelta >= 0;
@@ -452,7 +300,7 @@ function ProfilePage({ profile = null }) {
   const ratingLevel = getRatingLevel(ratingHistory.currentRating);
   const chartStart = ratingPeriod === 'year'
     ? new Date(now.getFullYear(), 0, 1)
-    : selectedRatingHistory.chartStart || new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    : selectedRatingHistory.chartStart;
   const chartTicks = ratingPeriod === 'today'
     ? (() => {
       const rangeHours = Math.max(1, Math.ceil((now.getTime() - chartStart.getTime()) / (60 * 60 * 1000)));
@@ -658,15 +506,7 @@ function ProfilePage({ profile = null }) {
                 { id: 'problemsSolved', label: 'Problems solved', value: profileStats.solved, icon: Target, caption: 'Unique questions answered correctly' },
                 { id: 'activeDays', label: 'Active days', value: activity.activeDays, icon: CalendarDays, caption: 'This year' },
                 { id: 'longestStreak', label: 'Longest streak', value: `${activity.longestStreak} ${activity.longestStreak === 1 ? 'day' : 'days'}`, icon: Flame, caption: 'This year' },
-                {
-                  id: 'attemptsThisYear',
-                  label: 'Attempts this year',
-                  value: activity.attempts,
-                  icon: BookOpen,
-                  caption: canShowProfileStatCard('activeDays', visibleStats, isOwnProfile)
-                    ? `${activity.activeDays} days in the arena`
-                    : 'This year',
-                },
+                { id: 'attemptsThisYear', label: 'Attempts this year', value: activity.attempts, icon: BookOpen, caption: `${activity.activeDays} days in the arena` },
               ]
                 .filter(({ id }) => canShowProfileStatCard(id, visibleStats, isOwnProfile))
                 .map(({ id, label, value, icon: Icon, caption }) => (
@@ -728,7 +568,6 @@ function ProfilePage({ profile = null }) {
               </Card>
               )}
 
-              {isOwnProfile && (
               <Card className="border-border">
                 <CardHeader>
                   <CardTitle className="text-lg font-black uppercase tracking-tight">Medal showcase</CardTitle>
@@ -766,7 +605,6 @@ function ProfilePage({ profile = null }) {
                   )}
                 </CardContent>
               </Card>
-              )}
             </div>
 
             {canShowProfileStatCard('subjectRating', visibleStats, isOwnProfile) && (
@@ -808,11 +646,7 @@ function ProfilePage({ profile = null }) {
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">Every square is one day. More green means more questions solved.</p>
                 </div>
-                {canShowProfileStatCard('attemptsThisYear', visibleStats, isOwnProfile) && (
-                  <p className="font-mono text-sm font-bold">
-                    {activity.attempts.toLocaleString()} <span className="font-sans font-medium text-muted-foreground">attempts</span>
-                  </p>
-                )}
+                <p className="font-mono text-sm font-bold">{activity.attempts.toLocaleString()} <span className="font-sans font-medium text-muted-foreground">attempts</span></p>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto pb-2">
@@ -842,11 +676,7 @@ function ProfilePage({ profile = null }) {
                                   onClick={() => day.inRange && setSelectedActivityDay(day)}
                                   disabled={!day.inRange}
                                   title={`${day.solved} ${day.solved === 1 ? 'question solved' : 'questions solved'} on ${day.dateLabel}`}
-                                  aria-label={`${day.dateLabel}: ${day.solved} ${day.solved === 1 ? 'question solved' : 'questions solved'}${
-                                    canShowProfileStatCard('attemptsThisYear', visibleStats, isOwnProfile)
-                                      ? `, ${day.count} ${day.count === 1 ? 'attempt' : 'attempts'}`
-                                      : ''
-                                  }`}
+                                  aria-label={`${day.dateLabel}: ${day.solved} ${day.solved === 1 ? 'question solved' : 'questions solved'}, ${day.count} ${day.count === 1 ? 'attempt' : 'attempts'}`}
                                   aria-pressed={selectedActivityDay?.key === day.key}
                                   className={`h-full w-full ${activityColor(day.solved)} transition hover:ring-2 hover:ring-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground ${selectedActivityDay?.key === day.key ? 'ring-2 ring-foreground' : ''}`}
                                 />
@@ -874,14 +704,7 @@ function ProfilePage({ profile = null }) {
                   </div>
                 )}
                 <div className="mt-4 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  {[
-                    canShowProfileStatCard('activeDays', visibleStats, isOwnProfile)
-                      ? `${activity.activeDays} active days`
-                      : null,
-                    canShowProfileStatCard('longestStreak', visibleStats, isOwnProfile)
-                      ? `${activity.longestStreak} day longest streak`
-                      : null,
-                  ].filter(Boolean).join(' · ')}
+                  <span>{activity.activeDays} active days · {activity.longestStreak} day longest streak</span>
                   <span className="flex items-center gap-1.5">
                     Less <i className="h-3 w-3 bg-secondary" />
                     {['bg-emerald-800', 'bg-emerald-700', 'bg-emerald-600', 'bg-emerald-500', 'bg-emerald-300'].map((color) => (

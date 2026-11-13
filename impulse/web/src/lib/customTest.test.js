@@ -20,25 +20,27 @@ const makeQuestion = (id, chapter, difficulty, year = 2024) => ({
 });
 
 describe('selectCustomTestQuestions', () => {
-  it('reports a shortage instead of filling from other chapters', () => {
+  it('fills from other chapters while keeping exam, subject, and year constraints', () => {
     const questions = [
       makeQuestion('selected-easy', 'Mechanics', 'Easy'),
-      ...Array.from({ length: 5 }, (_, index) => makeQuestion(`other-${index}`, 'Optics', 'Medium')),
-      makeQuestion('wrong-year', 'Mechanics', 'Hard', 2023),
-      { ...makeQuestion('wrong-exam', 'Mechanics', 'Hard'), exam: 'NEET' },
-      { ...makeQuestion('wrong-subject', 'Mechanics', 'Hard'), subject: 'Chemistry' },
+      makeQuestion('fallback-medium', 'Optics', 'Medium'),
+      makeQuestion('wrong-year', 'Optics', 'Hard', 2023),
+      { ...makeQuestion('wrong-exam', 'Optics', 'Hard'), exam: 'NEET' },
+      { ...makeQuestion('wrong-subject', 'Optics', 'Hard'), subject: 'Chemistry' },
     ];
 
-    expect(() => selectCustomTestQuestions({
+    const selected = selectCustomTestQuestions({
       questions,
       exam: 'JEE MAINS',
       subject: 'Physics',
       chapters: ['Mechanics'],
       years: ['2024'],
-      count: 2,
+      count: 5,
       difficulty: 'moderate-hard',
       random: () => 0,
-    })).toThrow('Not enough questions in the selected chapters (Physics: requested 2, found 1)');
+    });
+
+    expect(selected.map((question) => question.id).sort()).toEqual(['fallback-medium', 'selected-easy']);
   });
 
   it('uses the requested mix when every difficulty is available', () => {
@@ -65,8 +67,8 @@ describe('selectCustomTestQuestions', () => {
     expect(selected.filter((question) => question.difficulty === 'Easy')).toHaveLength(4);
   });
 
-  it('caps a subject at 75 questions even when a larger count is requested', () => {
-    const questions = Array.from({ length: 80 }, (_, index) => (
+  it('caps a subject at 120 questions even when a larger count is requested', () => {
+    const questions = Array.from({ length: 125 }, (_, index) => (
       makeQuestion(`question-${index}`, 'Mechanics', 'Medium')
     ));
     const selected = selectCustomTestQuestions({
@@ -75,19 +77,20 @@ describe('selectCustomTestQuestions', () => {
       subject: 'Physics',
       chapters: ['Mechanics'],
       years: ['2024'],
-      count: 80,
+      count: 125,
       difficulty: 'moderate-hard',
       random: () => 0,
     });
 
-    expect(selected).toHaveLength(75);
+    expect(selected).toHaveLength(120);
   });
 
-  it('fills difficulty targets only with questions from the selected chapters', () => {
+  it('fills missing difficulty targets without dropping uncategorized eligible questions', () => {
     const questions = [
       makeQuestion('selected-easy', 'Mechanics', 'Easy'),
       makeQuestion('selected-hard', 'Mechanics', 'Hard'),
       makeQuestion('other-medium', 'Optics', 'Medium'),
+      makeQuestion('other-uncategorized', 'Optics', 'Unrated'),
     ];
     const selected = selectCustomTestQuestions({
       questions,
@@ -95,12 +98,17 @@ describe('selectCustomTestQuestions', () => {
       subject: 'Physics',
       chapters: ['Mechanics'],
       years: ['2024'],
-      count: 2,
+      count: 4,
       difficulty: 'moderate-hard',
       random: () => 0,
     });
 
-    expect(selected.map(({ id }) => id).sort()).toEqual(['selected-easy', 'selected-hard']);
+    expect(selected.map(({ id }) => id).sort()).toEqual([
+      'other-medium',
+      'other-uncategorized',
+      'selected-easy',
+      'selected-hard',
+    ]);
   });
 
   it('groups a multi-subject bank once without changing per-subject selection results', () => {
@@ -114,7 +122,7 @@ describe('selectCustomTestQuestions', () => {
       makeQuestion('p-hard', 'Mechanics', 'Hard'),
     ];
     const subjects = [
-      { name: 'Physics', chapters: ['Mechanics'], count: 2 },
+      { name: 'Physics', chapters: ['Mechanics'], count: 3 },
       { name: 'Chemistry', chapters: ['Organic'], count: 2 },
     ];
     const createRandom = () => {
@@ -144,22 +152,6 @@ describe('selectCustomTestQuestions', () => {
       difficulty: 'moderate-hard',
       random: createRandom(),
     })).toEqual(previousSelection);
-  });
-
-  it('reports shortages for every subject when any requested count cannot be met', () => {
-    const questions = [makeQuestion('physics-one', 'Mechanics', 'Easy')];
-    const subjects = [
-      { name: 'Physics', chapters: ['Mechanics'], count: 2 },
-      { name: 'Chemistry', chapters: ['Organic'], count: 3 },
-    ];
-
-    expect(() => selectCustomTestQuestionsBySubject({
-      questions,
-      exam: 'JEE MAINS',
-      subjects,
-      years: ['2024'],
-      difficulty: 'moderate-hard',
-    })).toThrow('Physics: requested 2, found 1; Chemistry: requested 3, found 0');
   });
 });
 

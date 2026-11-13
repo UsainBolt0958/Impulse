@@ -4,11 +4,12 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  consumeBasicDailyQuota,
+  createBillingOrder,
   getSeriesAccess,
   getSeriesAccessBatch,
+  handleGatewayWebhook,
+  refreshBillingOrder,
   verifyCustomerAccessToken,
-  verifyGoogleCustomerAccessToken,
 } from './billing.js';
 import {
   getPersistentStorageUsage,
@@ -44,7 +45,6 @@ import {
 } from './questionQuery.js';
 import {
   CUSTOM_DIFFICULTIES,
-  InsufficientCustomTestQuestionsError,
   MAX_QUESTIONS_PER_SUBJECT,
   selectCustomTestQuestionsBySubject,
 } from '../shared/customTestSelection.js';
@@ -339,7 +339,7 @@ function isAdminRequest(request) {
   return Boolean(getAdminSession(request));
 }
 
-function createExamSession(userId, seriesId, basicPaperTestId = null) {
+function createExamSession(userId) {
   const now = Date.now();
   for (const [token, session] of EXAM_SESSIONS) {
     if (session.expiresAt <= now) EXAM_SESSIONS.delete(token);
@@ -347,8 +347,6 @@ function createExamSession(userId, seriesId, basicPaperTestId = null) {
   const token = randomBytes(32).toString('base64url');
   EXAM_SESSIONS.set(token, {
     userId,
-    seriesId,
-    basicPaperTestId,
     expiresAt: now + EXAM_SESSION_MAX_AGE_SECONDS * 1000,
   });
   return token;
@@ -434,11 +432,10 @@ function publicTestSummary(test) {
   };
 }
 
-async function requestHasSeriesAccess(request, seriesId, testId = null) {
+async function requestHasSeriesAccess(request, seriesId) {
   if (isAdminRequest(request)) return true;
   const session = getExamSession(request);
-  if (!session || session.seriesId !== seriesId) return false;
-  if (session.basicPaperTestId) return !testId || session.basicPaperTestId === testId;
+  if (!session) return false;
   const access = await getSeriesAccess(session.userId, seriesId);
   return access.allowed;
 }
@@ -520,12 +517,100 @@ async function handleRequest(request, response) {
     return;
   }
 
+  if (url.pathname === '/api/billing/webhook' && request.method === 'POST') {
+    try {
+      const payload = await readRequestBody(request, 16 * 1024);
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        sendJson(response, 400, { error: 'The webhook body must be a JSON object.' });
+        return;
+      }
+      await handleGatewayWebhook(payload);
+      sendJson(response, 200, { received: true });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not verify the payment notification.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/orders' && request.method === 'POST') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to continue to checkout.' });
+        return;
+      }
+
+      const body = await readRequestBody(request, 16 * 1024);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        sendJson(response, 400, { error: 'The request body must be a JSON object.' });
+        return;
+      }
+      if (body.productType === 'test_series') {
+        const seriesId = typeof body.seriesId === 'string' ? body.seriesId.trim() : '';
+        const series = await readJsonFile(SERIES_FILE, []);
+        if (!seriesId || !series.some((item) => item.id === seriesId && item.published)) {
+          sendJson(response, 400, { error: 'Choose a published test series.' });
+          return;
+        }
+      }
+      const order = await createBillingOrder({
+        userId: user.id,
+        productType: body.productType,
+        planCode: body.planCode,
+        durationMonths: body.durationMonths,
+        seriesId: body.seriesId,
+        mobile: body.mobile,
+      });
+      sendJson(response, 201, order);
+    } catch (error) {
+      sendBillingError(response, error, 'Could not create a payment order.');
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/billing/orders/') && request.method === 'GET') {
+    const orderId = url.pathname.slice('/api/billing/orders/'.length);
+    if (!/^[A-Za-z0-9_-]{10,64}$/.test(orderId)) {
+      sendJson(response, 400, { error: 'Invalid payment order id.' });
+      return;
+    }
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to check your payment.' });
+        return;
+      }
+      const order = await refreshBillingOrder(orderId, user.id);
+      if (!order) {
+        sendJson(response, 404, { error: 'Payment order not found.' });
+        return;
+      }
+      sendJson(response, 200, {
+        orderId: order.order_id,
+        productType: order.product_type,
+        planCode: order.plan_code,
+        durationMonths: order.duration_months,
+        seriesId: order.series_id,
+        amountInr: order.amount_inr,
+        status: order.status,
+        createdAt: order.created_at,
+        expiresAt: order.expires_at,
+        paidAt: order.paid_at,
+      });
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check the payment status.');
+    }
+    return;
+  }
+
   if (url.pathname === '/api/billing/exam-session' && request.method === 'POST') {
     try {
       const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
-      const user = await verifyGoogleCustomerAccessToken(accessToken);
+      const user = await verifyCustomerAccessToken(accessToken);
       if (!user) {
-        sendJson(response, 401, { error: 'Sign in with Google to access this test.' });
+        sendJson(response, 401, { error: 'Sign in to access this test.' });
         return;
       }
       const body = await readRequestBody(request, 16 * 1024);
@@ -535,48 +620,22 @@ async function handleRequest(request, response) {
         return;
       }
       const series = await readJsonFile(SERIES_FILE, []);
-      const selectedSeries = series.find((item) => item.id === seriesId && item.published);
-      if (!selectedSeries) {
+      if (!series.some((item) => item.id === seriesId && item.published)) {
         sendJson(response, 404, { error: 'This test series is not available.' });
         return;
       }
-      let basicPaperTestId = null;
-      if (selectedSeries.meta?.kind === 'previous-papers') {
-        const testId = typeof body?.testId === 'string' ? body.testId.trim() : '';
-        const paper = testId ? await readJsonFileItem(TESTS_FILE, testId) : null;
-        if (
-          !paper?.published
-          || paper.seriesId !== seriesId
-          || paper.meta?.kind !== 'previous-paper'
-        ) {
-          sendJson(response, 404, { error: 'This previous paper is not available.' });
-          return;
-        }
-        const quota = await consumeBasicDailyQuota(user.id, 'previous_paper', testId);
-        if (!quota?.allowed) {
-          sendJson(response, 429, {
-            error: 'The Basic plan allows 2 different previous papers per day. Try again after midnight India time or apply for Pro.',
-            reason: 'daily_limit',
-            limit: quota.limit,
-            resetsAt: quota.resets_at,
-          });
-          return;
-        }
-        basicPaperTestId = testId;
-      } else {
-        const access = await getSeriesAccess(user.id, seriesId);
-        if (!access.allowed) {
-          sendJson(response, 403, {
-            error: 'Purchase this test series before opening its tests.',
-            reason: access.reason,
-            priceInr: access.price_inr,
-          });
-          return;
-        }
+      const access = await getSeriesAccess(user.id, seriesId);
+      if (!access.allowed) {
+        sendJson(response, 403, {
+          error: 'Purchase this test series before opening its tests.',
+          reason: access.reason,
+          priceInr: access.price_inr,
+        });
+        return;
       }
       const previousSession = getExamSession(request);
       if (previousSession) EXAM_SESSIONS.delete(previousSession.token);
-      setExamCookie(response, createExamSession(user.id, seriesId, basicPaperTestId));
+      setExamCookie(response, createExamSession(user.id));
       sendJson(response, 200, { authorized: true });
     } catch (error) {
       sendBillingError(response, error, 'Could not authorize this test session.');
@@ -778,13 +837,6 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname === '/api/questions/custom-test' && request.method === 'POST') {
-    const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
-    const user = await verifyGoogleCustomerAccessToken(accessToken);
-    if (!user) {
-      sendJson(response, 401, { error: 'Sign in with Google before starting a custom test.' });
-      return;
-    }
-
     let body;
     try {
       body = await readRequestBody(request, 64 * 1024);
@@ -832,38 +884,20 @@ async function handleRequest(request, response) {
         difficulty: body.difficulty,
       })
       : await readQuestions();
-    let questions;
-    try {
-      questions = selectCustomTestQuestionsBySubject({
-        questions: sourceQuestions,
-        exam: body.exam.trim(),
-        subjects: subjects.map((subject) => ({
-          ...subject,
-          name: subject.name.trim(),
-          chapters: subject.chapters.map((chapter) => chapter.trim()),
-        })),
-        years: body.years.map((year) => year.trim()),
-        difficulty: body.difficulty,
-      });
-    } catch (error) {
-      if (!(error instanceof InsufficientCustomTestQuestionsError)) throw error;
-      sendJson(response, 400, { error: error.message });
-      return;
-    }
+    const questions = selectCustomTestQuestionsBySubject({
+      questions: sourceQuestions,
+      exam: body.exam.trim(),
+      subjects: subjects.map((subject) => ({
+        ...subject,
+        name: subject.name.trim(),
+        chapters: subject.chapters.map((chapter) => chapter.trim()),
+      })),
+      years: body.years.map((year) => year.trim()),
+      difficulty: body.difficulty,
+    });
 
     if (!questions.length) {
       sendJson(response, 400, { error: 'There are no questions for the selected chapters and years.' });
-      return;
-    }
-
-    const quota = await consumeBasicDailyQuota(user.id, 'custom_test', randomUUID());
-    if (!quota?.allowed) {
-      sendJson(response, 429, {
-        error: 'The Basic plan allows 5 custom tests per day. Try again after midnight India time or apply for Pro.',
-        reason: 'daily_limit',
-        limit: quota.limit,
-        resetsAt: quota.resets_at,
-      });
       return;
     }
 
@@ -1234,7 +1268,7 @@ async function handleRequest(request, response) {
       sendJson(response, 404, { error: 'Not found' });
       return;
     }
-    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId, id))) {
+    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId))) {
       sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
       return;
     }
@@ -1508,7 +1542,7 @@ async function handleRequest(request, response) {
       sendJson(response, 404, { error: 'Test series test not found.' });
       return;
     }
-    if (!await requestHasSeriesAccess(request, seriesId, testId)) {
+    if (!await requestHasSeriesAccess(request, seriesId)) {
       sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
       return;
     }
@@ -1558,7 +1592,7 @@ async function handleRequest(request, response) {
       sendJson(response, 404, { error: 'Test not found' });
       return;
     }
-    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId, id))) {
+    if (!isAdminRequest(request) && (!test.seriesId || !await requestHasSeriesAccess(request, test.seriesId))) {
       sendJson(response, 403, { error: 'Purchase this test series before opening its tests.' });
       return;
     }

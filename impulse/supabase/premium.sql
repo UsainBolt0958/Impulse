@@ -32,7 +32,7 @@ revoke execute on function public.is_billing_admin() from public, anon;
 grant execute on function public.is_billing_admin() to authenticated;
 
 create table if not exists public.premium_plans (
-  plan_code text primary key check (plan_code in ('free', 'pro')),
+  plan_code text primary key check (plan_code in ('free', 'lite', 'gold', 'ultimate')),
   name text not null,
   description text not null default '',
   features jsonb not null default '[]'::jsonb check (jsonb_typeof(features) = 'array'),
@@ -400,16 +400,28 @@ create policy "Billing admins read billing audit"
 insert into public.premium_plans (plan_code, name, description, features, limits, sort_order)
 values
   (
-    'free', 'Basic', 'Unlimited PYQ practice with daily limits for papers, custom tests, and friends.',
+    'free', 'Free', 'Explore core practice before upgrading.',
     '[]'::jsonb,
-    '{"friends":3,"previous_paper_daily":2,"custom_test_daily":5}'::jsonb,
+    '{"friends":1,"previous_paper_daily":null,"included_paper_attempts":2,"custom_test_lifetime":3,"custom_test_daily":0}'::jsonb,
     0
   ),
   (
-    'pro', 'Pro', 'Complete access with no usage restrictions.',
+    'lite', 'Impulse Lite', 'More daily practice and room for a small study circle.',
+    '[]'::jsonb,
+    '{"friends":3,"previous_paper_daily":1,"custom_test_daily":3}'::jsonb,
+    1
+  ),
+  (
+    'gold', 'Impulse Gold', 'For regular preparation and frequent mock practice.',
+    '[]'::jsonb,
+    '{"friends":5,"previous_paper_daily":3,"custom_test_daily":10}'::jsonb,
+    2
+  ),
+  (
+    'ultimate', 'Impulse Ultimate', 'The highest limits for intensive preparation.',
     '[]'::jsonb,
     '{"friends":null,"previous_paper_daily":null,"custom_test_daily":null}'::jsonb,
-    1
+    3
   )
 on conflict (plan_code) do update set
   name = excluded.name,
@@ -422,13 +434,10 @@ on conflict (plan_code) do update set
 insert into public.premium_plan_prices (plan_code, duration_months, price_inr)
 values
   ('free', 0, 0),
-  ('pro', 12, 799)
-on conflict (plan_code, duration_months) do update set
-  price_inr = case
-    when excluded.plan_code = 'free' then excluded.price_inr
-    else public.premium_plan_prices.price_inr
-  end,
-  updated_at = now();
+  ('lite', 3, 199), ('lite', 6, 399), ('lite', 12, 699),
+  ('gold', 3, 399), ('gold', 6, 699), ('gold', 12, 1199),
+  ('ultimate', 3, 599), ('ultimate', 6, 999), ('ultimate', 12, 1899)
+on conflict (plan_code, duration_months) do nothing;
 
 insert into public.referral_settings (singleton)
 values (true)
