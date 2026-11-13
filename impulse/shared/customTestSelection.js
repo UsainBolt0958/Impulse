@@ -1,4 +1,4 @@
-export const MAX_QUESTIONS_PER_SUBJECT = 120;
+export const MAX_QUESTIONS_PER_SUBJECT = 75;
 
 export const CUSTOM_DIFFICULTIES = [
   { id: 'easy', label: 'Easy', mix: { easy: 0.8, medium: 0.18, hard: 0.02 } },
@@ -7,6 +7,17 @@ export const CUSTOM_DIFFICULTIES = [
   { id: 'hard', label: 'Hard', mix: { easy: 0.05, medium: 0.3, hard: 0.65 } },
   { id: 'very-hard', label: 'Very hard', mix: { easy: 0, medium: 0.2, hard: 0.8 } },
 ];
+
+export class InsufficientCustomTestQuestionsError extends Error {
+  constructor(shortages) {
+    const details = shortages
+      .map(({ subject, requested, available }) => `${subject}: requested ${requested}, found ${available}`)
+      .join('; ');
+    super(`Not enough questions in the selected chapters (${details}). Select more chapters or reduce the question count.`);
+    this.name = 'InsufficientCustomTestQuestionsError';
+    this.shortages = shortages;
+  }
+}
 
 export function getQuestionType(question) {
   const rawType = String(question?.type || question?.question_type || '').trim().toUpperCase();
@@ -71,64 +82,54 @@ export function selectCustomTestQuestions({
 }) {
   const selectedChapters = new Set(chapters);
   const selectedYears = new Set(years.map(String));
-  const eligible = [];
-  const selectedChapterPool = [];
-  const otherChapterPool = [];
-  const selectedChapterPoolsByDifficulty = { easy: [], medium: [], hard: [] };
-  const otherChapterPoolsByDifficulty = { easy: [], medium: [], hard: [] };
-  const selectedChapterQuestionById = new Map();
-  const questionsById = new Map();
+  const selectedChapterPoolById = new Map();
   for (const question of questions) {
     if (
       question.exam !== exam
       || String(question.subject || 'Unspecified') !== subject
       || !selectedYears.has(String(question.year))
+      || !selectedChapters.has(question.chapter || 'Unspecified')
     ) {
       continue;
     }
 
-    eligible.push(question);
-    questionsById.set(question.id, question);
-    const isSelectedChapter = selectedChapters.has(question.chapter || 'Unspecified');
-    const pool = isSelectedChapter ? selectedChapterPool : otherChapterPool;
-    const poolsByDifficulty = isSelectedChapter
-      ? selectedChapterPoolsByDifficulty
-      : otherChapterPoolsByDifficulty;
-    pool.push(question);
-    if (isSelectedChapter && !selectedChapterQuestionById.has(question.id)) {
-      selectedChapterQuestionById.set(question.id, question);
+    if (!selectedChapterPoolById.has(question.id)) {
+      selectedChapterPoolById.set(question.id, question);
     }
-    const bucket = difficultyBucket(question);
-    if (bucket) poolsByDifficulty[bucket].push(question);
   }
   const requestedCount = Math.floor(Number(count) || 0);
-  const targetCount = Math.min(MAX_QUESTIONS_PER_SUBJECT, Math.max(0, requestedCount), eligible.length);
+  const targetCount = Math.min(MAX_QUESTIONS_PER_SUBJECT, Math.max(0, requestedCount));
+  const selectedChapterPool = [...selectedChapterPoolById.values()];
+  if (selectedChapterPool.length < targetCount) {
+    throw new InsufficientCustomTestQuestionsError([{
+      subject: subject || 'Unspecified',
+      requested: targetCount,
+      available: selectedChapterPool.length,
+    }]);
+  }
+
   const difficultyOption = CUSTOM_DIFFICULTIES.find((item) => item.id === difficulty);
   const targets = getMixTargets(targetCount, difficultyOption?.mix || CUSTOM_DIFFICULTIES[2].mix);
   const selectedIds = new Set();
+  const selectedChapterPoolsByDifficulty = { easy: [], medium: [], hard: [] };
+  selectedChapterPool.forEach((question) => {
+    const bucket = difficultyBucket(question);
+    if (bucket) selectedChapterPoolsByDifficulty[bucket].push(question);
+  });
 
   for (const bucket of ['easy', 'medium', 'hard']) {
     takeFromPool(selectedChapterPoolsByDifficulty[bucket], targets[bucket], random, selectedIds);
   }
 
-  for (const bucket of ['easy', 'medium', 'hard']) {
-    const alreadySelected = [...selectedIds].filter((id) => {
-      const question = selectedChapterQuestionById.get(id);
-      return difficultyBucket(question) === bucket;
-    }).length;
-    const shortage = Math.max(0, targets[bucket] - alreadySelected);
-    takeFromPool(otherChapterPoolsByDifficulty[bucket], shortage, random, selectedIds);
-  }
-
   if (selectedIds.size < targetCount) {
-    const remaining = [...selectedChapterPool, ...otherChapterPool]
+    const remaining = selectedChapterPool
       .filter((question) => !selectedIds.has(question.id));
     shuffle(remaining, random)
       .slice(0, targetCount - selectedIds.size)
       .forEach((question) => selectedIds.add(question.id));
   }
 
-  return shuffle([...selectedIds].map((id) => questionsById.get(id)).filter(Boolean), random);
+  return shuffle([...selectedIds].map((id) => selectedChapterPoolById.get(id)).filter(Boolean), random);
 }
 
 export function selectCustomTestQuestionsBySubject({
@@ -154,14 +155,26 @@ export function selectCustomTestQuestionsBySubject({
     if (subjectQuestions) subjectQuestions.push(question);
   }
 
-  return subjects.flatMap((subject) => selectCustomTestQuestions({
-    questions: questionsBySubject.get(subject.name.trim()),
-    exam,
-    subject: subject.name.trim(),
-    chapters: subject.chapters,
-    years,
-    count: subject.count,
-    difficulty,
-    random,
-  }));
+  const selectedQuestions = [];
+  const shortages = [];
+  subjects.forEach((subject) => {
+    try {
+      selectedQuestions.push(...selectCustomTestQuestions({
+        questions: questionsBySubject.get(subject.name.trim()),
+        exam,
+        subject: subject.name.trim(),
+        chapters: subject.chapters,
+        years,
+        count: subject.count,
+        difficulty,
+        random,
+      }));
+    } catch (error) {
+      if (!(error instanceof InsufficientCustomTestQuestionsError)) throw error;
+      shortages.push(...error.shortages);
+    }
+  });
+
+  if (shortages.length) throw new InsufficientCustomTestQuestionsError(shortages);
+  return selectedQuestions;
 }

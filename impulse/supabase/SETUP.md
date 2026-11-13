@@ -14,11 +14,13 @@ For compact cross-device custom-test resume, also run [`custom_test_sessions.sql
 
 To enable username search and friend requests, also run [`friends.sql`](./friends.sql) in the SQL Editor. This is an additive migration and is safe to run for a project where you already ran `schema.sql`.
 
-To configure the Free, Lite, Gold, and Ultimate catalog, subscription term prices, per-series prices, referral discount settings, and billing tables, also run [`premium.sql`](./premium.sql). It seeds the current plan catalog and prices; later edits made in the billing admin panel are stored in Supabase. It does not create purchases or charge users.
+To configure the Basic and Pro catalog, also run [`premium.sql`](./premium.sql). Basic is free; Pro is seeded at ₹799 per year, and an administrator can update the displayed annual price. Pro applications and their admin workflow are added by [`pro_memberships.sql`](./pro_memberships.sql) below.
 
 Run [`admin_access.sql`](./admin_access.sql) after `premium.sql`. It restricts the admin role to the verified Google accounts `yashbharati81@gmail.com` and `impulsepreps@gmail.com`. No account UUID needs to be inserted manually. The same role gates the full admin portal and billing controls; other signed-in accounts see **No admin access**.
 
-Run [`upi_payments.sql`](./upi_payments.sql) after `premium.sql` and `admin_access.sql`. It creates server-managed UPI orders and purchased test-series records, and service-role-only database functions that verify the configured price and apply a confirmed payment once. Never expose the Supabase service-role key to the browser or a user.
+For an existing project with legacy payment records, retain the payment tables created by [`upi_payments.sql`](./upi_payments.sql) so the Admin Portal can show them in its archive. Those tables are historical only: the app no longer exposes UPI checkout, payment-status, or webhook routes.
+
+After `premium.sql`, `admin_access.sql`, and (if previously used) `upi_payments.sql`, run [`pro_memberships.sql`](./pro_memberships.sql). It adds Pro applications and membership administration, and disables execution of the legacy payment-order RPCs. Pro approval grants one year; approve only after checkout is confirmed outside the app.
 
 Run [`persistent_admin_storage.sql`](./persistent_admin_storage.sql) to store admin content in Supabase and create the public image bucket used for uploaded question images. Run it before deploying the matching API code. This is required for hosted admin edits and uploads to survive API restarts/deployments. It uses the existing `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the API host; do not add the service-role key to Cloudflare or any `VITE_*` setting. Existing Render-local JSON files and uploads are not migrated by this SQL; they are ignored in production after this change.
 
@@ -73,21 +75,11 @@ SUPABASE_NORMALIZED_QUESTIONS=false
 ADMIN_ALLOWED_ORIGINS=https://YOUR_DOMAIN,https://admin.YOUR_DOMAIN
 NODE_ENV=production
 ADMIN_COOKIE_SAMESITE=None
-UPIGATEWAY_USER_TOKEN=YOUR_PRIVATE_MERCHANT_TOKEN
-PAYMENT_RETURN_URL=https://YOUR_DOMAIN/payments/return
 ```
 
 For live Supabase project-usage metrics in the admin **Assets** panel, also set `SUPABASE_PROJECT_REF` and `SUPABASE_MANAGEMENT_ACCESS_TOKEN` on this private API host. The project reference is the ID in the project's `https://<project-ref>.supabase.co` URL. Create a Supabase Management API token for an account authorized for the project, and treat it as a highly privileged secret. Keep the token server-side only; never use a `VITE_` prefix or put it in a frontend environment setting. A sample variable list is in [`server/.env.example`](../server/.env.example). If these variables are not configured, project-level database, egress, MAU, and Realtime metrics remain unavailable rather than being inferred from app traffic.
 
-Set `VITE_API_BASE_URL=https://YOUR_API_HOST/api` for both frontend builds so their requests reach this API. Include every website origin that calls the API in `ADMIN_ALLOWED_ORIGINS`, including the main site and admin site. `UPIGATEWAY_API_BASE` is optional and defaults to `https://free.upigateway.dev/api`.
-
-In the UPIGateway merchant dashboard, configure the webhook URL as:
-
-```text
-https://YOUR_API_HOST/api/billing/webhook
-```
-
-The webhook is only a notification: this API re-queries UPIGateway's order-status endpoint and only grants access after the returned order ID, success status, amount, and UTR match the server's pending order. The browser redirect alone never grants access. Configure a real HTTPS production domain and test a pending payment, a failed payment, a successful payment, and repeated webhook delivery before enabling purchases for customers. If a merchant token has ever been exposed, revoke it and configure a newly generated token only in the API host's private environment settings.
+Set `VITE_API_BASE_URL=https://YOUR_API_HOST/api` for both frontend builds so their requests reach this API. Include every website origin that calls the API in `ADMIN_ALLOWED_ORIGINS`, including the main site and admin site. Do not configure UPI credentials or a payment webhook for the current app; checkout is disconnected.
 
 The API also uses Supabase Auth to validate customer sessions. For local `npm run dev:admin`, the Vite config passes `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to its local API process. The API independently validates Google admin access and creates random HTTP-only sessions. Admin and exam sessions are kept in API memory and lost on restart; run a single API instance for now. Payment orders and entitlements are stored in Supabase, but the current API still stores test content and uploads in local files. Before using a host that restarts or scales API instances, move that content/uploads to durable shared storage and move sessions to a shared store.
 
