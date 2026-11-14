@@ -6,7 +6,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import PremiumPage from './PremiumPage';
-import { loadProOffer } from '@/lib/premiumCatalog';
+import { loadProBatches, loadProOffer } from '@/lib/premiumCatalog';
 import { supabase } from '@/lib/supabase';
 
 const auth = vi.hoisted(() => ({
@@ -24,8 +24,9 @@ vi.mock('@/contexts/AuthContext', () => ({
 vi.mock('@/components/Header.jsx', () => ({ default: () => null }));
 vi.mock('@/components/Footer.jsx', () => ({ default: () => null }));
 vi.mock('@/lib/premiumCatalog', () => ({
+  loadProBatches: vi.fn(),
   loadProOffer: vi.fn(),
-  formatPriceInr: (amount) => `₹${amount}`,
+  formatPriceInr: (amount) => `₹${Number(amount).toLocaleString('en-IN')}`,
   getPlanLimitText: (plan) => plan.plan_code === 'basic'
     ? ['Up to 3 friends', 'Up to 5 custom tests per day', 'Up to 3 previous-year papers per day']
     : ['Unlimited friends', 'Unlimited custom tests'],
@@ -40,12 +41,26 @@ beforeEach(() => {
   auth.proAccess = { hasAccess: false, expiresAt: null, status: null, loading: false, error: '' };
   auth.refreshProAccess.mockReset().mockResolvedValue(auth.proAccess);
   loadProOffer.mockResolvedValue({
-    regular_price_inr: 1000,
-    discounted_price_inr: 500,
     card_style: 'gradient',
     color_one: '#302770',
     color_two: '#7C3AED',
   });
+  loadProBatches.mockResolvedValue([
+    {
+      id: 'batch-2027',
+      batch_name: 'Batch 2027',
+      expires_on: '2027-07-31',
+      regular_price_inr: 799,
+      discounted_price_inr: null,
+    },
+    {
+      id: 'batch-2028',
+      batch_name: 'Batch 2028',
+      expires_on: '2028-07-31',
+      regular_price_inr: 1499,
+      discounted_price_inr: null,
+    },
+  ]);
   supabase.rpc.mockResolvedValue({ data: 'request-1', error: null });
 });
 
@@ -77,13 +92,21 @@ describe('PremiumPage Pro request form', () => {
       </MemoryRouter>
     );
 
+    expect(await screen.findByText('₹799')).toBeInTheDocument();
+    expect(screen.getByText('Expires 31 July 2027')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Buy Pro' }));
     const fullName = screen.getByLabelText('Full name');
     const phone = screen.getByLabelText('Phone number');
     expect(fullName).toHaveValue('');
+    expect(fullName).toHaveClass('text-slate-950');
     expect(phone).toHaveValue('');
     expect(screen.getByText('Account name')).toBeInTheDocument();
 
+    fireEvent.change(screen.getByRole('combobox', { name: 'Pro batch' }), {
+      target: { value: 'batch-2028' },
+    });
+    expect(screen.getByText('₹1,499')).toBeInTheDocument();
+    expect(screen.getByText('Expires 31 July 2028')).toBeInTheDocument();
     fireEvent.change(fullName, { target: { value: 'Riya Sharma' } });
     fireEvent.change(phone, { target: { value: '9876543210' } });
     fireEvent.change(screen.getByLabelText(/Description/), { target: { value: 'Please contact me' } });
@@ -93,6 +116,7 @@ describe('PremiumPage Pro request form', () => {
       expect(supabase.rpc).toHaveBeenCalledWith('submit_pro_access_request', {
         p_full_name: 'Riya Sharma',
         p_phone: '9876543210',
+        p_batch_id: 'batch-2028',
         p_description: 'Please contact me',
       });
     });

@@ -5,8 +5,8 @@ This file is the handoff for resuming the premium/payment setup. It records the 
 ## Current status at a glance
 
 - The temporary site-wide free-access offer has been removed. Basic limits and Pro entitlements now determine access; paid test-series access requires a purchase unless the series is free/unpriced or the account has Pro.
-- Basic includes up to three friends, five custom tests per India calendar day, and three previous-year papers per India calendar day. Admin approval grants Pro for 12 months.
-- The Pro card uses separate regular/discounted price settings. Pro requests remain manual; the existing UPI payment system and legacy price records are retained.
+- Basic includes up to three friends, five custom tests per India calendar day, and three previous-year papers per India calendar day. Pro requests select a batch; access expires on that batch's configured date.
+- Each Pro batch has editable regular/discounted prices, and the card appearance is configurable. Pro requests remain manual; the existing UPI payment system and legacy price records are retained.
 - Active Pro users see their benefits and expiry date on the Premium, profile, and dashboard views.
 - The profile page's “Your data across devices” card was removed. Profile stats, saved data, and account syncing were not removed.
 - UPIGateway order creation previously returned HTTP 400. No successful live payment has been confirmed. Payment handling should remain untested/disabled until a provider account can create and verify orders.
@@ -45,7 +45,7 @@ If a secret is exposed, revoke/rotate it with its provider and update the new va
 
 The shared header no longer announces a site-wide free period. API and database checks apply the Basic limits; Pro access is checked from the signed-in user's entitlement. The customer `/premium` page shows the current Pro benefits to an active Pro account instead of another request/Buy Pro action.
 
-The Pro access migration grants each approved request 12 months from approval. Its `expires_at` field also backs the expiry shown to users and administrators. Existing grants without an expiry are backfilled to `created_at + 12 months`; accounts whose grant record is already older than a year will expire when the updated migration is applied, as requested. If `supabase/pro_access.sql` was already applied, rerun the updated, idempotent migration before deploying the frontend so the expiry column and `get_my_pro_access_status()` RPC exist.
+The Pro access migration seeds Batch 2027 at ₹799 through July 31, 2027 and Batch 2028 at ₹1,499 through July 31, 2028. Admins can add batches or edit each batch's price and expiry. Batch expiry edits apply to future approvals only; already-approved users keep their granted expiry. Existing grants without an expiry are backfilled to `created_at + 12 months`; accounts whose grant record is already older than a year will expire when the updated migration is applied, as requested. Rerun the updated, idempotent migration before deploying the frontend so batch pricing, the expiry column, and `get_my_pro_access_status()` exist.
 
 Paid test-series access continues to require a purchase, except for free/unpriced series and Pro accounts. The existing UPI order/payment system is retained; removing the site-wide free switch no longer blocks new orders. Do not enable live UPI checkout until the provider and deployment readiness checklist below has been completed.
 
@@ -138,7 +138,7 @@ The migrations for the complete app are run in this order where not already comp
 6. `supabase/upi_payments.sql`
 7. `supabase/persistent_admin_storage.sql`
 
-The Pro access migration adds the application queue, 12-month entitlements, expiry reporting, and Basic usage enforcement. The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run these migrations before deploying the matching API code.
+The Pro access migration adds the batch-based application queue, editable batch catalog, expiry reporting, and Basic usage enforcement. The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run these migrations before deploying the matching API code.
 
 Google sign-in settings:
 
@@ -190,7 +190,7 @@ Choose and record the eventual admin URL in this document after deployment. An a
 ## Current plan access behavior
 
 - Basic daily limits are enforced by the API/database; Pro users bypass those limits.
-- Approved Pro entitlements last 12 months and expire automatically. Admins can suspend or remove access before expiry.
+- Approved Pro entitlements expire at the end of the selected batch's configured date. Admins can suspend or remove access before expiry.
 - Paid test-series access is authorized by Pro status or an active purchase; free/unpriced series remain free.
 - The old site-wide free offer did not create purchases or paid subscriptions. Its client and server bypasses have now been removed.
 - The Pro application flow does not use UPI checkout. Legacy UPI order/payment code and admin controls remain available for the existing supported catalog.

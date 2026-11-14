@@ -34,11 +34,32 @@ export async function loadProOffer() {
   if (!supabase) throw new Error('Supabase is not configured for this website.');
   const { data, error } = await supabase
     .from('pro_offer_settings')
-    .select('regular_price_inr,discounted_price_inr,card_style,color_one,color_two')
+    .select('card_style,color_one,color_two')
     .eq('singleton', true)
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function loadProBatches() {
+  if (!supabase) throw new Error('Supabase is not configured for this website.');
+  const { data, error } = await supabase
+    .from('pro_access_batches')
+    .select('id,batch_name,expires_on,regular_price_inr,discounted_price_inr')
+    .eq('enabled', true)
+    .order('expires_on')
+    .order('batch_name');
+  if (error) throw error;
+
+  const dateParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const dateValues = Object.fromEntries(dateParts.map(({ type, value }) => [type, value]));
+  const todayInIndia = `${dateValues.year}-${dateValues.month}-${dateValues.day}`;
+  return (data || []).filter((batch) => batch.expires_on >= todayInIndia);
 }
 
 export async function loadTestSeriesPriceMap() {
