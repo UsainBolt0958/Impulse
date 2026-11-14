@@ -769,6 +769,7 @@ describe('portal server requests', () => {
         body: JSON.stringify(selection),
       })
     );
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer test-access-token');
   });
 
 });

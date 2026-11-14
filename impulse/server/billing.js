@@ -92,6 +92,33 @@ export async function verifyCustomerAccessToken(accessToken) {
   return typeof user.id === 'string' ? user : null;
 }
 
+async function hasProAccess(userId) {
+  const result = await supabaseRequest('rpc/has_pro_access', {
+    method: 'POST',
+    body: JSON.stringify({ p_user_id: userId }),
+  });
+  return result === true;
+}
+
+export async function consumeDailyFeature(userId, feature) {
+  if (!['custom_test', 'previous_paper'].includes(feature)) {
+    throw new Error('Unsupported daily feature.');
+  }
+  const result = await supabaseRequest('rpc/consume_daily_feature', {
+    method: 'POST',
+    body: JSON.stringify({ p_user_id: userId, p_feature: feature }),
+  });
+  if (!result?.allowed) {
+    const featureLabel = feature === 'custom_test' ? 'custom tests' : 'previous-year papers';
+    const error = new Error(
+      `You have reached the Basic limit of ${result?.limit} ${featureLabel} today. Upgrade to Pro for unlimited access.`
+    );
+    error.statusCode = 429;
+    throw error;
+  }
+  return result;
+}
+
 export async function getBillingOrder(orderId, userId) {
   const query = new URLSearchParams({
     order_id: `eq.${orderId}`,
@@ -330,6 +357,9 @@ export async function handleGatewayWebhook(payload) {
 }
 
 export async function getSeriesAccess(userId, seriesId) {
+  if (await hasProAccess(userId)) {
+    return { allowed: true, reason: 'pro' };
+  }
   if (isFreeAccessActive()) {
     return { allowed: true, reason: 'temporary_free_access' };
   }
@@ -358,10 +388,11 @@ export async function getSeriesAccess(userId, seriesId) {
     : { allowed: false, reason: 'payment_required', price_inr: Number(configuredPrice.price_inr) };
 }
 
-export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAccess = false) {
+export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAccess = false, proAccess = false) {
   const prices = new Map((priceRows || []).map((row) => [row.series_id, Number(row.price_inr)]));
   const purchases = new Set((purchaseRows || []).map((row) => row.series_id));
   return Object.fromEntries(seriesIds.map((seriesId) => {
+    if (proAccess) return [seriesId, { allowed: true, reason: 'pro' }];
     if (freeAccess) return [seriesId, { allowed: true, reason: 'temporary_free_access' }];
     const price = prices.get(seriesId);
     if (price === undefined || price === 0) return [seriesId, { allowed: true, reason: 'free' }];
@@ -371,6 +402,9 @@ export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAcc
 }
 
 export async function getSeriesAccessBatch(userId, seriesIds) {
+  if (await hasProAccess(userId)) {
+    return buildSeriesAccessMap(seriesIds, [], [], false, true);
+  }
   if (isFreeAccessActive()) {
     return buildSeriesAccessMap(seriesIds, [], [], true);
   }

@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createBillingOrder,
+  consumeDailyFeature,
   getSeriesAccess,
   getSeriesAccessBatch,
   handleGatewayWebhook,
@@ -620,7 +621,8 @@ async function handleRequest(request, response) {
         return;
       }
       const series = await readJsonFile(SERIES_FILE, []);
-      if (!series.some((item) => item.id === seriesId && item.published)) {
+      const selectedSeries = series.find((item) => item.id === seriesId && item.published);
+      if (!selectedSeries) {
         sendJson(response, 404, { error: 'This test series is not available.' });
         return;
       }
@@ -632,6 +634,9 @@ async function handleRequest(request, response) {
           priceInr: access.price_inr,
         });
         return;
+      }
+      if (selectedSeries.meta?.kind === 'previous-papers') {
+        await consumeDailyFeature(user.id, 'previous_paper');
       }
       const previousSession = getExamSession(request);
       if (previousSession) EXAM_SESSIONS.delete(previousSession.token);
@@ -689,6 +694,27 @@ async function handleRequest(request, response) {
       sendJson(response, 200, { accessBySeriesId });
     } catch (error) {
       sendBillingError(response, error, 'Could not check test-series access.');
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/billing/usage' && request.method === 'POST') {
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      const user = await verifyCustomerAccessToken(accessToken);
+      if (!user) {
+        sendJson(response, 401, { error: 'Sign in to use daily-limited features.' });
+        return;
+      }
+      const body = await readRequestBody(request, 16 * 1024);
+      if (body?.feature !== 'previous_paper') {
+        sendJson(response, 400, { error: 'Unsupported daily feature.' });
+        return;
+      }
+      const usage = await consumeDailyFeature(user.id, body.feature);
+      sendJson(response, 200, usage);
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check your daily feature limit.');
     }
     return;
   }
@@ -837,6 +863,19 @@ async function handleRequest(request, response) {
   }
 
   if (url.pathname === '/api/questions/custom-test' && request.method === 'POST') {
+    let user;
+    try {
+      const accessToken = /^Bearer\s+(.+)$/i.exec(request.headers.authorization || '')?.[1];
+      user = await verifyCustomerAccessToken(accessToken);
+    } catch (error) {
+      sendBillingError(response, error, 'Could not verify your account for custom tests.');
+      return;
+    }
+    if (!user) {
+      sendJson(response, 401, { error: 'Sign in to start custom tests.' });
+      return;
+    }
+
     let body;
     try {
       body = await readRequestBody(request, 64 * 1024);
@@ -898,6 +937,13 @@ async function handleRequest(request, response) {
 
     if (!questions.length) {
       sendJson(response, 400, { error: 'There are no questions for the selected chapters and years.' });
+      return;
+    }
+
+    try {
+      await consumeDailyFeature(user.id, 'custom_test');
+    } catch (error) {
+      sendBillingError(response, error, 'Could not check your daily custom-test limit.');
       return;
     }
 

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { loadPublicSeries } from '@/lib/portalServer';
 import { formatPriceInr } from '@/lib/premiumCatalog';
 import { supabase } from '@/lib/supabase';
+import ProAccessAdminPanel from './ProAccessAdminPanel';
 
 const DURATIONS = [3, 6, 12];
 
@@ -285,6 +286,16 @@ function BillingAdminPanel() {
       {error && <p role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 p-3 text-sm text-destructive"><AlertCircle className="h-4 w-4 shrink-0" />{error}</p>}
       {notice && <p role="status" className="rounded-xl border border-primary/40 p-3 text-sm">{notice}</p>}
 
+      <ProAccessAdminPanel session={session} />
+
+      <details className="rounded-3xl border border-border p-4">
+        <summary className="cursor-pointer list-none text-lg font-black">
+          Archived legacy UPI gateway, tiers, and billing records
+          <span className="mt-1 block text-sm font-normal text-muted-foreground">
+            Open for rupees-collected reports, legacy tier prices, test-series pricing, referral settings, and payment records.
+          </span>
+        </summary>
+        <div className="mt-5 space-y-6">
       {summary && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -502,6 +513,8 @@ function BillingAdminPanel() {
           )) : <p className="text-sm text-muted-foreground">No admin changes recorded yet.</p>}
         </CardContent>
       </Card>
+        </div>
+      </details>
       </div>
     </div>
   );

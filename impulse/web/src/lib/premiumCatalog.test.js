@@ -54,4 +54,18 @@ describe('premium catalog presentation', () => {
       'Test series sold separately',
     ]);
   });
+
+  it('describes the Basic and Pro feature limits', () => {
+    expect(getPlanLimitText({ plan_code: 'basic' })).toEqual([
+      'Up to 3 friends',
+      'Up to 5 custom tests per day',
+      'Up to 3 previous-year papers per day',
+    ]);
+    expect(getPlanLimitText({ plan_code: 'pro' })).toEqual([
+      'Unlimited friends',
+      'Unlimited custom tests',
+      'Unlimited previous-year papers',
+      'Unlimited access to test series',
+    ]);
+  });
 });

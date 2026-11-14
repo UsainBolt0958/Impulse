@@ -278,9 +278,11 @@ export async function loadCustomTestCatalog() {
 }
 
 export async function createCustomTestQuestions(payload) {
+  const accessToken = await getAccessToken();
   const data = await requestJsonOrThrow('/questions/custom-test', {
     method: 'POST',
     body: JSON.stringify(payload || {}),
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
   return Array.isArray(data?.questions) ? data.questions : [];
 }
@@ -446,6 +448,16 @@ export async function establishExamSession(seriesId) {
   return requestWithUserAuth('/billing/exam-session', {
     method: 'POST',
     body: JSON.stringify({ seriesId }),
+  });
+}
+
+export async function recordDailyFeatureUse(feature) {
+  if (feature !== 'previous_paper') {
+    throw new Error('Unsupported daily feature.');
+  }
+  return requestWithUserAuth('/billing/usage', {
+    method: 'POST',
+    body: JSON.stringify({ feature }),
   });
 }
 

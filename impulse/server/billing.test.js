@@ -30,4 +30,17 @@ describe('batched test-series access', () => {
       'series-two': { allowed: true, reason: 'temporary_free_access' },
     });
   });
+
+  it('grants every test series to Pro accounts', () => {
+    expect(buildSeriesAccessMap(
+      ['paid-series', 'unconfigured-series'],
+      [{ series_id: 'paid-series', price_inr: 750 }],
+      [],
+      false,
+      true
+    )).toEqual({
+      'paid-series': { allowed: true, reason: 'pro' },
+      'unconfigured-series': { allowed: true, reason: 'pro' },
+    });
+  });
 });
