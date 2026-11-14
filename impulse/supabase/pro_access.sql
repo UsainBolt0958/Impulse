@@ -73,6 +73,12 @@ create unique index if not exists pro_access_requests_one_pending_per_user_idx
   on public.pro_access_requests (user_id)
   where status = 'pending';
 
+create table if not exists public.pro_request_ignores (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  ignored_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.pro_access (
   user_id uuid primary key references auth.users (id) on delete cascade,
   batch_id uuid references public.pro_access_batches (id) on delete set null,
@@ -105,18 +111,20 @@ create table if not exists public.pro_daily_usage (
 alter table public.pro_offer_settings enable row level security;
 alter table public.pro_access_batches enable row level security;
 alter table public.pro_access_requests enable row level security;
+alter table public.pro_request_ignores enable row level security;
 alter table public.pro_access enable row level security;
 alter table public.pro_daily_usage enable row level security;
 
 revoke all on public.pro_offer_settings, public.pro_access_batches, public.pro_access_requests,
-  public.pro_access, public.pro_daily_usage from public, anon, authenticated;
+  public.pro_request_ignores, public.pro_access, public.pro_daily_usage
+  from public, anon, authenticated;
 grant select on public.pro_offer_settings to anon, authenticated;
 grant insert, update on public.pro_offer_settings to authenticated;
 grant select on public.pro_access_batches to anon, authenticated;
 grant insert, update on public.pro_access_batches to authenticated;
 grant select on public.pro_access_requests to authenticated;
 grant all on public.pro_offer_settings, public.pro_access_batches, public.pro_access_requests,
-  public.pro_access, public.pro_daily_usage to service_role;
+  public.pro_request_ignores, public.pro_access, public.pro_daily_usage to service_role;
 
 drop policy if exists "Anyone can read Pro offer settings" on public.pro_offer_settings;
 create policy "Anyone can read Pro offer settings"
@@ -210,9 +218,20 @@ declare
   current_user_id uuid := auth.uid();
   request_id uuid;
   selected_batch public.pro_access_batches;
+  india_today date := (now() at time zone 'Asia/Kolkata')::date;
+  requests_today bigint;
 begin
   if current_user_id is null then
     raise exception 'Sign in before requesting Pro access.';
+  end if;
+  perform pg_advisory_xact_lock(
+    hashtextextended('pro-request-limit:' || current_user_id::text, 0)
+  );
+  if exists (
+    select 1 from public.pro_request_ignores as ignored
+    where ignored.user_id = current_user_id
+  ) then
+    raise exception 'Pro applications are unavailable for this account.';
   end if;
   if public.has_pro_access(current_user_id) then
     raise exception 'This account already has Pro access.';
@@ -234,6 +253,14 @@ begin
   end if;
   if selected_batch.expires_on < (now() at time zone 'Asia/Kolkata')::date then
     raise exception 'This Pro batch has expired. Choose another batch.';
+  end if;
+  select count(*) into requests_today
+  from public.pro_access_requests as request
+  where request.user_id = current_user_id
+    and request.created_at >= (india_today::timestamp at time zone 'Asia/Kolkata')
+    and request.created_at < ((india_today + 1)::timestamp at time zone 'Asia/Kolkata');
+  if requests_today >= 5 then
+    raise exception 'You can submit up to 5 Pro applications per India calendar day.';
   end if;
   if exists (
     select 1 from public.pro_access_requests
@@ -288,6 +315,10 @@ begin
           request.batch_id, request.quoted_regular_price_inr,
           request.quoted_discounted_price_inr, request.description,
           request.status, request.created_at, batch.batch_name, batch.expires_on,
+          exists (
+            select 1 from public.pro_request_ignores as ignored
+            where ignored.user_id = request.user_id
+          ) as requests_ignored,
           coalesce(nullif(profile.display_name, ''), auth_user.email, request.user_id::text) as account_name
         from public.pro_access_requests as request
         left join public.pro_access_batches as batch on batch.id = request.batch_id
@@ -304,7 +335,11 @@ begin
           access.grant_source, access.updated_at,
           coalesce(nullif(profile.display_name, ''), auth_user.email, access.user_id::text) as account_name,
           auth_user.email,
-          request.full_name, request.phone
+          request.full_name, request.phone,
+          exists (
+            select 1 from public.pro_request_ignores as ignored
+            where ignored.user_id = access.user_id
+          ) as requests_ignored
         from public.pro_access as access
         left join public.pro_access_batches as batch on batch.id = access.batch_id
         left join public.profiles as profile on profile.id = access.user_id
@@ -408,6 +443,159 @@ begin
       updated_by = excluded.updated_by,
       updated_at = now();
   end if;
+end
+$$;
+
+create or replace function public.set_pro_request_ignored(p_user_id uuid, p_ignore boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+  if p_user_id is null or not exists (select 1 from auth.users where id = p_user_id) then
+    raise exception 'The account could not be found.';
+  end if;
+  if p_ignore is null then
+    raise exception 'Choose whether to ignore this account''s future Pro applications.';
+  end if;
+
+  perform pg_advisory_xact_lock(
+    hashtextextended('pro-request-limit:' || p_user_id::text, 0)
+  );
+  if p_ignore then
+    insert into public.pro_request_ignores (user_id, ignored_by)
+    values (p_user_id, auth.uid())
+    on conflict (user_id) do update
+      set ignored_by = excluded.ignored_by,
+          created_at = now();
+  else
+    delete from public.pro_request_ignores where user_id = p_user_id;
+  end if;
+end
+$$;
+
+create or replace function public.search_pro_access_accounts(p_query text)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  search_text text := trim(coalesce(p_query, ''));
+  search_results jsonb;
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+  if char_length(search_text) < 2 then
+    raise exception 'Enter at least 2 characters to search accounts.';
+  end if;
+
+  select coalesce(jsonb_agg(to_jsonb(item) order by item.account_name), '[]'::jsonb)
+  into search_results
+  from (
+    select auth_user.id as user_id,
+      auth_user.email,
+      coalesce(nullif(profile.display_name, ''), auth_user.email, auth_user.id::text) as account_name,
+      profile.username,
+      access.status as pro_status,
+      access.batch_id,
+      batch.batch_name,
+      access.expires_at,
+      public.pro_access_is_active(auth_user.id) as has_pro_access,
+      exists (
+        select 1 from public.pro_request_ignores as ignored
+        where ignored.user_id = auth_user.id
+      ) as requests_ignored
+    from auth.users as auth_user
+    left join public.profiles as profile on profile.id = auth_user.id
+    left join public.pro_access as access on access.user_id = auth_user.id
+    left join public.pro_access_batches as batch on batch.id = access.batch_id
+    where coalesce(auth_user.email, '') ilike '%' || search_text || '%'
+      or coalesce(profile.display_name, '') ilike '%' || search_text || '%'
+      or coalesce(profile.username, '') ilike '%' || search_text || '%'
+      or auth_user.id::text ilike '%' || search_text || '%'
+    order by account_name
+    limit 25
+  ) as item;
+
+  return search_results;
+end
+$$;
+
+create or replace function public.grant_manual_pro_access(p_user_id uuid, p_batch_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  selected_batch public.pro_access_batches;
+  selected_expires_at timestamptz;
+  pending_request public.pro_access_requests;
+  has_pending_request boolean;
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+  if p_user_id is null or not exists (select 1 from auth.users where id = p_user_id) then
+    raise exception 'The account could not be found.';
+  end if;
+  perform pg_advisory_xact_lock(
+    hashtextextended('pro-request-limit:' || p_user_id::text, 0)
+  );
+
+  select * into selected_batch
+  from public.pro_access_batches
+  where id = p_batch_id;
+  if not found then
+    raise exception 'Choose an existing Pro batch.';
+  end if;
+  if selected_batch.expires_on < (now() at time zone 'Asia/Kolkata')::date then
+    raise exception 'This Pro batch has expired and cannot be granted.';
+  end if;
+  selected_expires_at :=
+    ((selected_batch.expires_on + 1)::timestamp at time zone 'Asia/Kolkata')
+    - interval '1 microsecond';
+
+  select * into pending_request
+  from public.pro_access_requests
+  where user_id = p_user_id and status = 'pending'
+  for update;
+  has_pending_request := found;
+  if has_pending_request then
+    update public.pro_access_requests
+    set status = 'approved',
+        decided_at = now(),
+        decided_by = auth.uid(),
+        batch_id = selected_batch.id,
+        quoted_regular_price_inr = selected_batch.regular_price_inr,
+        quoted_discounted_price_inr = selected_batch.discounted_price_inr
+    where id = pending_request.id;
+  end if;
+
+  insert into public.pro_access (
+    user_id, batch_id, status, grant_source, last_request_id,
+    suspended_until, expires_at, updated_by
+  ) values (
+    p_user_id, selected_batch.id, 'active', 'manual',
+    case when has_pending_request then pending_request.id else null end,
+    null, selected_expires_at, auth.uid()
+  )
+  on conflict (user_id) do update set
+    batch_id = excluded.batch_id,
+    status = 'active',
+    grant_source = 'manual',
+    last_request_id = excluded.last_request_id,
+    suspended_until = null,
+    expires_at = excluded.expires_at,
+    updated_by = excluded.updated_by,
+    updated_at = now();
 end
 $$;
 
@@ -672,6 +860,12 @@ revoke execute on function public.get_pro_admin_overview() from public, anon;
 grant execute on function public.get_pro_admin_overview() to authenticated;
 revoke execute on function public.decide_pro_access_request(uuid, boolean, uuid) from public, anon;
 grant execute on function public.decide_pro_access_request(uuid, boolean, uuid) to authenticated;
+revoke execute on function public.set_pro_request_ignored(uuid, boolean) from public, anon;
+grant execute on function public.set_pro_request_ignored(uuid, boolean) to authenticated;
+revoke execute on function public.search_pro_access_accounts(text) from public, anon;
+grant execute on function public.search_pro_access_accounts(text) to authenticated;
+revoke execute on function public.grant_manual_pro_access(uuid, uuid) from public, anon;
+grant execute on function public.grant_manual_pro_access(uuid, uuid) to authenticated;
 revoke execute on function public.manage_pro_access(uuid, text, integer) from public, anon;
 grant execute on function public.manage_pro_access(uuid, text, integer) to authenticated;
 revoke execute on function public.consume_daily_feature(uuid, text) from public, anon, authenticated;
