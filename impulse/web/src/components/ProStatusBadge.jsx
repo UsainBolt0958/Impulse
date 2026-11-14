@@ -18,7 +18,7 @@ function ProStatusBadge({ expiresAt, compact = false }) {
       aria-label={`Impulse Pro member${compact ? '' : `, expires ${formatProExpiry(expiresAt)}`}`}
       className={`inline-flex flex-col items-center justify-center bg-transparent ${compact ? 'gap-0' : 'gap-1'}`}
     >
-      <span className={`pro-status-badge__label inline-flex items-center justify-center rounded-full font-semibold leading-none tracking-[0.2em] ${compact ? 'px-2 py-1 text-[8px]' : 'px-3 py-1.5 text-xs'}`}>
+      <span className={`pro-status-badge__label inline-flex items-center justify-center rounded-full font-medium leading-none tracking-[0.16em] ${compact ? 'px-2 py-[3px] text-[8px]' : 'px-3 py-1 text-xs'}`}>
         <span className="pro-status-badge__text">PRO</span>
       </span>
       {!compact && (
