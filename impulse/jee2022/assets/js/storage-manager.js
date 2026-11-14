@@ -269,29 +269,34 @@ const StorageManager = (function() {
         await init();
         
         const checkpointId = `${sessionId}_${Date.now()}`;
+        const checkpointSnapshot = { ...checkpointData };
+        delete checkpointSnapshot.data;
         const record = {
             checkpointId: checkpointId,
             sessionId: sessionId,
             timestamp: Date.now(),
-            ...compress(checkpointData)
+            ...compress(checkpointSnapshot)
         };
         
+        let saved = false;
         try {
             if (isInitialized && db) {
-                return new Promise((resolve, reject) => {
+                saved = await new Promise((resolve) => {
                     const transaction = db.transaction([CHECKPOINT_STORE], 'readwrite');
                     const store = transaction.objectStore(CHECKPOINT_STORE);
-                    const request = store.put(record);
-                    
-                    request.onsuccess = () => resolve(checkpointId);
-                    request.onerror = () => resolve(null);
+                    store.put(record);
+                    transaction.oncomplete = () => resolve(true);
+                    transaction.onerror = () => resolve(false);
+                    transaction.onabort = () => resolve(false);
                 });
             }
         } catch (e) {
             console.error('Checkpoint save failed:', e);
         }
         
-        return null;
+        if (!saved) return null;
+        await cleanupCheckpoints(sessionId);
+        return checkpointId;
     };
     
     // Get latest checkpoint
@@ -359,7 +364,7 @@ const StorageManager = (function() {
         return checkpoints;
     };
     
-    // Cleanup old checkpoints (keep only last 10 per session)
+    // Keep only the latest recovery checkpoint for each session.
     const cleanupCheckpoints = async (sessionId) => {
         await init();
         
@@ -367,8 +372,8 @@ const StorageManager = (function() {
             if (isInitialized && db) {
                 const checkpoints = await getCheckpoints(sessionId);
                 
-                if (checkpoints.length > 10) {
-                    const toDelete = checkpoints.slice(0, checkpoints.length - 10);
+                if (checkpoints.length > 1) {
+                    const toDelete = checkpoints.slice(0, checkpoints.length - 1);
                     
                     const transaction = db.transaction([CHECKPOINT_STORE], 'readwrite');
                     const store = transaction.objectStore(CHECKPOINT_STORE);
@@ -410,6 +415,7 @@ const StorageManager = (function() {
             // Clear from localStorage
             const key = `exam_session_${sessionId}`;
             localStorage.removeItem(key);
+            localStorage.removeItem(`exam_analytics_${sessionId}`);
             
             const chunks = localStorage.getItem(`${key}_chunks`);
             if (chunks) {

@@ -19,10 +19,6 @@ vi.mock('@/lib/premiumCatalog', () => ({
   formatPriceInr: (price) => `₹${price}`,
   loadTestSeriesPriceMap,
 }));
-vi.mock('@/lib/freeAccess', () => ({
-  FREE_ACCESS_END_LABEL: 'test date',
-  useFreeAccessActive: () => false,
-}));
 vi.mock('@/components/Header.jsx', () => ({ default: () => null }));
 vi.mock('@/components/Footer.jsx', () => ({ default: () => null }));
 

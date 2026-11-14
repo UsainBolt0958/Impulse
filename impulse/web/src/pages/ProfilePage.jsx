@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import Header from '@/components/Header.jsx';
+import ProStatusBadge from '@/components/ProStatusBadge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useQuestions } from '@/hooks/useQuestions';
 import { useSolvedQuestions } from '@/hooks/useSolvedQuestions';
@@ -184,7 +185,7 @@ function activityColor(solved) {
 }
 
 function ProfilePage({ profile = null }) {
-  const { user, profile: accountProfile } = useAuth();
+  const { user, profile: accountProfile, proAccess } = useAuth();
   const { solvedQuestions: ownSolvedQuestions } = useSolvedQuestions();
   const { questions: ownQuestions } = useQuestions();
   const solvedQuestions = profile?.solvedQuestions || ownSolvedQuestions;
@@ -339,6 +340,12 @@ function ProfilePage({ profile = null }) {
                     </span>
                   )}
                 </div>
+                {isOwnProfile && proAccess?.hasAccess && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <ProStatusBadge expiresAt={proAccess.expiresAt} />
+                    <p className="text-sm font-semibold text-violet-500">Your Pro benefits are active.</p>
+                  </div>
+                )}
               </div>
               {isOwnProfile ? (
                 <Link

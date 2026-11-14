@@ -7,11 +7,6 @@ const UPIGATEWAY_USER_TOKEN = process.env.UPIGATEWAY_USER_TOKEN || '';
 const UPIGATEWAY_API_BASE = (process.env.UPIGATEWAY_API_BASE || 'https://free.upigateway.dev/api').replace(/\/+$/, '');
 const PAYMENT_RETURN_URL = process.env.PAYMENT_RETURN_URL || '';
 const PROVIDER = 'upigateway';
-const FREE_ACCESS_END = Date.parse('2027-01-02T00:00:00+05:30');
-
-function isFreeAccessActive() {
-  return Date.now() < FREE_ACCESS_END;
-}
 
 function requireSupabaseConfig() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -192,11 +187,6 @@ async function reconcileGatewayStatus(orderId) {
 }
 
 export async function createBillingOrder({ userId, productType, planCode, durationMonths, seriesId, mobile }) {
-  if (isFreeAccessActive()) {
-    const error = new Error('All paid access is free through January 1, 2027. Checkout is temporarily disabled.');
-    error.statusCode = 409;
-    throw error;
-  }
   requirePaymentConfig();
   if (!/^[6-9]\d{9}$/.test(String(mobile || ''))) {
     throw new Error('Enter a valid 10-digit Indian mobile number for UPI checkout.');
@@ -360,9 +350,6 @@ export async function getSeriesAccess(userId, seriesId) {
   if (await hasProAccess(userId)) {
     return { allowed: true, reason: 'pro' };
   }
-  if (isFreeAccessActive()) {
-    return { allowed: true, reason: 'temporary_free_access' };
-  }
 
   const priceQuery = new URLSearchParams({
     series_id: `eq.${seriesId}`,
@@ -388,12 +375,11 @@ export async function getSeriesAccess(userId, seriesId) {
     : { allowed: false, reason: 'payment_required', price_inr: Number(configuredPrice.price_inr) };
 }
 
-export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAccess = false, proAccess = false) {
+export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, proAccess = false) {
   const prices = new Map((priceRows || []).map((row) => [row.series_id, Number(row.price_inr)]));
   const purchases = new Set((purchaseRows || []).map((row) => row.series_id));
   return Object.fromEntries(seriesIds.map((seriesId) => {
     if (proAccess) return [seriesId, { allowed: true, reason: 'pro' }];
-    if (freeAccess) return [seriesId, { allowed: true, reason: 'temporary_free_access' }];
     const price = prices.get(seriesId);
     if (price === undefined || price === 0) return [seriesId, { allowed: true, reason: 'free' }];
     if (purchases.has(seriesId)) return [seriesId, { allowed: true, reason: 'purchased' }];
@@ -403,9 +389,6 @@ export function buildSeriesAccessMap(seriesIds, priceRows, purchaseRows, freeAcc
 
 export async function getSeriesAccessBatch(userId, seriesIds) {
   if (await hasProAccess(userId)) {
-    return buildSeriesAccessMap(seriesIds, [], [], false, true);
-  }
-  if (isFreeAccessActive()) {
     return buildSeriesAccessMap(seriesIds, [], [], true);
   }
   if (seriesIds.length === 0) return {};

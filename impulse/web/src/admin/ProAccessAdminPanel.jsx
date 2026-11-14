@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { formatProExpiry } from '@/components/ProStatusBadge';
 import { supabase } from '@/lib/supabase';
 
 const EMPTY_SETTINGS = {
@@ -56,7 +57,7 @@ function ProAccessAdminPanel({ session }) {
         p_approve: approve,
       });
       if (actionError) throw actionError;
-      setNotice(approve ? 'Pro access granted to the account.' : 'The request was rejected.');
+      setNotice(approve ? 'Pro access granted for 12 months.' : 'The request was rejected.');
       await loadOverview();
     } catch (actionError) {
       console.error('Could not review the Pro access request.', actionError);
@@ -155,7 +156,7 @@ function ProAccessAdminPanel({ session }) {
       <Card className="rounded-3xl border-border">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> Pro applications</CardTitle>
-          <p className="text-sm text-muted-foreground">Approve requests to grant unlimited Pro access or reject them.</p>
+          <p className="text-sm text-muted-foreground">Approving a request grants 12 months of unlimited Pro access.</p>
         </CardHeader>
         <CardContent className="space-y-3">
           {loading ? (
@@ -211,13 +212,14 @@ function ProAccessAdminPanel({ session }) {
             const suspensionExpired = account.status === 'suspended'
               && account.suspended_until
               && new Date(account.suspended_until) <= new Date();
+            const accessExpired = account.expires_at && new Date(account.expires_at) <= new Date();
             return (
               <article key={account.user_id} className="grid gap-4 rounded-2xl border border-border p-4 lg:grid-cols-[1fr_auto]">
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-black">{account.account_name}</p>
-                    <Badge variant={account.status === 'active' || suspensionExpired ? 'default' : 'outline'}>
-                      {suspensionExpired ? 'Active (suspension ended)' : account.status}
+                    <Badge variant={!accessExpired && (account.status === 'active' || suspensionExpired) ? 'default' : 'outline'}>
+                      {accessExpired ? 'expired' : suspensionExpired ? 'Active (suspension ended)' : account.status}
                     </Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">{account.email || account.user_id}</p>
@@ -226,38 +228,45 @@ function ProAccessAdminPanel({ session }) {
                       {account.full_name || 'No form name'}{account.phone ? ` · ${account.phone}` : ''}
                     </p>
                   )}
-                  {account.status === 'suspended' && !suspensionExpired && (
+                  {account.expires_at && (
+                    <p className="text-xs text-muted-foreground">Pro expires {formatProExpiry(account.expires_at)}</p>
+                  )}
+                  {account.status === 'suspended' && !suspensionExpired && !accessExpired && (
                     <p className="text-xs text-muted-foreground">
                       Suspended until {new Date(account.suspended_until).toLocaleString()}
                     </p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {account.status === 'suspended' && (
+                  {account.status === 'suspended' && !accessExpired && (
                     <Button type="button" size="sm" variant="outline" onClick={() => manageAccess(account, 'restore')} disabled={busyId === account.user_id}>
                       Restore
                     </Button>
                   )}
-                  <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                    <span className="sr-only">Suspension duration for {account.account_name}</span>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="3650"
-                      step="1"
-                      placeholder="Days"
-                      value={suspensionDays[account.user_id] || ''}
-                      onChange={(event) => setSuspensionDays((current) => ({
-                        ...current,
-                        [account.user_id]: event.target.value,
-                      }))}
-                      className="w-24"
-                    />
-                    days
-                  </label>
-                  <Button type="button" size="sm" variant="outline" onClick={() => manageAccess(account, 'suspend')} disabled={busyId === account.user_id}>
-                    <PauseCircle className="h-4 w-4" /> Suspend
-                  </Button>
+                  {!accessExpired && (
+                    <>
+                      <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                        <span className="sr-only">Suspension duration for {account.account_name}</span>
+                        <Input
+                          type="number"
+                          min="1"
+                          max="3650"
+                          step="1"
+                          placeholder="Days"
+                          value={suspensionDays[account.user_id] || ''}
+                          onChange={(event) => setSuspensionDays((current) => ({
+                            ...current,
+                            [account.user_id]: event.target.value,
+                          }))}
+                          className="w-24"
+                        />
+                        days
+                      </label>
+                      <Button type="button" size="sm" variant="outline" onClick={() => manageAccess(account, 'suspend')} disabled={busyId === account.user_id}>
+                        <PauseCircle className="h-4 w-4" /> Suspend
+                      </Button>
+                    </>
+                  )}
                   <Button type="button" size="sm" variant="destructive" onClick={() => manageAccess(account, 'remove')} disabled={busyId === account.user_id}>
                     <Trash2 className="h-4 w-4" /> Remove Pro
                   </Button>

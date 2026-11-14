@@ -335,11 +335,13 @@ const StorageManager = (function() {
         await init();
         
         const checkpointId = `${sessionId}_${Date.now()}`;
+        const checkpointSnapshot = { ...checkpointData };
+        delete checkpointSnapshot.data;
         const record = {
             checkpointId: checkpointId,
             sessionId: sessionId,
             timestamp: Date.now(),
-            ...compress(checkpointData)
+            ...compress(checkpointSnapshot)
         };
         
         let savedInIndexedDB = false;
@@ -348,10 +350,9 @@ const StorageManager = (function() {
                 savedInIndexedDB = await new Promise((resolve) => {
                     const transaction = db.transaction([CHECKPOINT_STORE], 'readwrite');
                     const store = transaction.objectStore(CHECKPOINT_STORE);
-                    const request = store.put(record);
-                    
-                    request.onsuccess = () => resolve(true);
-                    request.onerror = () => resolve(false);
+                    store.put(record);
+                    transaction.oncomplete = () => resolve(true);
+                    transaction.onerror = () => resolve(false);
                     transaction.onabort = () => resolve(false);
                 });
             }
@@ -360,16 +361,19 @@ const StorageManager = (function() {
         }
 
         let savedInLocalStorage = false;
-        try {
-            localStorage.setItem(
-                `${CHECKPOINT_LOCAL_PREFIX}${checkpointId}`,
-                JSON.stringify(record)
-            );
-            savedInLocalStorage = true;
-        } catch (e) {
-            console.error('Checkpoint localStorage backup failed:', e);
+        if (!savedInIndexedDB) {
+            try {
+                localStorage.setItem(
+                    `${CHECKPOINT_LOCAL_PREFIX}${checkpointId}`,
+                    JSON.stringify(record)
+                );
+                savedInLocalStorage = true;
+            } catch (e) {
+                console.error('Checkpoint localStorage fallback failed:', e);
+            }
         }
 
+        await cleanupCheckpoints(sessionId);
         return savedInIndexedDB || savedInLocalStorage ? checkpointId : null;
     });
     
@@ -386,14 +390,15 @@ const StorageManager = (function() {
         return records.map((record) => decompress(record)).filter(Boolean);
     };
     
-    // Cleanup old checkpoints (keep only last 10 per session)
+    // Keep only the latest recovery checkpoint for each session.
     const cleanupCheckpoints = async (sessionId) => {
         await init();
         
         try {
             const checkpoints = await getCheckpointRecords(sessionId);
-            const toDelete = checkpoints.slice(0, Math.max(0, checkpoints.length - 10));
-            const retainedIds = new Set(checkpoints.slice(-10).map((checkpoint) => checkpoint.checkpointId));
+            const toDelete = checkpoints.slice(0, Math.max(0, checkpoints.length - 1));
+            const retainedIds = new Set(checkpoints.slice(-1).map((checkpoint) => checkpoint.checkpointId));
+            const hasIndexedDB = isInitialized && db;
 
             if (isInitialized && db && toDelete.length > 0) {
                 const transaction = db.transaction([CHECKPOINT_STORE], 'readwrite');
@@ -403,9 +408,33 @@ const StorageManager = (function() {
 
             for (let index = localStorage.length - 1; index >= 0; index--) {
                 const key = localStorage.key(index);
-                if (!key || !key.startsWith(`${CHECKPOINT_LOCAL_PREFIX}${sessionId}_`)) continue;
-                const checkpointId = key.slice(CHECKPOINT_LOCAL_PREFIX.length);
-                if (!retainedIds.has(checkpointId)) localStorage.removeItem(key);
+                if (!key || !key.startsWith(CHECKPOINT_LOCAL_PREFIX)) continue;
+                try {
+                    const record = JSON.parse(localStorage.getItem(key));
+                    if (record?.sessionId === sessionId &&
+                        (hasIndexedDB || !retainedIds.has(record.checkpointId))) {
+                        localStorage.removeItem(key);
+                    }
+                } catch (e) {
+                    console.error('Failed to clean saved exam checkpoint:', e);
+                }
+            }
+
+            if (!hasIndexedDB && checkpoints.length) {
+                const latest = checkpoints[checkpoints.length - 1];
+                const checkpointData = decompress(latest);
+                if (checkpointData && Object.prototype.hasOwnProperty.call(checkpointData, 'data')) {
+                    delete checkpointData.data;
+                    localStorage.setItem(
+                        `${CHECKPOINT_LOCAL_PREFIX}${latest.checkpointId}`,
+                        JSON.stringify({
+                            checkpointId: latest.checkpointId,
+                            sessionId,
+                            timestamp: latest.timestamp,
+                            ...compress(checkpointData),
+                        })
+                    );
+                }
             }
         } catch (e) {
             console.error('Checkpoint cleanup failed:', e);
@@ -450,6 +479,7 @@ const StorageManager = (function() {
 
         const key = `exam_session_${sessionId}`;
         localStorage.removeItem(key);
+        localStorage.removeItem(`exam_analytics_${sessionId}`);
         const checkpointPrefix = `${CHECKPOINT_LOCAL_PREFIX}${sessionId}_`;
         for (let index = localStorage.length - 1; index >= 0; index--) {
             const checkpointKey = localStorage.key(index);

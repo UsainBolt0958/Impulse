@@ -3,13 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { Sun, Moon, UserRound, UsersRound } from 'lucide-react';
 import ColoredIcon from './ColoredIcon';
 import { useAuth } from '@/contexts/AuthContext';
-import { useFreeAccessActive } from '@/lib/freeAccess';
+import ProStatusBadge from './ProStatusBadge';
 
 function Header() {
   const location = useLocation();
-  const { profile } = useAuth();
+  const { profile, proAccess } = useAuth();
   const [isDark, setIsDark] = useState(false);
-  const freeAccessActive = useFreeAccessActive();
 
   useEffect(() => {
     // Initialize theme from localStorage or OS preference
@@ -43,11 +42,6 @@ function Header() {
 
   return (
     <>
-      {freeAccessActive ? (
-        <div className="bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">
-          All premium plans and test series are free through January 1, 2027. Listed prices are unchanged.
-        </div>
-      ) : null}
       <header className="border-b border-border bg-background sticky top-0 z-50 flex-shrink-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center h-20">
@@ -93,7 +87,10 @@ function Header() {
                   : 'text-violet-500 hover:bg-secondary'
               }`}
             >
-              <ProfileIcon avatarUrl={profile?.avatar_url} />
+              <span className="flex flex-col items-center gap-0.5">
+                <ProfileIcon avatarUrl={profile?.avatar_url} />
+                {proAccess?.hasAccess && <ProStatusBadge compact />}
+              </span>
             </Link>
 
           </div>

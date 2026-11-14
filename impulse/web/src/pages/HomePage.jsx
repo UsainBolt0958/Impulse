@@ -12,9 +12,12 @@ import { Target, TrendingUp, Flame, BookMarked, Clock, Award, BookOpen } from 'l
 import ColoredIcon from '@/components/ColoredIcon';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import ProStatusBadge from '@/components/ProStatusBadge';
+import { useAuth } from '@/contexts/AuthContext';
 import { BarChart, Bar, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Cell, Tooltip } from 'recharts';
 
 function HomePage() {
+  const { proAccess } = useAuth();
   const {
     getUniqueAttemptedCount,
     getTotalAttempts,
@@ -90,6 +93,12 @@ function HomePage() {
             <div className="mb-12">
               <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Dashboard</h1>
               <p className="text-lg text-muted-foreground">Track your progress and performance</p>
+              {proAccess?.hasAccess && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <ProStatusBadge expiresAt={proAccess.expiresAt} />
+                  <p className="text-sm font-semibold text-violet-500">Your Pro benefits are active.</p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
