@@ -5,8 +5,8 @@ This file is the handoff for resuming the premium/payment setup. It records the 
 ## Current status at a glance
 
 - **Temporary free offer is enabled through January 1, 2027 (inclusive), India Standard Time.**
-- Subscription plan prices and test-series prices remain in Supabase and are still displayed as reference prices. The offer does not modify the catalog.
-- While the offer is active, the website header shows a free-offer notice, premium checkout buttons are hidden, and the API refuses new payment-order requests.
+- Legacy subscription and test-series prices remain in Supabase; the Pro card uses separate regular/discounted price settings. The free offer does not modify either catalog.
+- While the offer is active, the website header shows a free-offer notice, legacy UPI checkout is hidden, and the API refuses new payment-order requests. The Pro request form remains available.
 - Test-series access is temporarily allowed by the API without checking for a purchase. This protects both the normal site flow and direct API requests from being blocked during the offer.
 - At **January 2, 2027, 00:00 IST**, the temporary access check expires automatically. The site returns to its normal purchase/access rules, so payments must be configured and tested before that time if paid access should resume smoothly.
 - The profile page's “Your data across devices” card was removed. Profile stats, saved data, and account syncing were not removed.
@@ -158,10 +158,11 @@ The migrations for the complete app are run in this order where not already comp
 2. `supabase/friends.sql`
 3. `supabase/premium.sql`
 4. `supabase/admin_access.sql`
-5. `supabase/upi_payments.sql`
-6. `supabase/persistent_admin_storage.sql`
+5. `supabase/pro_access.sql` (after `friends.sql`, `premium.sql`, and `admin_access.sql`)
+6. `supabase/upi_payments.sql`
+7. `supabase/persistent_admin_storage.sql`
 
-The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run this new migration before deploying the matching API code. Catalog prices are stored in Supabase, so the free offer does not require changing those rows.
+The Pro access migration adds the application queue, manual entitlements, and Basic usage enforcement. The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run these migrations before deploying the matching API code. Catalog prices are stored in Supabase, so the free offer does not require changing those rows.
 
 Google sign-in settings:
 
@@ -213,11 +214,11 @@ Choose and record the eventual admin URL in this document after deployment. An a
 ## What the current free offer does and does not do
 
 - Makes existing paid test series accessible through the server-side exam authorization path during the offer.
-- Keeps the configured subscription and test-series prices visible as reference values.
+- Leaves legacy subscription and test-series price records unchanged.
 - Hides premium subscription checkout and stops new payment-order creation while the offer is active.
 - Shows the temporary offer notice at the top of pages using the shared site header.
 - Does **not** rewrite historical orders, issue refunds, create paid subscription records, or create test-series purchase rows for free use.
-- Does **not** automatically add server-enforced subscription quotas/feature tiers. The configured plan features and limits remain catalog/display information unless separately implemented.
+- Enforces Basic limits of three friends, five custom-test starts per India calendar day, and three previous-paper starts per India calendar day through the Pro access migration. Approved Pro accounts bypass these limits and receive test-series access; admins can suspend or remove Pro access.
 - Does **not** guarantee the gateway will start working when the offer ends.
 
 ## Payment readiness checklist before charging anyone

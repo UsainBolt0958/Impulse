@@ -1,126 +1,252 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { Link } from 'react-router-dom';
 import { Check, Crown, Sparkles } from 'lucide-react';
 import Header from '@/components/Header.jsx';
 import Footer from '@/components/Footer.jsx';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import CheckoutControl from '@/components/CheckoutControl.jsx';
-import { loadPremiumCatalog, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
-import { FREE_ACCESS_END_LABEL, useFreeAccessActive } from '@/lib/freeAccess';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/contexts/AuthContext';
+import { loadProOffer, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
+import { supabase } from '@/lib/supabase';
+
+const BASIC_PLAN = { plan_code: 'basic', name: 'Basic' };
+const PRO_PLAN = { plan_code: 'pro', name: 'Pro' };
 
 function PremiumPage() {
-  const freeAccessActive = useFreeAccessActive();
-  const [plans, setPlans] = useState([]);
+  const { user, profile, authLoading } = useAuth();
+  const [offer, setOffer] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     let active = true;
-    loadPremiumCatalog()
-      .then((catalog) => {
-        if (active) setPlans(catalog);
+    loadProOffer()
+      .then((settings) => {
+        if (active) setOffer(settings);
       })
       .catch((loadError) => {
-        console.error('Could not load subscription pricing.', loadError);
-        if (active) setError('Subscription plans could not be loaded. Please try again later.');
+        console.error('Could not load Pro offer settings.', loadError);
+        if (active) setError('Pro details could not be loaded. Please try again later.');
       })
       .finally(() => {
         if (active) setIsLoading(false);
       });
-
     return () => { active = false; };
   }, []);
+
+  const cardStyle = useMemo(() => {
+    const colorOne = offer?.color_one || '#302770';
+    const colorTwo = offer?.color_two || '#7C3AED';
+    const background = offer?.card_style === 'solid'
+      ? colorOne
+      : `linear-gradient(130deg, ${colorOne}, ${colorTwo})`;
+    return { background, color: '#ffffff' };
+  }, [offer]);
+
+  const openRequestForm = () => {
+    setFormOpen(true);
+    setRequestSent(false);
+    setError('');
+  };
+
+  const submitRequest = async (event) => {
+    event.preventDefault();
+    if (!supabase || !user) {
+      setError('Sign in before requesting Pro access.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const { error: submitError } = await supabase.rpc('submit_pro_access_request', {
+        p_full_name: fullName,
+        p_phone: phone.replace(/\D/g, ''),
+        p_description: description,
+      });
+      if (submitError) throw submitError;
+      setRequestSent(true);
+      setFullName('');
+      setPhone('');
+      setDescription('');
+    } catch (submitError) {
+      console.error('Could not submit the Pro access request.', submitError);
+      setError(submitError.message || 'Your request could not be submitted. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const accountName = profile?.display_name || user?.email || 'Signed-in account';
+  const pricesConfigured = offer?.regular_price_inr != null || offer?.discounted_price_inr != null;
 
   return (
     <>
       <Helmet>
-        <title>Impulse Premium - Impulse</title>
-        <meta name="description" content="Compare Impulse subscription plans and features." />
+        <title>Impulse Plans - Impulse</title>
+        <meta name="description" content="Compare Basic and Pro access on Impulse." />
       </Helmet>
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
         <main className="flex-1 py-12">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="mx-auto mb-10 max-w-3xl text-center">
+          <div className="mx-auto max-w-5xl space-y-8 px-4 sm:px-6 lg:px-8">
+            <header className="mx-auto max-w-3xl text-center">
               <Badge variant="outline" className="mb-4 gap-2 rounded-full px-4 py-2">
-                <Sparkles className="h-4 w-4" /> Impulse subscriptions
+                <Sparkles className="h-4 w-4" /> Impulse plans
               </Badge>
               <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Choose your pace</h1>
               <p className="mt-4 text-muted-foreground">
-                {freeAccessActive
-                  ? `All subscription plans and test series are free through ${FREE_ACCESS_END_LABEL}. Listed prices are unchanged.`
-                  : 'PYQ practice is available on every plan. Test series are separate purchases and are not included.'}
+                Basic gives you daily practice limits. Request Pro and we will contact you to arrange checkout.
               </p>
-            </div>
+            </header>
 
             {isLoading ? (
-              <p className="py-16 text-center text-muted-foreground">Loading plans…</p>
-            ) : error ? (
-              <p role="alert" className="py-16 text-center text-destructive">{error}</p>
+              <p role="status" className="py-12 text-center text-muted-foreground">Loading plans…</p>
+            ) : error && !offer ? (
+              <p role="alert" className="py-12 text-center text-destructive">{error}</p>
             ) : (
-              <div className="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
-                {plans.map((plan) => (
-                  <Card key={plan.plan_code} className={`flex flex-col border-border ${plan.plan_code === 'gold' ? 'ring-2 ring-primary' : ''}`}>
-                    <CardHeader>
-                      <div className="flex items-center justify-between gap-2">
-                        <CardTitle className="text-2xl font-black">{plan.name}</CardTitle>
-                        {plan.plan_code === 'gold' && <Badge>Popular</Badge>}
-                        {plan.plan_code === 'ultimate' && <Crown className="h-5 w-5 text-primary" aria-label="Ultimate" />}
+              <div className="grid items-stretch gap-5 md:grid-cols-2">
+                <Card className="flex flex-col border-border">
+                  <CardHeader>
+                    <CardTitle className="text-3xl font-black">{BASIC_PLAN.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">Your everyday study plan.</p>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col">
+                    <ul className="space-y-4">
+                      {getPlanLimitText(BASIC_PLAN).map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card
+                  className={`pro-offer-card flex flex-col overflow-hidden border-0 shadow-xl ${offer?.card_style === 'animated' ? 'pro-offer-card--animated' : ''}`}
+                  style={cardStyle}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="flex items-center gap-2 text-3xl font-black text-white">
+                        <Crown className="h-6 w-6" aria-hidden="true" /> {PRO_PLAN.name}
+                      </CardTitle>
+                      <Badge className="border-white/30 bg-white/15 text-white">Unlimited</Badge>
+                    </div>
+                    <p className="text-sm text-white/80">No daily caps. We will get back to you for checkout.</p>
+                  </CardHeader>
+                  <CardContent className="flex flex-1 flex-col">
+                    <ul className="mb-6 space-y-4">
+                      {getPlanLimitText(PRO_PLAN).map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-sm">
+                          <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {pricesConfigured && (
+                      <div className="mb-5 flex items-baseline gap-3">
+                        {offer?.regular_price_inr != null && (
+                          <span className={offer?.discounted_price_inr != null ? 'text-lg text-white/70 line-through' : 'text-2xl font-black'}>
+                            {formatPriceInr(offer.regular_price_inr)}
+                          </span>
+                        )}
+                        {offer?.discounted_price_inr != null && (
+                          <span className="text-3xl font-black">{formatPriceInr(offer.discounted_price_inr)}</span>
+                        )}
                       </div>
-                      <p className="text-sm text-muted-foreground">{plan.description}</p>
-                    </CardHeader>
-                    <CardContent className="flex flex-1 flex-col">
-                      <ul className="mb-6 space-y-3">
-                        {getPlanLimitText(plan).map((feature) => (
-                          <li key={feature} className="flex items-start gap-2 text-sm">
-                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                            <span>{feature}</span>
-                          </li>
-                        ))}
-                        {(plan.features || []).map((feature) => (
-                          <li key={feature} className="flex items-start gap-2 text-sm">
-                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                            <span>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="mt-auto space-y-2 border-t border-border pt-4">
-                        {plan.prices.map((price) => (
-                          <div key={price.duration_months} className="space-y-2 rounded-md border border-border p-3">
-                            <div className="flex items-center justify-between gap-3 text-sm">
-                              <span>{price.duration_months === 0 ? 'Free' : `${price.duration_months} months`}</span>
-                              <span className={freeAccessActive && price.price_inr > 0 ? 'font-bold line-through text-muted-foreground' : 'font-bold'}>
-                                {formatPriceInr(price.price_inr)}
-                              </span>
-                            </div>
-                            {freeAccessActive && plan.plan_code !== 'free' && price.price_inr > 0 ? (
-                              <p className="text-right text-xs font-semibold text-primary">
-                                Free through {FREE_ACCESS_END_LABEL}
-                              </p>
-                            ) : null}
-                            {plan.plan_code !== 'free' && price.price_inr > 0 ? (
-                              freeAccessActive ? null : (
-                                <CheckoutControl
-                                  productType="subscription"
-                                  planCode={plan.plan_code}
-                                  durationMonths={price.duration_months}
-                                  priceInr={price.price_inr}
-                                />
-                              )
-                            ) : null}
-                          </div>
-                        ))}
+                    )}
+
+                    {!formOpen ? (
+                      <Button type="button" onClick={openRequestForm} className="mt-auto bg-white font-black text-black hover:bg-white/90">
+                        Buy Pro
+                      </Button>
+                    ) : requestSent ? (
+                      <div role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">
+                        <p className="font-bold">Request received.</p>
+                        <p className="mt-1 text-white/80">We will get back to you for checkout.</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                    ) : authLoading ? (
+                      <p role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">Checking your account…</p>
+                    ) : !user ? (
+                      <div className="mt-auto space-y-3 rounded-xl bg-white/15 p-4 text-sm">
+                        <p>Sign in to attach your request to an account.</p>
+                        <Button asChild className="bg-white font-bold text-black hover:bg-white/90">
+                          <Link to="/account">Sign in</Link>
+                        </Button>
+                      </div>
+                    ) : (
+                      <form onSubmit={submitRequest} className="mt-auto space-y-3 rounded-xl bg-white/10 p-4">
+                        <p className="text-sm text-white/85">
+                          Account: <span className="font-bold text-white">{accountName}</span>
+                        </p>
+                        <label className="block space-y-1 text-sm font-semibold">
+                          <span>Full name</span>
+                          <Input
+                            required
+                            minLength={2}
+                            maxLength={120}
+                            autoComplete="off"
+                            value={fullName}
+                            onChange={(event) => setFullName(event.target.value)}
+                            className="bg-white text-foreground"
+                          />
+                        </label>
+                        <label className="block space-y-1 text-sm font-semibold">
+                          <span>Phone number</span>
+                          <Input
+                            required
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel-national"
+                            pattern="[6-9][0-9]{9}"
+                            maxLength={10}
+                            placeholder="10-digit Indian number"
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                            className="bg-white text-foreground"
+                          />
+                        </label>
+                        <label className="block space-y-1 text-sm font-semibold">
+                          <span>Description <span className="font-normal text-white/70">(optional)</span></span>
+                          <Textarea
+                            maxLength={1000}
+                            rows={3}
+                            value={description}
+                            onChange={(event) => setDescription(event.target.value)}
+                            placeholder="Anything you would like us to know?"
+                            className="bg-white text-foreground"
+                          />
+                        </label>
+                        {error && <p role="alert" className="text-sm font-semibold text-white">{error}</p>}
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="submit" disabled={isSubmitting} className="bg-white font-black text-black hover:bg-white/90">
+                            {isSubmitting ? 'Sending…' : 'Send request'}
+                          </Button>
+                          <Button type="button" variant="ghost" onClick={() => setFormOpen(false)} className="text-white hover:bg-white/15 hover:text-white">
+                            Cancel
+                          </Button>
+                        </div>
+                      </form>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             )}
-            <p className="mt-8 text-center text-xs text-muted-foreground">
-              {freeAccessActive
-                ? `No payment is required through ${FREE_ACCESS_END_LABEL}; listed prices are retained for reference.`
-                : 'Checkout uses the current server-side catalog price. Enter your Indian mobile number to continue with UPI.'}
+            <p className="text-center text-xs text-muted-foreground">
+              Requests are linked to your signed-in account. Submitting a request does not charge you or activate Pro.
             </p>
           </div>
         </main>

@@ -1,0 +1,511 @@
+create table if not exists public.pro_offer_settings (
+  singleton boolean primary key default true check (singleton),
+  regular_price_inr integer check (regular_price_inr is null or regular_price_inr >= 0),
+  discounted_price_inr integer check (
+    discounted_price_inr is null
+    or (discounted_price_inr >= 0 and (regular_price_inr is null or discounted_price_inr <= regular_price_inr))
+  ),
+  card_style text not null default 'gradient' check (card_style in ('solid', 'gradient', 'animated')),
+  color_one text not null default '#302770' check (color_one ~ '^#[0-9A-Fa-f]{6}$'),
+  color_two text not null default '#7C3AED' check (color_two ~ '^#[0-9A-Fa-f]{6}$'),
+  updated_by uuid references auth.users (id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.pro_offer_settings (singleton)
+values (true)
+on conflict (singleton) do nothing;
+
+create table if not exists public.pro_access_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  full_name text not null check (char_length(full_name) between 2 and 120),
+  phone text not null check (phone ~ '^[6-9][0-9]{9}$'),
+  description text not null default '' check (char_length(description) <= 1000),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  decided_at timestamptz,
+  decided_by uuid references auth.users (id) on delete set null
+);
+
+create index if not exists pro_access_requests_user_created_idx
+  on public.pro_access_requests (user_id, created_at desc);
+create index if not exists pro_access_requests_pending_idx
+  on public.pro_access_requests (created_at desc)
+  where status = 'pending';
+create unique index if not exists pro_access_requests_one_pending_per_user_idx
+  on public.pro_access_requests (user_id)
+  where status = 'pending';
+
+create table if not exists public.pro_access (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  status text not null default 'active' check (status in ('active', 'suspended', 'revoked')),
+  grant_source text not null default 'request' check (grant_source in ('request', 'manual')),
+  last_request_id uuid references public.pro_access_requests (id) on delete set null,
+  suspended_until timestamptz,
+  updated_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((status = 'suspended' and suspended_until is not null) or status <> 'suspended')
+);
+
+create table if not exists public.pro_daily_usage (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  feature text not null check (feature in ('custom_test', 'previous_paper')),
+  usage_date date not null,
+  usage_count smallint not null check (usage_count >= 0),
+  primary key (user_id, feature, usage_date)
+);
+
+alter table public.pro_offer_settings enable row level security;
+alter table public.pro_access_requests enable row level security;
+alter table public.pro_access enable row level security;
+alter table public.pro_daily_usage enable row level security;
+
+revoke all on public.pro_offer_settings, public.pro_access_requests,
+  public.pro_access, public.pro_daily_usage from public, anon, authenticated;
+grant select on public.pro_offer_settings to anon, authenticated;
+grant insert, update on public.pro_offer_settings to authenticated;
+grant select on public.pro_access_requests to authenticated;
+grant all on public.pro_offer_settings, public.pro_access_requests,
+  public.pro_access, public.pro_daily_usage to service_role;
+
+drop policy if exists "Anyone can read Pro offer settings" on public.pro_offer_settings;
+create policy "Anyone can read Pro offer settings"
+  on public.pro_offer_settings for select to anon, authenticated using (true);
+drop policy if exists "Billing admins manage Pro offer settings" on public.pro_offer_settings;
+create policy "Billing admins manage Pro offer settings"
+  on public.pro_offer_settings for all to authenticated
+  using ((select public.is_billing_admin()))
+  with check ((select public.is_billing_admin()));
+drop policy if exists "Users read their own Pro access requests" on public.pro_access_requests;
+create policy "Users read their own Pro access requests"
+  on public.pro_access_requests for select to authenticated
+  using ((select auth.uid()) = user_id or (select public.is_billing_admin()));
+
+create or replace function public.has_pro_access(p_user_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() = 'authenticated' and p_user_id <> auth.uid() then
+    raise exception 'You can only check your own Pro access.';
+  end if;
+
+  return exists (
+    select 1
+    from public.pro_access as access
+    where access.user_id = p_user_id
+      and (
+        access.status = 'active'
+        or (access.status = 'suspended' and access.suspended_until <= now())
+      )
+  );
+end
+$$;
+
+create or replace function public.submit_pro_access_request(
+  p_full_name text,
+  p_phone text,
+  p_description text default ''
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  request_id uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in before requesting Pro access.';
+  end if;
+  if public.has_pro_access(current_user_id) then
+    raise exception 'This account already has Pro access.';
+  end if;
+  if char_length(trim(coalesce(p_full_name, ''))) not between 2 and 120 then
+    raise exception 'Enter your full name (2–120 characters).';
+  end if;
+  if coalesce(p_phone, '') !~ '^[6-9][0-9]{9}$' then
+    raise exception 'Enter a valid 10-digit Indian phone number.';
+  end if;
+  if char_length(coalesce(p_description, '')) > 1000 then
+    raise exception 'Keep the description to 1,000 characters or fewer.';
+  end if;
+  if exists (
+    select 1 from public.pro_access_requests
+    where user_id = current_user_id and status = 'pending'
+  ) then
+    raise exception 'Your Pro request is already waiting for review.';
+  end if;
+
+  insert into public.pro_access_requests (user_id, full_name, phone, description)
+  values (current_user_id, trim(p_full_name), p_phone, trim(coalesce(p_description, '')))
+  returning id into request_id;
+
+  return request_id;
+end
+$$;
+
+create or replace function public.get_pro_admin_overview()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  overview jsonb;
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+
+  select jsonb_build_object(
+    'settings', (select to_jsonb(settings) from public.pro_offer_settings as settings where singleton),
+    'requests', coalesce((
+      select jsonb_agg(to_jsonb(item) order by item.created_at)
+      from (
+        select request.id, request.user_id, request.full_name, request.phone,
+          request.description, request.status, request.created_at,
+          coalesce(nullif(profile.display_name, ''), auth_user.email, request.user_id::text) as account_name
+        from public.pro_access_requests as request
+        left join public.profiles as profile on profile.id = request.user_id
+        left join auth.users as auth_user on auth_user.id = request.user_id
+        where request.status = 'pending'
+      ) as item
+    ), '[]'::jsonb),
+    'users', coalesce((
+      select jsonb_agg(to_jsonb(item) order by item.updated_at desc)
+      from (
+        select access.user_id, access.status, access.suspended_until,
+          access.grant_source, access.updated_at,
+          coalesce(nullif(profile.display_name, ''), auth_user.email, access.user_id::text) as account_name,
+          auth_user.email,
+          request.full_name, request.phone
+        from public.pro_access as access
+        left join public.profiles as profile on profile.id = access.user_id
+        left join auth.users as auth_user on auth_user.id = access.user_id
+        left join public.pro_access_requests as request on request.id = access.last_request_id
+        where access.status in ('active', 'suspended')
+      ) as item
+    ), '[]'::jsonb)
+  ) into overview;
+
+  return overview;
+end
+$$;
+
+create or replace function public.decide_pro_access_request(p_request_id uuid, p_approve boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  request_record public.pro_access_requests;
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+
+  select * into request_record
+  from public.pro_access_requests
+  where id = p_request_id
+  for update;
+  if not found or request_record.status <> 'pending' then
+    raise exception 'This Pro request is no longer waiting for review.';
+  end if;
+
+  update public.pro_access_requests
+  set status = case when p_approve then 'approved' else 'rejected' end,
+      decided_at = now(),
+      decided_by = auth.uid()
+  where id = p_request_id;
+
+  if p_approve then
+    insert into public.pro_access (
+      user_id, status, grant_source, last_request_id, suspended_until, updated_by
+    ) values (
+      request_record.user_id, 'active', 'request', request_record.id, null, auth.uid()
+    )
+    on conflict (user_id) do update set
+      status = 'active',
+      grant_source = 'request',
+      last_request_id = excluded.last_request_id,
+      suspended_until = null,
+      updated_by = excluded.updated_by,
+      updated_at = now();
+  end if;
+end
+$$;
+
+create or replace function public.manage_pro_access(
+  p_user_id uuid,
+  p_action text,
+  p_duration_days integer default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.is_billing_admin() then
+    raise exception 'Billing administrator access is required.';
+  end if;
+  if p_action = 'suspend' then
+    if p_duration_days is null or p_duration_days not between 1 and 3650 then
+      raise exception 'Choose a suspension duration between 1 and 3,650 days.';
+    end if;
+    update public.pro_access
+    set status = 'suspended',
+        suspended_until = now() + make_interval(days => p_duration_days),
+        updated_by = auth.uid(),
+        updated_at = now()
+    where user_id = p_user_id and status in ('active', 'suspended');
+  elsif p_action = 'remove' then
+    update public.pro_access
+    set status = 'revoked', suspended_until = null,
+        updated_by = auth.uid(), updated_at = now()
+    where user_id = p_user_id and status in ('active', 'suspended');
+  elsif p_action = 'restore' then
+    update public.pro_access
+    set status = 'active', suspended_until = null,
+        updated_by = auth.uid(), updated_at = now()
+    where user_id = p_user_id and status = 'suspended';
+  else
+    raise exception 'Unsupported Pro access action.';
+  end if;
+
+  if not found then
+    raise exception 'The Pro account is no longer available for this action.';
+  end if;
+end
+$$;
+
+create or replace function public.consume_daily_feature(p_user_id uuid, p_feature text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  daily_limit smallint;
+  current_usage smallint;
+  today date := (now() at time zone 'Asia/Kolkata')::date;
+begin
+  if auth.role() <> 'service_role' then
+    raise exception 'Service role required.';
+  end if;
+  if p_feature = 'custom_test' then
+    daily_limit := 5;
+  elsif p_feature = 'previous_paper' then
+    daily_limit := 3;
+  else
+    raise exception 'Unsupported daily feature.';
+  end if;
+
+  if public.has_pro_access(p_user_id) then
+    return jsonb_build_object('allowed', true, 'unlimited', true);
+  end if;
+
+  insert into public.pro_daily_usage (user_id, feature, usage_date, usage_count)
+  values (p_user_id, p_feature, today, 1)
+  on conflict (user_id, feature, usage_date) do update
+  set usage_count = public.pro_daily_usage.usage_count + 1
+  where public.pro_daily_usage.usage_count < daily_limit
+  returning usage_count into current_usage;
+
+  if current_usage is null then
+    select usage_count into current_usage
+    from public.pro_daily_usage
+    where user_id = p_user_id and feature = p_feature and usage_date = today;
+    return jsonb_build_object(
+      'allowed', false,
+      'unlimited', false,
+      'used', current_usage,
+      'limit', daily_limit
+    );
+  end if;
+
+  return jsonb_build_object(
+    'allowed', true,
+    'unlimited', false,
+    'used', current_usage,
+    'limit', daily_limit
+  );
+end
+$$;
+
+create or replace function public.send_friend_request(target_user_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  lower_user_id uuid;
+  higher_user_id uuid;
+  existing_status text;
+  existing_requester uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in to add friends.';
+  end if;
+  if target_user_id is null or target_user_id = current_user_id then
+    raise exception 'You cannot send a friend request to yourself.';
+  end if;
+  if not exists (
+    select 1 from public.profiles as profile
+    where profile.id = target_user_id and profile.username is not null
+  ) then
+    raise exception 'This user was not found.';
+  end if;
+
+  lower_user_id := least(current_user_id, target_user_id);
+  higher_user_id := greatest(current_user_id, target_user_id);
+  perform pg_advisory_xact_lock(hashtextextended('friend-limit:' || lower_user_id::text, 0));
+  perform pg_advisory_xact_lock(hashtextextended('friend-limit:' || higher_user_id::text, 0));
+  select friendship.status, friendship.requested_by
+  into existing_status, existing_requester
+  from public.friendships as friendship
+  where friendship.user_low = lower_user_id and friendship.user_high = higher_user_id
+  for update;
+
+  if found then
+    if existing_status = 'accepted' then
+      raise exception 'You are already friends.';
+    end if;
+    if existing_requester = current_user_id then
+      raise exception 'Your friend request is already pending.';
+    end if;
+    if not public.has_pro_access(current_user_id) and (
+      select count(*) from public.friendships as friendship
+      where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
+        and (
+          friendship.status = 'accepted'
+          or (friendship.status = 'pending' and friendship.requested_by = current_user_id)
+        )
+    ) >= 3 then
+      raise exception 'Basic accounts can have up to 3 friends. Upgrade to Pro for unlimited friends.';
+    end if;
+    if not public.has_pro_access(target_user_id) and (
+      select count(*) from public.friendships as friendship
+      where (friendship.user_low = target_user_id or friendship.user_high = target_user_id)
+        and (
+          friendship.status = 'accepted'
+          or (friendship.status = 'pending' and friendship.requested_by = target_user_id)
+        )
+    ) > 3 then
+      raise exception 'The other account has reached its Basic friend limit.';
+    end if;
+    update public.friendships
+    set status = 'accepted', updated_at = now()
+    where user_low = lower_user_id and user_high = higher_user_id;
+    return 'accepted';
+  end if;
+
+  if not public.has_pro_access(current_user_id) and (
+    select count(*) from public.friendships as friendship
+    where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
+      and (
+        friendship.status = 'accepted'
+        or (friendship.status = 'pending' and friendship.requested_by = current_user_id)
+      )
+  ) >= 3 then
+    raise exception 'Basic accounts can have up to 3 friends. Upgrade to Pro for unlimited friends.';
+  end if;
+
+  insert into public.friendships (user_low, user_high, requested_by)
+  values (lower_user_id, higher_user_id, current_user_id);
+  return 'pending';
+end
+$$;
+
+create or replace function public.respond_to_friend_request(target_user_id uuid, accept_request boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := auth.uid();
+  lower_user_id uuid;
+  higher_user_id uuid;
+  existing_status text;
+  existing_requester uuid;
+begin
+  if current_user_id is null then
+    raise exception 'Sign in to respond to friend requests.';
+  end if;
+  if target_user_id is null or target_user_id = current_user_id then
+    raise exception 'This friend request is invalid.';
+  end if;
+
+  lower_user_id := least(current_user_id, target_user_id);
+  higher_user_id := greatest(current_user_id, target_user_id);
+  perform pg_advisory_xact_lock(hashtextextended('friend-limit:' || lower_user_id::text, 0));
+  perform pg_advisory_xact_lock(hashtextextended('friend-limit:' || higher_user_id::text, 0));
+  select friendship.status, friendship.requested_by
+  into existing_status, existing_requester
+  from public.friendships as friendship
+  where friendship.user_low = lower_user_id and friendship.user_high = higher_user_id
+  for update;
+
+  if not found or existing_status <> 'pending' or existing_requester = current_user_id then
+    raise exception 'This friend request is no longer available.';
+  end if;
+
+  if accept_request then
+    if not public.has_pro_access(current_user_id) and (
+      select count(*) from public.friendships as friendship
+      where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
+        and (
+          friendship.status = 'accepted'
+          or (friendship.status = 'pending' and friendship.requested_by = current_user_id)
+        )
+    ) >= 3 then
+      raise exception 'Basic accounts can have up to 3 friends. Upgrade to Pro for unlimited friends.';
+    end if;
+    if not public.has_pro_access(existing_requester) and (
+      select count(*) from public.friendships as friendship
+      where (friendship.user_low = existing_requester or friendship.user_high = existing_requester)
+        and (
+          friendship.status = 'accepted'
+          or (friendship.status = 'pending' and friendship.requested_by = existing_requester)
+        )
+    ) > 3 then
+      raise exception 'The other account has reached its Basic friend limit.';
+    end if;
+    update public.friendships
+    set status = 'accepted', updated_at = now()
+    where user_low = lower_user_id and user_high = higher_user_id;
+  else
+    delete from public.friendships
+    where user_low = lower_user_id and user_high = higher_user_id;
+  end if;
+end
+$$;
+
+revoke execute on function public.has_pro_access(uuid) from public, anon;
+grant execute on function public.has_pro_access(uuid) to authenticated, service_role;
+revoke execute on function public.submit_pro_access_request(text, text, text) from public, anon;
+grant execute on function public.submit_pro_access_request(text, text, text) to authenticated;
+revoke execute on function public.get_pro_admin_overview() from public, anon;
+grant execute on function public.get_pro_admin_overview() to authenticated;
+revoke execute on function public.decide_pro_access_request(uuid, boolean) from public, anon;
+grant execute on function public.decide_pro_access_request(uuid, boolean) to authenticated;
+revoke execute on function public.manage_pro_access(uuid, text, integer) from public, anon;
+grant execute on function public.manage_pro_access(uuid, text, integer) to authenticated;
+revoke execute on function public.consume_daily_feature(uuid, text) from public, anon, authenticated;
+grant execute on function public.consume_daily_feature(uuid, text) to service_role;
+revoke execute on function public.send_friend_request(uuid) from public, anon;
+grant execute on function public.send_friend_request(uuid) to authenticated;
+revoke execute on function public.respond_to_friend_request(uuid, boolean) from public, anon;
+grant execute on function public.respond_to_friend_request(uuid, boolean) to authenticated;

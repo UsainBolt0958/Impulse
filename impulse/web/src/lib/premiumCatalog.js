@@ -30,6 +30,17 @@ export async function loadPremiumCatalog() {
   }));
 }
 
+export async function loadProOffer() {
+  if (!supabase) throw new Error('Supabase is not configured for this website.');
+  const { data, error } = await supabase
+    .from('pro_offer_settings')
+    .select('regular_price_inr,discounted_price_inr,card_style,color_one,color_two')
+    .eq('singleton', true)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function loadTestSeriesPriceMap() {
   if (!supabase) throw new Error('Supabase is not configured for this website.');
   const { data, error } = await supabase
@@ -46,6 +57,21 @@ export function formatPriceInr(amount) {
 export function getPlanLimitText(plan) {
   const limits = plan?.limits || {};
   const text = [];
+  if (plan?.plan_code === 'basic') {
+    return [
+      'Up to 3 friends',
+      'Up to 5 custom tests per day',
+      'Up to 3 previous-year papers per day',
+    ];
+  }
+  if (plan?.plan_code === 'pro') {
+    return [
+      'Unlimited friends',
+      'Unlimited custom tests',
+      'Unlimited previous-year papers',
+      'Unlimited access to test series',
+    ];
+  }
   text.push(limits.friends == null
     ? 'Unlimited friends'
     : `Up to ${limits.friends} ${limits.friends === 1 ? 'friend' : 'friends'}`);

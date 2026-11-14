@@ -6,7 +6,11 @@ import Footer from '@/components/Footer.jsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ColoredIcon from '@/components/ColoredIcon';
 import { ArrowLeft, BookOpen } from 'lucide-react';
-import { establishExamSession, loadPublicTestCatalog } from '@/lib/portalServer';
+import {
+  establishExamSession,
+  loadPublicTestCatalog,
+  recordDailyFeatureUse,
+} from '@/lib/portalServer';
 
 function titleCase(value = '') {
   return value
@@ -29,6 +33,18 @@ function PreviousPapersExamPage() {
     setLaunchError('');
     try {
       await establishExamSession(paper.seriesId);
+      window.location.assign(examUrl);
+    } catch (error) {
+      console.error('Could not authorize the previous-paper session.', error);
+      setLaunchError(error.message || 'This paper is not available to your account.');
+    }
+  };
+
+  const launchStaticPaper = async (event, examUrl) => {
+    event.preventDefault();
+    setLaunchError('');
+    try {
+      await recordDailyFeatureUse('previous_paper');
       window.location.assign(examUrl);
     } catch (error) {
       console.error('Could not authorize the previous-paper session.', error);
@@ -356,7 +372,14 @@ function PreviousPapersExamPage() {
 
                 return item.href && item.href !== '#'
                   ? (
-                    <a key={item.year} href={item.href} className="block no-underline" target="_self" rel="noreferrer">
+                    <a
+                      key={item.year}
+                      href={item.href}
+                      className="block no-underline"
+                      target="_self"
+                      rel="noreferrer"
+                      onClick={(event) => launchStaticPaper(event, item.href)}
+                    >
                       {cardBody}
                     </a>
                   )
