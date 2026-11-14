@@ -1,14 +1,13 @@
 # Impulse Premium, Payments, and Deployment Handoff
 
-This file is the handoff for resuming the premium/payment setup. It records the current implementation and deployment status known on **November 1, 2026**. Hosting dashboards and secret values cannot be inspected from this repository, so deployment details marked **reported** are based on what the owner previously confirmed and should be checked in the relevant dashboard if anything has changed.
+This file is the handoff for resuming the premium/payment setup. It records the current implementation and deployment status. Hosting dashboards and secret values cannot be inspected from this repository, so deployment details marked **reported** are based on what the owner previously confirmed and should be checked in the relevant dashboard if anything has changed.
 
 ## Current status at a glance
 
-- **Temporary free offer is enabled through January 1, 2027 (inclusive), India Standard Time.**
-- Legacy subscription and test-series prices remain in Supabase; the Pro card uses separate regular/discounted price settings. The free offer does not modify either catalog.
-- While the offer is active, the website header shows a free-offer notice, legacy UPI checkout is hidden, and the API refuses new payment-order requests. The Pro request form remains available.
-- Test-series access is temporarily allowed by the API without checking for a purchase. This protects both the normal site flow and direct API requests from being blocked during the offer.
-- At **January 2, 2027, 00:00 IST**, the temporary access check expires automatically. The site returns to its normal purchase/access rules, so payments must be configured and tested before that time if paid access should resume smoothly.
+- The temporary site-wide free-access offer has been removed. Basic limits and Pro entitlements now determine access; paid test-series access requires a purchase unless the series is free/unpriced or the account has Pro.
+- Basic includes up to three friends, five custom tests per India calendar day, and three previous-year papers per India calendar day. Admin approval grants Pro for 12 months.
+- The Pro card uses separate regular/discounted price settings. Pro requests remain manual; the existing UPI payment system and legacy price records are retained.
+- Active Pro users see their benefits and expiry date on the Premium, profile, and dashboard views.
 - The profile page's “Your data across devices” card was removed. Profile stats, saved data, and account syncing were not removed.
 - UPIGateway order creation previously returned HTTP 400. No successful live payment has been confirmed. Payment handling should remain untested/disabled until a provider account can create and verify orders.
 - The admin panel is **not known to be deployed as a separate live site**. The previously reported live frontend is the customer site only.
@@ -42,36 +41,13 @@ Never expose or paste:
 
 If a secret is exposed, revoke/rotate it with its provider and update the new value only in the appropriate private environment settings. The Supabase anon/publishable key is intended for frontend use, but still keep it configured only for its intended public client access.
 
-## Temporary free-access switch
+## Current plan and Pro access
 
-The date and message are in [web/src/lib/freeAccess.js](./web/src/lib/freeAccess.js):
+The shared header no longer announces a site-wide free period. API and database checks apply the Basic limits; Pro access is checked from the signed-in user's entitlement. The customer `/premium` page shows the current Pro benefits to an active Pro account instead of another request/Buy Pro action.
 
-- `FREE_ACCESS_END` is set to `2027-01-02T00:00:00+05:30`. This makes January 1 the last free day in India.
-- `FREE_ACCESS_END_LABEL` is the display label, `January 1, 2027`.
-- `useFreeAccessActive()` updates the UI when the cutoff is reached, even if a page remains open.
+The Pro access migration grants each approved request 12 months from approval. Its `expires_at` field also backs the expiry shown to users and administrators. Existing grants without an expiry are backfilled to `created_at + 12 months`; accounts whose grant record is already older than a year will expire when the updated migration is applied, as requested. If `supabase/pro_access.sql` was already applied, rerun the updated, idempotent migration before deploying the frontend so the expiry column and `get_my_pro_access_status()` RPC exist.
 
-The server-side payment/access checks are in [server/billing.js](./server/billing.js):
-
-- The `FREE_ACCESS_END` constant blocks new payment orders during the free period.
-- `getSeriesAccess()` grants temporary test-series access during the same period.
-- Keep the client and server cutoff dates identical if changing or extending the offer. The server is authoritative for payment/access decisions; changing only the banner or client code is not sufficient.
-
-The header banner is rendered in [web/src/components/Header.jsx](./web/src/components/Header.jsx). Premium display/prices and hidden checkout controls are in [web/src/pages/PremiumPage.jsx](./web/src/pages/PremiumPage.jsx). Test-series UI access is in [web/src/pages/TestSeriesPage.jsx](./web/src/pages/TestSeriesPage.jsx).
-
-### Extend the free period
-
-1. Change `FREE_ACCESS_END` and `FREE_ACCESS_END_LABEL` in `web/src/lib/freeAccess.js`.
-2. Set the exact same cutoff in `server/billing.js`.
-3. Run the tests/build listed under **Validation**.
-4. Deploy both the customer frontend and the Render API. The frontend and API are separate services.
-
-For example, to make January 31, 2027 the last free day, the timestamp should be February 1 at midnight IST (`2027-02-01T00:00:00+05:30`) and the label should say `January 31, 2027`.
-
-### Resume paid checkout before the automatic cutoff
-
-If payments are ready before the automatic end date, move both cutoff constants in the two files above to a timestamp already in the past, update the label or remove the free-period wording as appropriate, then deploy the frontend and API. Do this only after checking the payment readiness checklist below.
-
-If no code is changed, both the UI and API return to normal automatically on January 2, 2027 IST. That does **not** mean the gateway will be ready or that checkout will succeed.
+Paid test-series access continues to require a purchase, except for free/unpriced series and Pro accounts. The existing UPI order/payment system is retained; removing the site-wide free switch no longer blocks new orders. Do not enable live UPI checkout until the provider and deployment readiness checklist below has been completed.
 
 ## Deployment and configuration already reported
 
@@ -162,7 +138,7 @@ The migrations for the complete app are run in this order where not already comp
 6. `supabase/upi_payments.sql`
 7. `supabase/persistent_admin_storage.sql`
 
-The Pro access migration adds the application queue, manual entitlements, and Basic usage enforcement. The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run these migrations before deploying the matching API code. Catalog prices are stored in Supabase, so the free offer does not require changing those rows.
+The Pro access migration adds the application queue, 12-month entitlements, expiry reporting, and Basic usage enforcement. The payment migration depends on the premium/admin schema. The persistent admin storage migration creates the API-only content table and a public bucket for images. It does not import content from Render's local files; the owner said the old papers/images are not needed. Run these migrations before deploying the matching API code.
 
 Google sign-in settings:
 
@@ -211,19 +187,17 @@ To deploy the admin frontend as a separate Cloudflare Pages project:
 
 Choose and record the eventual admin URL in this document after deployment. An address such as `admin.yourdomain.com` requires a domain you own and DNS configuration; it is not automatically created by the customer Pages project.
 
-## What the current free offer does and does not do
+## Current plan access behavior
 
-- Makes existing paid test series accessible through the server-side exam authorization path during the offer.
-- Leaves legacy subscription and test-series price records unchanged.
-- Hides premium subscription checkout and stops new payment-order creation while the offer is active.
-- Shows the temporary offer notice at the top of pages using the shared site header.
-- Does **not** rewrite historical orders, issue refunds, create paid subscription records, or create test-series purchase rows for free use.
-- Enforces Basic limits of three friends, five custom-test starts per India calendar day, and three previous-paper starts per India calendar day through the Pro access migration. Approved Pro accounts bypass these limits and receive test-series access; admins can suspend or remove Pro access.
-- Does **not** guarantee the gateway will start working when the offer ends.
+- Basic daily limits are enforced by the API/database; Pro users bypass those limits.
+- Approved Pro entitlements last 12 months and expire automatically. Admins can suspend or remove access before expiry.
+- Paid test-series access is authorized by Pro status or an active purchase; free/unpriced series remain free.
+- The old site-wide free offer did not create purchases or paid subscriptions. Its client and server bypasses have now been removed.
+- The Pro application flow does not use UPI checkout. Legacy UPI order/payment code and admin controls remain available for the existing supported catalog.
 
 ## Payment readiness checklist before charging anyone
 
-Do not enable paid checkout just because the free offer expires. First:
+Before enabling live paid checkout, first:
 
 1. Confirm with the provider that the merchant account is active and the receiving UPI ID is verified. The merchant dashboard previously showed a PhonePe merchant with status **Deactive**; use the provider's legitimate dashboard/support process to resolve status.
 2. Confirm eligibility and required KYC directly with the provider and bank. Do not enter browser cookies, Google session tokens, OTPs, or recovery codes into a payment-verification form unless the provider's verified support explains the process and it is clearly required.
@@ -262,21 +236,28 @@ Run the admin frontend:
 npm run dev:admin --prefix web
 ```
 
-Run builds and focused offer tests:
+Run builds and focused regression tests:
 
 ```sh
 npm run build --prefix web
-npm exec --prefix web -- vitest run --config web/vite.config.js web/src/lib/freeAccess.test.js web/src/pages/TestSeriesPage.test.js web/src/lib/premiumCatalog.test.js
+npm exec --prefix web -- vitest run --config web/vite.config.js web/src/pages/PremiumPage.test.jsx web/src/pages/TestSeriesPage.test.js server/billing.test.js
 node --check server/billing.js
 node --check server/index.js
 ```
 
-The production frontend build and the focused six tests passed after the free offer was implemented. A full frontend test run previously had unrelated failures from tests expecting files under a different `public` path and UI tests without a DOM environment; investigate those separately if they recur.
+The storage-manager tests resolve fixtures from the web app root:
+
+```sh
+cd web
+npm exec -- vitest run --config vite.config.js src/lib/storageManager.test.js
+```
+
+Run the matching focused tests and build after changing the plans, storage manager, or test-series access code.
 
 ## Resume checklist for the next work session
 
 1. Read this file and [supabase/SETUP.md](./supabase/SETUP.md).
-2. Check whether the current date is still within the free period and whether the two cutoff constants still match.
+2. Check that the deployed API and frontend both use the current entitlement rules.
 3. Check Cloudflare Pages production deployment and the Render API deployment/health endpoint.
 4. Confirm whether the admin site has since been deployed; if so, record its URL and add it to CORS/Auth settings.
 5. Before re-enabling payments, resolve UPIGateway's inactive merchant/HTTP 400 issue and test the complete lifecycle safely.

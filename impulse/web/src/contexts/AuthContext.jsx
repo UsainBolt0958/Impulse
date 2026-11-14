@@ -1,9 +1,16 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { clearLocalUserData, startUserDataSync } from '@/lib/userDataSync';
 import { clearExamSession } from '@/lib/portalServer';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 const AuthContext = createContext(null);
+const EMPTY_PRO_ACCESS = {
+  hasAccess: false,
+  expiresAt: null,
+  status: null,
+  loading: false,
+  error: '',
+};
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -12,11 +19,83 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [proAccess, setProAccess] = useState(EMPTY_PRO_ACCESS);
   const [syncStatus, setSyncStatus] = useState('idle');
   const [syncError, setSyncError] = useState('');
   const activeUserId = useRef(null);
   const localDataCleanup = useRef(Promise.resolve());
   const user = session?.user || null;
+
+  const refreshProAccess = useCallback(async () => {
+    const requestedUserId = user?.id;
+    if (!requestedUserId || !supabase) {
+      setProAccess(EMPTY_PRO_ACCESS);
+      return EMPTY_PRO_ACCESS;
+    }
+
+    setProAccess((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      const { data, error } = await supabase.rpc('get_my_pro_access_status');
+      if (error) throw error;
+      const next = {
+        hasAccess: data?.has_access === true,
+        expiresAt: typeof data?.expires_at === 'string' ? data.expires_at : null,
+        status: typeof data?.status === 'string' ? data.status : null,
+        loading: false,
+        error: '',
+      };
+      if (activeUserId.current === requestedUserId) setProAccess(next);
+      return next;
+    } catch (error) {
+      const next = {
+        ...EMPTY_PRO_ACCESS,
+        error: error.message || 'Could not verify Pro access.',
+      };
+      if (activeUserId.current === requestedUserId) setProAccess(next);
+      throw error;
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setProAccess(EMPTY_PRO_ACCESS);
+      return undefined;
+    }
+
+    refreshProAccess().catch((error) => {
+      console.error('Could not load your Pro access status.', error);
+    });
+    return undefined;
+  }, [user?.id, refreshProAccess]);
+
+  useEffect(() => {
+    if (!user || !proAccess.hasAccess || !proAccess.expiresAt) return undefined;
+    const remaining = new Date(proAccess.expiresAt).getTime() - Date.now();
+    if (remaining <= 0) {
+      refreshProAccess().catch((error) => {
+        console.error('Could not refresh expired Pro access.', error);
+      });
+      return undefined;
+    }
+
+    const timeoutId = setTimeout(() => {
+      refreshProAccess().catch((error) => {
+        console.error('Could not refresh Pro access at its expiry.', error);
+      });
+    }, Math.min(remaining, 2_147_000_000));
+    return () => clearTimeout(timeoutId);
+  }, [user?.id, proAccess.hasAccess, proAccess.expiresAt, refreshProAccess]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    const refreshOnFocus = () => {
+      refreshProAccess().catch((error) => {
+        console.error('Could not refresh Pro access on return to the site.', error);
+      });
+    };
+    window.addEventListener('focus', refreshOnFocus);
+    return () => window.removeEventListener('focus', refreshOnFocus);
+  }, [user?.id, refreshProAccess]);
 
   useEffect(() => {
     if (!supabase) {
@@ -45,6 +124,10 @@ export function AuthProvider({ children }) {
       setAuthError('');
       setAuthLoading(false);
       if (userChanged) {
+        setProAccess({
+          ...EMPTY_PRO_ACCESS,
+          loading: Boolean(nextUserId),
+        });
         setProfileLoading(Boolean(nextUserId));
         setProfileError('');
         setSyncStatus(nextSession ? 'loading' : 'idle');
@@ -149,6 +232,8 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     user,
     profile,
+    proAccess,
+    refreshProAccess,
     profileLoading,
     authLoading,
     authError,
@@ -204,6 +289,8 @@ export function AuthProvider({ children }) {
   }), [
     user,
     profile,
+    proAccess,
+    refreshProAccess,
     profileLoading,
     authLoading,
     authError,

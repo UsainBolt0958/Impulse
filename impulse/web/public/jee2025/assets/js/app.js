@@ -2422,14 +2422,13 @@ try{
         // ============================================================================
         function checkStorageQuota() {
             try {
-                const testKey = '__storage_test__';
-                const testData = new Array(1000000).join('a'); // ~1MB test
-                localStorage.setItem(testKey, testData);
+                const testKey = `__impulse_storage_test_${Date.now()}_${Math.random()}`;
+                localStorage.setItem(testKey, '1');
                 localStorage.removeItem(testKey);
                 return true;
             } catch(e) {
                 console.error('⚠️ Storage quota exceeded or unavailable:', e);
-                alert('⚠️ WARNING: Browser storage may be full or disabled.\n\nPlease:\n- Clear browser cache\n- Use a different browser\n- Disable Private/Incognito mode');
+                alert('⚠️ Browser storage is unavailable or has no writable space.\n\nYou may continue, but keep this tab open until the exam is submitted.');
                 return false;
             }
         }
@@ -2583,6 +2582,19 @@ try{
             
             closeInstrModal();
             
+            if (window.StorageManager && userData && userData.uid) {
+                try {
+                    const sessionId = `${userData.uid}_paper${paper}`;
+                    if (!isResume && typeof window.StorageManager.clearSession === 'function') {
+                        await window.StorageManager.clearSession(sessionId);
+                    } else if (isResume && typeof window.StorageManager.cleanupCheckpoints === 'function') {
+                        await window.StorageManager.cleanupCheckpoints(sessionId);
+                    }
+                } catch (error) {
+                    console.warn('Could not clear previous exam recovery data:', error);
+                }
+            }
+
             // Check storage before starting exam
             if(!checkStorageQuota()) {
                 if(!confirm('Storage may be limited. Continue anyway? (NOT RECOMMENDED)')) {
@@ -6419,21 +6431,6 @@ window.act = a => {
                 e.preventDefault();
             }
         });
-
-        // Monitor for localStorage quota issues
-        setInterval(function() {
-            try {
-                const test = '__storage_test_' + Date.now();
-                localStorage.setItem(test, 'x');
-                localStorage.removeItem(test);
-            } catch(e) {
-                console.error('⚠️ Storage check failed:', e);
-                if (sess && sess.data) {
-                    alert('⚠️ WARNING: Browser storage may be full!\n\nYour answers are being saved but you should:\n1. Clear browser cache\n2. Close other tabs\n3. Complete the exam soon');
-                }
-            }
-        }, 30000); // Check every 30 seconds
-
 
     } catch(e) {
         console.error(e);

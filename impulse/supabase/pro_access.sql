@@ -43,11 +43,17 @@ create table if not exists public.pro_access (
   grant_source text not null default 'request' check (grant_source in ('request', 'manual')),
   last_request_id uuid references public.pro_access_requests (id) on delete set null,
   suspended_until timestamptz,
+  expires_at timestamptz,
   updated_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check ((status = 'suspended' and suspended_until is not null) or status <> 'suspended')
 );
+
+alter table public.pro_access add column if not exists expires_at timestamptz;
+update public.pro_access
+set expires_at = created_at + interval '12 months'
+where expires_at is null and status in ('active', 'suspended');
 
 create table if not exists public.pro_daily_usage (
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -83,6 +89,25 @@ create policy "Users read their own Pro access requests"
   on public.pro_access_requests for select to authenticated
   using ((select auth.uid()) = user_id or (select public.is_billing_admin()));
 
+create or replace function public.pro_access_is_active(p_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.pro_access as access
+    where access.user_id = p_user_id
+      and (access.expires_at is null or access.expires_at > now())
+      and (
+        access.status = 'active'
+        or (access.status = 'suspended' and access.suspended_until <= now())
+      )
+  );
+$$;
+
 create or replace function public.has_pro_access(p_user_id uuid)
 returns boolean
 language plpgsql
@@ -95,16 +120,24 @@ begin
     raise exception 'You can only check your own Pro access.';
   end if;
 
-  return exists (
-    select 1
-    from public.pro_access as access
-    where access.user_id = p_user_id
-      and (
-        access.status = 'active'
-        or (access.status = 'suspended' and access.suspended_until <= now())
-      )
-  );
+  return public.pro_access_is_active(p_user_id);
 end
+$$;
+
+create or replace function public.get_my_pro_access_status()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'has_access', coalesce(public.has_pro_access(auth.uid()), false),
+    'status', access.status,
+    'expires_at', access.expires_at
+  )
+  from (select 1) as singleton
+  left join public.pro_access as access on access.user_id = auth.uid();
 $$;
 
 create or replace function public.submit_pro_access_request(
@@ -182,7 +215,7 @@ begin
     'users', coalesce((
       select jsonb_agg(to_jsonb(item) order by item.updated_at desc)
       from (
-        select access.user_id, access.status, access.suspended_until,
+        select access.user_id, access.status, access.suspended_until, access.expires_at,
           access.grant_source, access.updated_at,
           coalesce(nullif(profile.display_name, ''), auth_user.email, access.user_id::text) as account_name,
           auth_user.email,
@@ -229,15 +262,17 @@ begin
 
   if p_approve then
     insert into public.pro_access (
-      user_id, status, grant_source, last_request_id, suspended_until, updated_by
+      user_id, status, grant_source, last_request_id, suspended_until, expires_at, updated_by
     ) values (
-      request_record.user_id, 'active', 'request', request_record.id, null, auth.uid()
+      request_record.user_id, 'active', 'request', request_record.id,
+      null, now() + interval '12 months', auth.uid()
     )
     on conflict (user_id) do update set
       status = 'active',
       grant_source = 'request',
       last_request_id = excluded.last_request_id,
       suspended_until = null,
+      expires_at = excluded.expires_at,
       updated_by = excluded.updated_by,
       updated_at = now();
   end if;
@@ -277,7 +312,8 @@ begin
     update public.pro_access
     set status = 'active', suspended_until = null,
         updated_by = auth.uid(), updated_at = now()
-    where user_id = p_user_id and status = 'suspended';
+    where user_id = p_user_id and status = 'suspended'
+      and (expires_at is null or expires_at > now());
   else
     raise exception 'Unsupported Pro access action.';
   end if;
@@ -385,7 +421,7 @@ begin
     if existing_requester = current_user_id then
       raise exception 'Your friend request is already pending.';
     end if;
-    if not public.has_pro_access(current_user_id) and (
+    if not public.pro_access_is_active(current_user_id) and (
       select count(*) from public.friendships as friendship
       where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
         and (
@@ -395,14 +431,14 @@ begin
     ) >= 3 then
       raise exception 'Basic accounts can have up to 3 friends. Upgrade to Pro for unlimited friends.';
     end if;
-    if not public.has_pro_access(target_user_id) and (
+    if not public.pro_access_is_active(target_user_id) and (
       select count(*) from public.friendships as friendship
       where (friendship.user_low = target_user_id or friendship.user_high = target_user_id)
         and (
           friendship.status = 'accepted'
           or (friendship.status = 'pending' and friendship.requested_by = target_user_id)
         )
-    ) > 3 then
+    ) >= 3 then
       raise exception 'The other account has reached its Basic friend limit.';
     end if;
     update public.friendships
@@ -411,7 +447,7 @@ begin
     return 'accepted';
   end if;
 
-  if not public.has_pro_access(current_user_id) and (
+  if not public.pro_access_is_active(current_user_id) and (
     select count(*) from public.friendships as friendship
     where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
       and (
@@ -463,7 +499,7 @@ begin
   end if;
 
   if accept_request then
-    if not public.has_pro_access(current_user_id) and (
+    if not public.pro_access_is_active(current_user_id) and (
       select count(*) from public.friendships as friendship
       where (friendship.user_low = current_user_id or friendship.user_high = current_user_id)
         and (
@@ -473,14 +509,14 @@ begin
     ) >= 3 then
       raise exception 'Basic accounts can have up to 3 friends. Upgrade to Pro for unlimited friends.';
     end if;
-    if not public.has_pro_access(existing_requester) and (
+    if not public.pro_access_is_active(existing_requester) and (
       select count(*) from public.friendships as friendship
       where (friendship.user_low = existing_requester or friendship.user_high = existing_requester)
         and (
           friendship.status = 'accepted'
           or (friendship.status = 'pending' and friendship.requested_by = existing_requester)
         )
-    ) > 3 then
+    ) >= 3 then
       raise exception 'The other account has reached its Basic friend limit.';
     end if;
     update public.friendships
@@ -495,6 +531,9 @@ $$;
 
 revoke execute on function public.has_pro_access(uuid) from public, anon;
 grant execute on function public.has_pro_access(uuid) to authenticated, service_role;
+revoke execute on function public.pro_access_is_active(uuid) from public, anon, authenticated;
+revoke execute on function public.get_my_pro_access_status() from public, anon;
+grant execute on function public.get_my_pro_access_status() to authenticated;
 revoke execute on function public.submit_pro_access_request(text, text, text) from public, anon;
 grant execute on function public.submit_pro_access_request(text, text, text) to authenticated;
 revoke execute on function public.get_pro_admin_overview() from public, anon;

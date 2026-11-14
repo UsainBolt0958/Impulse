@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
+import ProStatusBadge, { formatProExpiry } from '@/components/ProStatusBadge';
 import { loadProOffer, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
 import { supabase } from '@/lib/supabase';
 
@@ -17,7 +18,7 @@ const BASIC_PLAN = { plan_code: 'basic', name: 'Basic' };
 const PRO_PLAN = { plan_code: 'pro', name: 'Pro' };
 
 function PremiumPage() {
-  const { user, profile, authLoading } = useAuth();
+  const { user, profile, authLoading, proAccess, refreshProAccess } = useAuth();
   const [offer, setOffer] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -43,6 +44,13 @@ function PremiumPage() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    refreshProAccess().catch((statusError) => {
+      console.error('Could not refresh Pro access for the plans page.', statusError);
+    });
+  }, [user?.id, refreshProAccess]);
 
   const cardStyle = useMemo(() => {
     const colorOne = offer?.color_one || '#302770';
@@ -144,7 +152,7 @@ function PremiumPage() {
                       </CardTitle>
                       <Badge className="border-white/30 bg-white/15 text-white">Unlimited</Badge>
                     </div>
-                    <p className="text-sm text-white/80">No daily caps. We will get back to you for checkout.</p>
+                    <p className="text-sm text-white/80">Unlimited access to every Pro feature.</p>
                   </CardHeader>
                   <CardContent className="flex flex-1 flex-col">
                     <ul className="mb-6 space-y-4">
@@ -156,7 +164,7 @@ function PremiumPage() {
                       ))}
                     </ul>
 
-                    {pricesConfigured && (
+                    {pricesConfigured && !proAccess?.hasAccess && (
                       <div className="mb-5 flex items-baseline gap-3">
                         {offer?.regular_price_inr != null && (
                           <span className={offer?.discounted_price_inr != null ? 'text-lg text-white/70 line-through' : 'text-2xl font-black'}>
@@ -169,16 +177,7 @@ function PremiumPage() {
                       </div>
                     )}
 
-                    {!formOpen ? (
-                      <Button type="button" onClick={openRequestForm} className="mt-auto bg-white font-black text-black hover:bg-white/90">
-                        Buy Pro
-                      </Button>
-                    ) : requestSent ? (
-                      <div role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">
-                        <p className="font-bold">Request received.</p>
-                        <p className="mt-1 text-white/80">We will get back to you for checkout.</p>
-                      </div>
-                    ) : authLoading ? (
+                    {authLoading ? (
                       <p role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">Checking your account…</p>
                     ) : !user ? (
                       <div className="mt-auto space-y-3 rounded-xl bg-white/15 p-4 text-sm">
@@ -186,6 +185,40 @@ function PremiumPage() {
                         <Button asChild className="bg-white font-bold text-black hover:bg-white/90">
                           <Link to="/account">Sign in</Link>
                         </Button>
+                      </div>
+                    ) : proAccess?.loading ? (
+                      <p role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">Checking your Pro access…</p>
+                    ) : proAccess?.error ? (
+                      <div className="mt-auto space-y-3 rounded-xl bg-white/15 p-4 text-sm">
+                        <p role="alert">Your Pro status could not be verified, so a new request is unavailable.</p>
+                        <Button
+                          type="button"
+                          onClick={() => refreshProAccess().catch((statusError) => {
+                            console.error('Could not retry Pro status verification.', statusError);
+                          })}
+                          className="bg-white font-bold text-black hover:bg-white/90"
+                        >
+                          Check again
+                        </Button>
+                      </div>
+                    ) : proAccess?.hasAccess ? (
+                      <div role="status" className="mt-auto flex flex-wrap items-center gap-4 rounded-xl bg-white/10 p-4">
+                        <ProStatusBadge expiresAt={proAccess.expiresAt} />
+                        <div>
+                          <p className="font-black">Your Pro benefits are active.</p>
+                          <p className="mt-1 text-sm text-white/80">
+                            Your access expires {formatProExpiry(proAccess.expiresAt)}.
+                          </p>
+                        </div>
+                      </div>
+                    ) : !formOpen ? (
+                      <Button type="button" onClick={openRequestForm} className="mt-auto bg-white font-black text-black hover:bg-white/90">
+                        Buy Pro
+                      </Button>
+                    ) : requestSent ? (
+                      <div role="status" className="mt-auto rounded-xl bg-white/15 p-4 text-sm">
+                        <p className="font-bold">Request received.</p>
+                        <p className="mt-1 text-white/80">We will get back to you for checkout.</p>
                       </div>
                     ) : (
                       <form onSubmit={submitRequest} className="mt-auto space-y-3 rounded-xl bg-white/10 p-4">
