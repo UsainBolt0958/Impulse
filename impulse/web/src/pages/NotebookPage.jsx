@@ -78,7 +78,7 @@ function NotebookPage() {
         <main className="flex-1 py-12">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mb-10">
-              <h1 className="mb-2 text-5xl font-black uppercase tracking-tight">Notebook</h1>
+              <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">Notebook</h1>
               <p className="text-lg text-muted-foreground">Organize questions into notebooks for later review</p>
             </div>
 

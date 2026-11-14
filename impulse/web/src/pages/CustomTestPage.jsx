@@ -91,7 +91,7 @@ function CustomTestPage() {
             <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-muted-foreground">Practice your way</p>
-                <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Custom Tests</h1>
+                <h1 className="text-3xl font-black uppercase tracking-tight sm:text-5xl">Custom Tests</h1>
                 <p className="mt-2 max-w-2xl text-muted-foreground">Build timed papers from PYQ chapters, then review your scorecards and question-by-question analysis.</p>
               </div>
               <Button disabled={isLoadingSession} onClick={() => navigate('/custom-test/build')} className="h-12 rounded-2xl px-5 font-black uppercase tracking-wide">

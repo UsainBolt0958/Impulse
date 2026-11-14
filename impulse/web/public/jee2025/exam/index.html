@@ -173,6 +173,89 @@
         @media (max-width: 480px) {
             .result-content { padding: 16px; }
             .score-comparison-card { padding: 16px; }
+            #scr-result .result-page-header {
+                height: auto;
+                min-height: 64px;
+                grid-template-columns: minmax(0, 1fr) auto;
+                gap: 4px;
+                padding: 6px 8px;
+            }
+            #scr-result .header-center {
+                min-width: 0;
+                justify-content: flex-start;
+                gap: 4px;
+            }
+            #scr-result .header-logo {
+                width: 28px;
+                height: 28px;
+                margin-right: 4px !important;
+            }
+            #scr-result .home-brand {
+                overflow: hidden;
+                font-size: clamp(14px, 4.2vw, 18px);
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            #scr-result .header-right {
+                display: flex;
+                min-width: 0;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 4px;
+            }
+            #scr-result .header-right .btn {
+                padding: 6px 7px;
+                font-size: 10px;
+                white-space: nowrap;
+            }
+            #scr-result .header-right .analysis-theme-toggle {
+                width: 32px;
+                padding: 6px;
+            }
+            #scr-result .result-sidebar {
+                padding: 4px 0;
+            }
+            #scr-result .sidebar-nav {
+                gap: 4px;
+            }
+            #scr-result .sidebar-nav .nav-item {
+                padding: 8px 10px;
+                font-size: 11px;
+            }
+            #scr-result .result-content {
+                padding: 12px 10px;
+            }
+            #scr-result .section-header {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 8px;
+                margin-bottom: 16px;
+                padding-bottom: 12px;
+            }
+            #scr-result .analysis-section,
+            #scr-result .score-card-full,
+            #scr-result .score-comparison-card,
+            #scr-result .detailed-analysis-card {
+                padding: 14px;
+                margin-bottom: 16px;
+            }
+            #scr-result .analysis-section-title {
+                gap: 6px;
+                margin-bottom: 14px;
+                font-size: 12px;
+            }
+            #scr-result .analysis-table {
+                font-size: 12px;
+            }
+            #scr-result .analysis-table th,
+            #scr-result .analysis-table td {
+                padding: 6px 4px;
+                overflow-wrap: anywhere;
+            }
+            #scr-result .table-container {
+                max-width: 100%;
+                overflow-x: auto;
+            }
         }
         .dynamic-test-results [data-section="strengths"],
         .dynamic-test-results [data-section="insights"],
@@ -292,7 +375,7 @@
                 >
                     <i data-lucide="moon" aria-hidden="true"></i>
                 </button>
-                <button class="btn-toggle" type="button" onclick="togglePanel()">
+                <button class="btn-toggle" type="button" aria-label="Toggle question palette" onclick="togglePanel()">
                     <i data-lucide="panel-right-close" aria-hidden="true"></i>
                 </button>
                 <div class="timer-badge">Time: <span id="time-disp">--:--</span></div>
@@ -333,6 +416,7 @@
                     <div>
                         <button class="btn" type="button" onclick="act('prev')">Previous</button>
                         <button class="btn btn-pri" type="button" onclick="act('save')">Save & Next</button>
+                        <button class="btn btn-pri mobile-submit" type="button" onclick="finishExam()">Submit</button>
                     </div>
                 </footer>
             </main>

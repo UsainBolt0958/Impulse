@@ -77,7 +77,11 @@ function CustomTestExamPage() {
   const [remainingSeconds, setRemainingSeconds] = useState(() => {
     return session ? Math.max(0, Math.ceil((session.endsAt - Date.now()) / 1000)) : 0;
   });
-  const [showPalette, setShowPalette] = useState(true);
+  const [showPalette, setShowPalette] = useState(() => (
+    typeof window === 'undefined'
+    || !window.matchMedia
+    || !window.matchMedia('(max-width: 767px)').matches
+  ));
   const [fontSize, setFontSize] = useState('medium');
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
   const [activeSubject, setActiveSubject] = useState(() => (
@@ -617,25 +621,32 @@ function CustomTestExamPage() {
             </Card>
             </div>
           </div>
-          <div className="shrink-0 border-t border-border bg-background px-4 py-3 shadow-[0_-8px_24px_hsl(var(--background)/0.8)] sm:px-6 lg:px-8">
-            <div className="flex w-full items-center gap-3">
-              <Button variant="outline" onClick={() => navigateToQuestion(currentIndex - 1)} disabled={currentIndex === 0} className="h-11 min-w-0 flex-1 rounded-xl font-bold">
+          <div className="shrink-0 border-t border-border bg-background px-4 py-3 shadow-[0_-8px_24px_hsl(var(--background)/0.8)] sm:px-6 lg:px-8 max-md:px-2 max-md:py-2 max-md:pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+            <div className="flex w-full items-center gap-3 max-md:flex-wrap max-md:gap-2">
+              <Button variant="outline" onClick={() => navigateToQuestion(currentIndex - 1)} disabled={currentIndex === 0} className="h-11 min-w-0 flex-1 rounded-xl font-bold max-md:h-10 max-md:basis-[calc(50%-0.25rem)] max-md:px-2 max-md:text-[11px]">
                 <ChevronLeft className="mr-1 h-4 w-4" /> Previous
               </Button>
               <Button
                 variant="outline"
                 onClick={() => answerQuestion('')}
                 disabled={!String(selectedAnswer).trim()}
-                className="h-11 min-w-0 flex-1 rounded-xl font-bold"
+                className="h-11 min-w-0 flex-1 rounded-xl font-bold max-md:h-10 max-md:basis-[calc(50%-0.25rem)] max-md:px-2 max-md:text-[11px]"
               >
                 <X className="mr-2 h-4 w-4" /> Clear response
               </Button>
               <Button
                 onClick={saveAndNavigateToNext}
                 disabled={currentIndex === questions.length - 1}
-                className="h-11 min-w-0 flex-1 rounded-xl font-black uppercase tracking-wide"
+                className="h-11 min-w-0 flex-1 rounded-xl font-black uppercase tracking-wide max-md:h-10 max-md:basis-[calc(50%-0.25rem)] max-md:px-2 max-md:text-[11px]"
               >
                 Save & next <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => submitExam(false)}
+                className="hidden h-11 min-w-0 flex-1 rounded-xl font-black uppercase tracking-wide max-md:inline-flex max-md:h-10 max-md:basis-[calc(50%-0.25rem)] max-md:px-2 max-md:text-[11px]"
+              >
+                <Send className="mr-2 h-4 w-4" /> Submit
               </Button>
             </div>
           </div>
@@ -644,8 +655,10 @@ function CustomTestExamPage() {
         <aside className={cn(
           'z-10 flex shrink-0 flex-col border-l border-border bg-card transition-all',
           showPalette ? 'w-[300px] lg:w-[340px]' : 'w-14',
-          'max-md:fixed max-md:bottom-0 max-md:right-0 max-md:top-16 max-md:shadow-xl',
-          !showPalette && 'max-md:w-14',
+          'max-md:fixed max-md:bottom-auto max-md:right-2 max-md:top-20 max-md:overflow-hidden max-md:rounded-xl max-md:shadow-xl',
+          showPalette
+            ? 'max-md:h-[70dvh] max-md:max-h-[calc(100dvh-6rem)] max-md:w-[calc(100vw-1rem)] max-md:max-w-[22rem]'
+            : 'max-md:h-11 max-md:w-11',
         )}>
           {showPalette && (
             <>
@@ -694,7 +707,7 @@ function CustomTestExamPage() {
               <LayoutGrid className="h-4 w-4" />
             </button>
           )}
-          <div className={cn('mt-auto border-t border-border p-3', !showPalette && 'px-2')}>
+          <div className={cn('mt-auto border-t border-border p-3 max-md:hidden', !showPalette && 'px-2')}>
             <Button
               variant="destructive"
               onClick={() => submitExam(false)}

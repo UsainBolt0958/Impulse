@@ -362,7 +362,7 @@ function FullScreenSolvingPage() {
                 </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 {Object.entries(question.options).map(([key, value]) => (
                   (() => {
                     const isSelected = selectedOption === key;
@@ -445,7 +445,7 @@ function FullScreenSolvingPage() {
         </main>
 
         {/* Footer Actions */}
-        <footer className="flex-shrink-0 border-t-4 border-border bg-background p-4 sm:px-8 z-10">
+        <footer className="z-10 flex-shrink-0 border-t-4 border-border bg-background p-4 sm:px-8 max-md:pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
             <Button
               variant="outline"

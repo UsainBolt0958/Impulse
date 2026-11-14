@@ -130,7 +130,7 @@ function PremiumPage() {
               <Badge variant="outline" className="mb-4 gap-2 rounded-full px-4 py-2">
                 <Sparkles className="h-4 w-4" /> Impulse plans
               </Badge>
-              <h1 className="text-4xl font-black uppercase tracking-tight sm:text-5xl">Choose your pace</h1>
+              <h1 className="text-3xl font-black uppercase tracking-tight sm:text-5xl">Choose your pace</h1>
               <p className="mt-4 text-muted-foreground">
                 Basic gives you daily practice limits. Request Pro and we will contact you to arrange checkout.
               </p>

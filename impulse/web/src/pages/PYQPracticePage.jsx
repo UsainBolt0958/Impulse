@@ -614,7 +614,7 @@ function PYQPracticePage() {
             
             {/* Header Area */}
             <div className="mb-12">
-              <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Practice Questions</h1>
+              <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">Practice Questions</h1>
               <p className="text-lg text-muted-foreground">Select your exam and subject to begin</p>
             </div>
 

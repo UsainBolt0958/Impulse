@@ -183,11 +183,11 @@ function PreviousPapersExamPage() {
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
 
-        <main className="flex-1 py-12">
+        <main className="flex-1 py-6 sm:py-12">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <h1 className="text-4xl font-black uppercase tracking-tight mb-2">{examTitle}</h1>
+                <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-4xl">{examTitle}</h1>
                 <p className="text-sm text-muted-foreground">
                   {paperId
                     ? 'This page is dedicated to this imported paper.'

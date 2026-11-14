@@ -333,7 +333,7 @@ function ProfilePage({ profile = null }) {
                   {isOwnProfile ? 'Your progress, in focus' : `${profileName}'s progress`}
                 </p>
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <h1 className="text-5xl font-black uppercase tracking-tight">{isOwnProfile ? 'Profile' : profileName}</h1>
+                  <h1 className="text-3xl font-black uppercase tracking-tight sm:text-5xl">{isOwnProfile ? 'Profile' : profileName}</h1>
                   {(profile?.username || accountProfile?.username) && (
                     <span className="text-base font-semibold text-muted-foreground">
                       @{profile?.username || accountProfile?.username}

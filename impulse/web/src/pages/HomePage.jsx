@@ -91,7 +91,7 @@ function HomePage() {
         <main className="flex-1 py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="mb-12">
-              <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Dashboard</h1>
+              <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">Dashboard</h1>
               <p className="text-lg text-muted-foreground">Track your progress and performance</p>
               {proAccess?.hasAccess && (
                 <div className="mt-4 flex flex-wrap items-center gap-3">

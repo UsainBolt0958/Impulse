@@ -316,3 +316,9 @@
     @apply w-full max-w-md bg-background border-2 border-foreground p-6 shadow-2xl animate-in zoom-in-95 duration-200;
   }
 }
+
+@media (max-width: 1023px) {
+  .main-content {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}

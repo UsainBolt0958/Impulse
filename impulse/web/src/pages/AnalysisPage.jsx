@@ -136,14 +136,14 @@ function AnalysisPage() {
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
 
-        <main className="flex-1 py-12">
+        <main className="flex-1 py-6 sm:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="mb-12">
-              <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Performance Analysis</h1>
-              <p className="text-lg text-muted-foreground">Detailed insights into your preparation</p>
+            <div className="mb-8 sm:mb-12">
+              <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">Performance Analysis</h1>
+              <p className="text-base text-muted-foreground sm:text-lg">Detailed insights into your preparation</p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-12">
+            <div className="mb-8 grid grid-cols-1 gap-4 md:mb-12 md:grid-cols-2 md:gap-6 lg:grid-cols-4">
               <StatsCard
                 label="Unique Questions Attempted"
                 value={getUniqueAttemptedCount()}
@@ -210,12 +210,12 @@ function AnalysisPage() {
               </CardContent>
             </Card>
 
-            <Tabs defaultValue="overview" className="space-y-8">
+            <Tabs defaultValue="overview" className="space-y-6 sm:space-y-8">
               <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
-                <TabsTrigger value="overview" className="font-bold uppercase text-xs">Overview</TabsTrigger>
-                <TabsTrigger value="chapters" className="font-bold uppercase text-xs">Chapters</TabsTrigger>
-                <TabsTrigger value="subjects" className="font-bold uppercase text-xs">Subjects</TabsTrigger>
-                <TabsTrigger value="exams" className="font-bold uppercase text-xs">Exams</TabsTrigger>
+                <TabsTrigger value="overview" className="px-1 text-[10px] font-bold uppercase sm:px-3 sm:text-xs">Overview</TabsTrigger>
+                <TabsTrigger value="chapters" className="px-1 text-[10px] font-bold uppercase sm:px-3 sm:text-xs">Chapters</TabsTrigger>
+                <TabsTrigger value="subjects" className="px-1 text-[10px] font-bold uppercase sm:px-3 sm:text-xs">Subjects</TabsTrigger>
+                <TabsTrigger value="exams" className="px-1 text-[10px] font-bold uppercase sm:px-3 sm:text-xs">Exams</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-8">

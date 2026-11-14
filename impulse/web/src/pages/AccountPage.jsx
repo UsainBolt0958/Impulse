@@ -96,7 +96,7 @@ function AccountPage() {
         <main className="mx-auto max-w-3xl space-y-6 px-4 py-10 sm:px-6">
           <section>
             <p className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-muted-foreground">Impulse</p>
-            <h1 className="text-4xl font-black uppercase tracking-tight">Your account</h1>
+            <h1 className="text-3xl font-black uppercase tracking-tight sm:text-4xl">Your account</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Sign in to keep your study history and preferences available across devices.
             </p>

@@ -176,7 +176,7 @@ function PerformanceChart({ type, data, title, dataKey, xKey, yKey }) {
   };
 
   return (
-    <Card className="border-border rounded-3xl overflow-hidden">
+    <Card className="border-border rounded-3xl overflow-hidden max-md:min-w-0">
       <CardHeader>
         <CardTitle className="text-lg font-black uppercase tracking-tight">{title}</CardTitle>
       </CardHeader>

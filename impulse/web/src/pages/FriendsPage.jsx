@@ -159,7 +159,7 @@ function FriendsPage() {
             <section className="flex flex-wrap items-end justify-between gap-5">
               <div>
                 <p className="mb-2 text-xs font-black uppercase tracking-[0.28em] text-muted-foreground">Learn together</p>
-                <h1 className="flex items-center gap-3 text-5xl font-black uppercase tracking-tight">
+                <h1 className="flex items-center gap-3 text-3xl font-black uppercase tracking-tight sm:text-5xl">
                   <UsersRound className="h-9 w-9 text-amber-500" />
                   Friends
                 </h1>

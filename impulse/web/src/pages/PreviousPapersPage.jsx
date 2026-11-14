@@ -18,11 +18,11 @@ function PreviousPapersPage() {
       <div className="min-h-screen flex flex-col bg-background">
         <Header />
 
-        <main className="flex-1 py-12">
+        <main className="flex-1 py-6 sm:py-12">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="mb-12">
-              <h1 className="text-5xl font-black uppercase tracking-tight mb-2">Previous Papers</h1>
-              <p className="text-lg text-muted-foreground">Browse and practice from past year question papers.</p>
+            <div className="mb-8 sm:mb-12">
+              <h1 className="mb-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">Previous Papers</h1>
+              <p className="text-base text-muted-foreground sm:text-lg">Browse and practice from past year question papers.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
