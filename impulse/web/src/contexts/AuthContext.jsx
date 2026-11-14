@@ -7,6 +7,7 @@ const AuthContext = createContext(null);
 const EMPTY_PRO_ACCESS = {
   hasAccess: false,
   expiresAt: null,
+  batchName: null,
   status: null,
   loading: false,
   error: '',
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
       const next = {
         hasAccess: data?.has_access === true,
         expiresAt: typeof data?.expires_at === 'string' ? data.expires_at : null,
+        batchName: typeof data?.batch_name === 'string' ? data.batch_name : null,
         status: typeof data?.status === 'string' ? data.status : null,
         loading: false,
         error: '',

@@ -11,7 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/contexts/AuthContext';
 import ProStatusBadge, { formatProExpiry } from '@/components/ProStatusBadge';
-import { loadProOffer, formatPriceInr, getPlanLimitText } from '@/lib/premiumCatalog';
+import {
+  loadProBatches,
+  loadProOffer,
+  formatPriceInr,
+  getPlanLimitText,
+} from '@/lib/premiumCatalog';
 import { supabase } from '@/lib/supabase';
 
 const BASIC_PLAN = { plan_code: 'basic', name: 'Basic' };
@@ -20,6 +25,8 @@ const PRO_PLAN = { plan_code: 'pro', name: 'Pro' };
 function PremiumPage() {
   const { user, profile, authLoading, proAccess, refreshProAccess } = useAuth();
   const [offer, setOffer] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [selectedBatchId, setSelectedBatchId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [formOpen, setFormOpen] = useState(false);
@@ -31,9 +38,13 @@ function PremiumPage() {
 
   useEffect(() => {
     let active = true;
-    loadProOffer()
-      .then((settings) => {
-        if (active) setOffer(settings);
+    Promise.all([loadProOffer(), loadProBatches()])
+      .then(([settings, availableBatches]) => {
+        if (active) {
+          setOffer(settings);
+          setBatches(availableBatches);
+          setSelectedBatchId((current) => current || availableBatches[0]?.id || '');
+        }
       })
       .catch((loadError) => {
         console.error('Could not load Pro offer settings.', loadError);
@@ -73,6 +84,10 @@ function PremiumPage() {
       setError('Sign in before requesting Pro access.');
       return;
     }
+    if (!selectedBatchId) {
+      setError('Choose an available Pro batch.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError('');
@@ -80,6 +95,7 @@ function PremiumPage() {
       const { error: submitError } = await supabase.rpc('submit_pro_access_request', {
         p_full_name: fullName,
         p_phone: phone.replace(/\D/g, ''),
+        p_batch_id: selectedBatchId,
         p_description: description,
       });
       if (submitError) throw submitError;
@@ -96,7 +112,9 @@ function PremiumPage() {
   };
 
   const accountName = profile?.display_name || user?.email || 'Signed-in account';
-  const pricesConfigured = offer?.regular_price_inr != null || offer?.discounted_price_inr != null;
+  const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) || null;
+  const hasBatchDiscount = selectedBatch?.discounted_price_inr != null
+    && selectedBatch.discounted_price_inr < selectedBatch.regular_price_inr;
 
   return (
     <>
@@ -164,15 +182,43 @@ function PremiumPage() {
                       ))}
                     </ul>
 
-                    {pricesConfigured && !proAccess?.hasAccess && (
-                      <div className="mb-5 flex items-baseline gap-3">
-                        {offer?.regular_price_inr != null && (
-                          <span className={offer?.discounted_price_inr != null ? 'text-lg text-white/70 line-through' : 'text-2xl font-black'}>
-                            {formatPriceInr(offer.regular_price_inr)}
-                          </span>
-                        )}
-                        {offer?.discounted_price_inr != null && (
-                          <span className="text-3xl font-black">{formatPriceInr(offer.discounted_price_inr)}</span>
+                    {!proAccess?.hasAccess && (
+                      <div className="mb-5 space-y-3">
+                        {batches.length > 0 ? (
+                          <>
+                            <label className="block space-y-1 text-sm font-semibold">
+                              <span>Choose your batch</span>
+                              <select
+                                aria-label="Pro batch"
+                                value={selectedBatchId}
+                                onChange={(event) => setSelectedBatchId(event.target.value)}
+                                className="h-10 w-full rounded-md border border-white/40 bg-white px-3 text-sm text-slate-950"
+                              >
+                                {batches.map((batch) => (
+                                  <option key={batch.id} value={batch.id}>{batch.batch_name}</option>
+                                ))}
+                              </select>
+                            </label>
+                            {selectedBatch && (
+                              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                {hasBatchDiscount && (
+                                  <span className="text-lg text-white/70 line-through">
+                                    {formatPriceInr(selectedBatch.regular_price_inr)}
+                                  </span>
+                                )}
+                                <span className="text-3xl font-black">
+                                  {formatPriceInr(selectedBatch.discounted_price_inr ?? selectedBatch.regular_price_inr)}
+                                </span>
+                                <span className="text-sm text-white/80">
+                                  Expires {formatProExpiry(selectedBatch.expires_on)}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p role="status" className="rounded-xl bg-white/15 p-3 text-sm">
+                            No upcoming Pro batches are available right now.
+                          </p>
                         )}
                       </div>
                     )}
@@ -205,14 +251,21 @@ function PremiumPage() {
                       <div role="status" className="mt-auto flex flex-wrap items-center gap-4 rounded-xl bg-white/10 p-4">
                         <ProStatusBadge expiresAt={proAccess.expiresAt} />
                         <div>
-                          <p className="font-black">Your Pro benefits are active.</p>
+                          <p className="font-black">
+                            Your {proAccess.batchName ? `${proAccess.batchName} ` : ''}Pro benefits are active.
+                          </p>
                           <p className="mt-1 text-sm text-white/80">
                             Your access expires {formatProExpiry(proAccess.expiresAt)}.
                           </p>
                         </div>
                       </div>
                     ) : !formOpen ? (
-                      <Button type="button" onClick={openRequestForm} className="mt-auto bg-white font-black text-black hover:bg-white/90">
+                      <Button
+                        type="button"
+                        onClick={openRequestForm}
+                        disabled={!selectedBatch}
+                        className="mt-auto bg-white font-black text-black hover:bg-white/90"
+                      >
                         Buy Pro
                       </Button>
                     ) : requestSent ? (
@@ -234,7 +287,7 @@ function PremiumPage() {
                             autoComplete="off"
                             value={fullName}
                             onChange={(event) => setFullName(event.target.value)}
-                            className="bg-white text-foreground"
+                            className="bg-white text-slate-950 placeholder:text-slate-500"
                           />
                         </label>
                         <label className="block space-y-1 text-sm font-semibold">
@@ -249,7 +302,7 @@ function PremiumPage() {
                             placeholder="10-digit Indian number"
                             value={phone}
                             onChange={(event) => setPhone(event.target.value.replace(/\D/g, '').slice(0, 10))}
-                            className="bg-white text-foreground"
+                            className="bg-white text-slate-950 placeholder:text-slate-500"
                           />
                         </label>
                         <label className="block space-y-1 text-sm font-semibold">
@@ -260,7 +313,7 @@ function PremiumPage() {
                             value={description}
                             onChange={(event) => setDescription(event.target.value)}
                             placeholder="Anything you would like us to know?"
-                            className="bg-white text-foreground"
+                            className="bg-white text-slate-950 placeholder:text-slate-500"
                           />
                         </label>
                         {error && <p role="alert" className="text-sm font-semibold text-white">{error}</p>}
