@@ -1,5 +1,4 @@
 import React from 'react';
-import { Sparkles } from 'lucide-react';
 
 export function formatProExpiry(expiresAt) {
   if (!expiresAt) return 'No expiry date';
@@ -17,14 +16,10 @@ function ProStatusBadge({ expiresAt, compact = false }) {
   return (
     <span
       aria-label={`Impulse Pro member${compact ? '' : `, expires ${formatProExpiry(expiresAt)}`}`}
-      className={`inline-flex flex-col items-center justify-center bg-transparent text-violet-500 ${compact ? 'gap-0' : 'gap-1'}`}
+      className={`inline-flex flex-col items-center justify-center bg-transparent ${compact ? 'gap-0' : 'gap-1'}`}
     >
-      <Sparkles
-        className={`text-violet-500 drop-shadow-[0_0_8px_rgba(168,85,247,0.9)] motion-safe:animate-pulse motion-reduce:animate-none ${compact ? 'h-3 w-3' : 'h-7 w-7'}`}
-        aria-hidden="true"
-      />
-      <span className={`font-black leading-none tracking-[0.16em] ${compact ? 'text-[8px]' : 'text-xs'}`}>
-        PRO
+      <span className={`pro-status-badge__label inline-flex items-center justify-center rounded-full font-semibold leading-none tracking-[0.2em] ${compact ? 'px-2 py-1 text-[8px]' : 'px-3 py-1.5 text-xs'}`}>
+        <span className="pro-status-badge__text">PRO</span>
       </span>
       {!compact && (
         <span className="text-xs font-medium text-muted-foreground">
