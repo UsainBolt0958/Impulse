@@ -134,6 +134,9 @@ function PremiumPage() {
               <p className="mt-4 text-muted-foreground">
                 Basic gives you daily practice limits. Request Pro and we will contact you to arrange checkout.
               </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You can submit up to 5 Pro requests per India calendar day.
+              </p>
             </header>
 
             {isLoading ? (

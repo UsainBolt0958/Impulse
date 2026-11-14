@@ -6,8 +6,9 @@ This file is the handoff for resuming the premium/payment setup. It records the 
 
 - The temporary site-wide free-access offer has been removed. Basic limits and Pro entitlements now determine access; paid test-series access requires a purchase unless the series is free/unpriced or the account has Pro.
 - Basic includes up to three friends, five custom tests per India calendar day, and three previous-year papers per India calendar day. Pro requests select a batch; access expires on that batch's configured date.
+- Pro requests are limited to five per account per India calendar day. Admins can block future requests from an account, search accounts, and grant a selected Pro batch manually.
 - Each Pro batch has editable regular/discounted prices, and the card appearance is configurable. Pro requests remain manual; the existing UPI payment system and legacy price records are retained.
-- Active Pro users see their benefits and expiry date on the Premium, profile, and dashboard views.
+- Active Pro users see their benefits and expiry date on the Premium, profile, and dashboard views, with a compact glowing capsule badge.
 - The profile page's “Your data across devices” card was removed. Profile stats, saved data, and account syncing were not removed.
 - UPIGateway order creation previously returned HTTP 400. No successful live payment has been confirmed. Payment handling should remain untested/disabled until a provider account can create and verify orders.
 - The admin panel is **not known to be deployed as a separate live site**. The previously reported live frontend is the customer site only.

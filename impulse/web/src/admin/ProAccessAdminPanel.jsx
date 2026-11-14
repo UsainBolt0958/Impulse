@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Palette, PauseCircle, RefreshCw, Save, ShieldCheck, Trash2, X } from 'lucide-react';
+import {
+  Check,
+  Palette,
+  PauseCircle,
+  RefreshCw,
+  Save,
+  Search,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  X,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,12 +39,30 @@ function isAvailableBatch(batch) {
     && new Date(`${batch.expires_on}T23:59:59+05:30`).getTime() >= Date.now();
 }
 
+function isUnexpiredBatch(batch) {
+  return new Date(`${batch.expires_on}T23:59:59+05:30`).getTime() >= Date.now();
+}
+
+function getAccountProLabel(account) {
+  if (account.has_pro_access) return 'Pro';
+  if (account.pro_status === 'suspended') return 'Suspended';
+  if (account.expires_at && new Date(account.expires_at).getTime() <= Date.now()) return 'Expired Pro';
+  if (account.pro_status === 'revoked') return 'Revoked';
+  return 'Basic';
+}
+
 function ProAccessAdminPanel({ session }) {
   const [overview, setOverview] = useState({ requests: [], users: [], batches: [] });
   const [settings, setSettings] = useState(EMPTY_SETTINGS);
   const [newBatch, setNewBatch] = useState(EMPTY_BATCH);
   const [suspensionDays, setSuspensionDays] = useState({});
   const [legacyBatchIds, setLegacyBatchIds] = useState({});
+  const [manualBatchIds, setManualBatchIds] = useState({});
+  const [requestSettingsId, setRequestSettingsId] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [searchedQuery, setSearchedQuery] = useState('');
+  const [searchLoading, setSearchLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
@@ -85,6 +115,99 @@ function ProAccessAdminPanel({ session }) {
     } catch (actionError) {
       console.error('Could not review the Pro access request.', actionError);
       setError(actionError.message || 'The request could not be updated.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const runUserSearch = async (query = userSearch) => {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) {
+      setUserSearchResults([]);
+      setSearchedQuery('');
+      setError('Enter at least 2 characters to search accounts.');
+      return;
+    }
+
+    setSearchLoading(true);
+    setError('');
+    try {
+      const { data, error: searchError } = await supabase.rpc('search_pro_access_accounts', {
+        p_query: normalizedQuery,
+      });
+      if (searchError) throw searchError;
+      if (!Array.isArray(data)) throw new Error('The account search returned an invalid response.');
+      setUserSearchResults(data);
+      setSearchedQuery(normalizedQuery);
+    } catch (searchError) {
+      setUserSearchResults([]);
+      setSearchedQuery('');
+      console.error('Could not search user accounts.', searchError);
+      setError(searchError.message || 'Account search failed.');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const searchUsers = (event) => {
+    event.preventDefault();
+    runUserSearch();
+  };
+
+  const setRequestIgnored = async (userId, shouldIgnore) => {
+    setBusyId(`ignore-${userId}`);
+    setError('');
+    setNotice('');
+    try {
+      const { error: ignoreError } = await supabase.rpc('set_pro_request_ignored', {
+        p_user_id: userId,
+        p_ignore: shouldIgnore,
+      });
+      if (ignoreError) throw ignoreError;
+      setNotice(shouldIgnore
+        ? 'Future Pro applications from this account are blocked; its current request remains in the queue.'
+        : 'This account can submit Pro applications again.');
+      await loadOverview();
+      if (userSearch.trim().length >= 2) await runUserSearch(userSearch);
+    } catch (ignoreError) {
+      console.error('Could not update Pro request settings.', ignoreError);
+      setError(ignoreError.message || 'The request settings could not be updated.');
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const grantManualAccess = async (account) => {
+    const grantableBatches = overview.batches.filter(isUnexpiredBatch);
+    const batchId = manualBatchIds[account.user_id] || grantableBatches[0]?.id;
+    if (!batchId) {
+      setError('No unexpired Pro batch is available to grant.');
+      return;
+    }
+    if (account.has_pro_access && !window.confirm(
+      `Replace ${account.account_name}'s current Pro batch with the selected batch?`
+    )) {
+      return;
+    }
+
+    setBusyId(`manual-${account.user_id}`);
+    setError('');
+    setNotice('');
+    try {
+      const { error: grantError } = await supabase.rpc('grant_manual_pro_access', {
+        p_user_id: account.user_id,
+        p_batch_id: batchId,
+      });
+      if (grantError) throw grantError;
+      const batch = grantableBatches.find((item) => item.id === batchId);
+      setNotice(`Manual Pro access granted to ${account.account_name}${batch ? ` for ${batch.batch_name}` : ''}.`);
+      await Promise.all([
+        loadOverview(),
+        userSearch.trim().length >= 2 ? runUserSearch(userSearch) : Promise.resolve(),
+      ]);
+    } catch (grantError) {
+      console.error('Could not grant manual Pro access.', grantError);
+      setError(grantError.message || 'Manual Pro access could not be granted.');
     } finally {
       setBusyId('');
     }
@@ -406,7 +529,11 @@ function ProAccessAdminPanel({ session }) {
           ) : overview.requests.map((request) => (
             <article key={request.id} className="grid gap-4 rounded-2xl border border-border p-4 lg:grid-cols-[1fr_auto]">
               <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-                <p><span className="text-xs font-bold uppercase text-muted-foreground">Account</span><br /><span className="font-semibold">{request.account_name}</span></p>
+                <p>
+                  <span className="text-xs font-bold uppercase text-muted-foreground">Account</span><br />
+                  <span className="font-semibold">{request.account_name}</span>
+                  {request.requests_ignored && <Badge className="ml-2" variant="outline">Future requests blocked</Badge>}
+                </p>
                 <p><span className="text-xs font-bold uppercase text-muted-foreground">Form name</span><br /><span className="font-semibold">{request.full_name}</span></p>
                 <p>
                   <span className="text-xs font-bold uppercase text-muted-foreground">Requested batch</span><br />
@@ -427,7 +554,19 @@ function ProAccessAdminPanel({ session }) {
                 <p><span className="text-xs font-bold uppercase text-muted-foreground">Description</span><br /><span className="whitespace-pre-wrap">{request.description || '—'}</span></p>
                 <p className="text-xs text-muted-foreground sm:col-span-2">Submitted {new Date(request.created_at).toLocaleString()}</p>
               </div>
-              <div className="flex items-start gap-2">
+              <div className="flex flex-wrap items-start gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setRequestSettingsId((current) => (
+                    current === request.id ? '' : request.id
+                  ))}
+                  aria-expanded={requestSettingsId === request.id}
+                  aria-label={`Request settings for ${request.account_name}`}
+                >
+                  <Settings className="h-4 w-4" /> Settings
+                </Button>
                 {!request.batch_id && (
                   <label className="text-xs font-semibold">
                     Assign batch
@@ -467,8 +606,114 @@ function ProAccessAdminPanel({ session }) {
                   <X className="h-4 w-4" /> Reject
                 </Button>
               </div>
+              {requestSettingsId === request.id && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted/50 p-3 lg:col-span-2">
+                  <p className="text-sm text-muted-foreground">
+                    Ignoring blocks future Pro applications from this account. This pending request remains reviewable.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={request.requests_ignored ? 'outline' : 'destructive'}
+                    onClick={() => setRequestIgnored(request.user_id, !request.requests_ignored)}
+                    disabled={busyId === `ignore-${request.user_id}`}
+                  >
+                    {request.requests_ignored ? 'Allow future requests' : 'Ignore future requests'}
+                  </Button>
+                </div>
+              )}
             </article>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-3xl border-border">
+        <CardHeader>
+          <CardTitle>Find accounts and grant Pro</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Search by account name, username, email, or account ID, then grant a batch directly.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={searchUsers} className="flex flex-wrap gap-2">
+            <Input
+              value={userSearch}
+              onChange={(event) => {
+                setUserSearch(event.target.value);
+                setUserSearchResults([]);
+                setSearchedQuery('');
+              }}
+              placeholder="Search accounts"
+              aria-label="Search accounts"
+              className="min-w-60 flex-1 bg-background text-foreground"
+            />
+            <Button type="submit" disabled={searchLoading}>
+              <Search className="h-4 w-4" /> {searchLoading ? 'Searching…' : 'Search'}
+            </Button>
+          </form>
+          {searchLoading && <p role="status" className="text-sm text-muted-foreground">Searching accounts…</p>}
+          {!searchLoading && searchedQuery === userSearch.trim() && searchedQuery && userSearchResults.length === 0 && (
+            <p className="text-sm text-muted-foreground">No matching accounts found.</p>
+          )}
+          {userSearchResults.map((account) => {
+            const grantableBatches = overview.batches.filter(isUnexpiredBatch);
+            return (
+              <article key={account.user_id} className="flex flex-col gap-4 rounded-2xl border border-border p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-black">{account.account_name}</p>
+                    <Badge variant={account.has_pro_access ? 'default' : 'outline'}>
+                      {getAccountProLabel(account)}
+                    </Badge>
+                    {account.requests_ignored && <Badge variant="outline">Requests ignored</Badge>}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {account.email || account.user_id}{account.username ? ` · @${account.username}` : ''}
+                  </p>
+                  {account.has_pro_access && (
+                    <p className="text-xs text-muted-foreground">
+                      {account.batch_name || 'Pro'} · Expires {formatProExpiry(account.expires_at)}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label={`Batch to grant to ${account.account_name}`}
+                    value={manualBatchIds[account.user_id] || grantableBatches[0]?.id || ''}
+                    onChange={(event) => setManualBatchIds((current) => ({
+                      ...current,
+                      [account.user_id]: event.target.value,
+                    }))}
+                    disabled={grantableBatches.length === 0}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                  >
+                    {grantableBatches.length === 0 ? (
+                      <option value="">No unexpired batches</option>
+                    ) : grantableBatches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>{batch.batch_name}</option>
+                    ))}
+                  </select>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => grantManualAccess(account)}
+                    disabled={grantableBatches.length === 0 || busyId === `manual-${account.user_id}`}
+                  >
+                    <UserPlus className="h-4 w-4" /> Grant batch
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRequestIgnored(account.user_id, !account.requests_ignored)}
+                    disabled={busyId === `ignore-${account.user_id}`}
+                  >
+                    {account.requests_ignored ? 'Allow requests' : 'Ignore requests'}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
         </CardContent>
       </Card>
 

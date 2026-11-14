@@ -82,6 +82,9 @@ describe('PremiumPage Pro request form', () => {
 
     expect(await screen.findByText('Your Pro benefits are active.')).toBeInTheDocument();
     expect(screen.getByText('Expires 14 November 2027')).toBeInTheDocument();
+    const proBadge = screen.getByLabelText('Impulse Pro member, expires 14 November 2027');
+    expect(proBadge).toHaveTextContent('PRO');
+    expect(proBadge.querySelector('svg')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Buy Pro' })).not.toBeInTheDocument();
   });
 
