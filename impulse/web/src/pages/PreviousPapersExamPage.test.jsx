@@ -133,7 +133,7 @@ describe('PreviousPapersExamPage', () => {
     });
   });
 
-  it.each(['jee-mains', 'jee-advanced', 'neet', 'mht-cet', 'comedk'])(
+  it.each(['jee-mains', 'neet', 'mht-cet', 'comedk'])(
     'groups %s uploaded papers by their JSON year metadata',
     async (examKey) => {
       loadPublicTestCatalog.mockResolvedValue({

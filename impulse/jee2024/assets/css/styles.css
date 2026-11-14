@@ -2353,3 +2353,223 @@
             background: #303030;
             border-color: #666;
         }
+
+        #scr-exam .foot-bar .mobile-submit {
+            display: none;
+        }
+
+        @media (max-width: 1023px) {
+            html,
+            body {
+                height: 100%;
+                min-height: 100%;
+            }
+
+            body {
+                height: 100dvh;
+            }
+
+            .screen {
+                height: 100dvh;
+            }
+
+            #scr-exam {
+                height: 100dvh;
+                min-height: 0;
+                background-attachment: scroll;
+            }
+
+            #scr-exam .top-bar {
+                height: 56px;
+                padding: 0 8px;
+            }
+
+            #scr-exam .top-bar > div {
+                gap: 6px !important;
+                min-width: 0;
+            }
+
+            #scr-exam .brand-title {
+                max-width: 28vw;
+                overflow: hidden;
+                font-size: clamp(11px, 3.8vw, 15px);
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #scr-exam #paper-label {
+                padding: 4px 5px !important;
+                font-size: 10px !important;
+            }
+
+            #scr-exam .btn-toggle {
+                width: 32px;
+                height: 32px;
+                min-width: 32px;
+                padding: 6px;
+            }
+
+            #scr-exam .timer-badge {
+                min-width: 74px;
+                padding: 4px 6px;
+                font-size: 14px;
+            }
+
+            #scr-exam .nav-strip {
+                height: 42px;
+                min-width: 0;
+            }
+
+            #scr-exam .nav-title {
+                padding: 0 9px;
+                font-size: 11px;
+            }
+
+            #scr-exam .nav-scroll,
+            #scr-exam .section-nav {
+                min-width: 0;
+                overflow-x: auto;
+                overscroll-behavior-x: contain;
+            }
+
+            #scr-exam .nav-btn {
+                min-width: 120px;
+                flex: 0 0 auto;
+                gap: 6px;
+                padding: 0 14px;
+                font-size: 12px;
+            }
+
+            #scr-exam .section-nav {
+                height: 38px;
+                flex: 0 0 auto;
+            }
+
+            #scr-exam .section-btn {
+                min-width: 100px;
+                flex: 0 0 auto;
+                padding: 0 12px;
+                font-size: 12px;
+            }
+
+            #scr-exam .main-area,
+            #scr-exam .q-section,
+            #scr-exam .q-scroll {
+                min-height: 0;
+            }
+
+            #scr-exam .q-section {
+                border-right: 0;
+            }
+
+            #scr-exam .q-header {
+                padding: 9px 12px;
+            }
+
+            #scr-exam #lbl-qno {
+                font-size: 15px !important;
+            }
+
+            #scr-exam .q-scroll {
+                padding: 12px;
+                overscroll-behavior: contain;
+            }
+
+            #scr-exam #q-text {
+                font-size: 16px !important;
+                line-height: 1.55 !important;
+                overflow-wrap: anywhere;
+            }
+
+            #scr-exam .q-img-box {
+                width: 100%;
+                max-width: 100%;
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+            #scr-exam .q-img-box img {
+                max-height: 42dvh;
+                max-width: 100%;
+            }
+
+            #scr-exam .foot-bar {
+                height: auto;
+                min-height: 0;
+                flex-wrap: wrap;
+                gap: 6px;
+                padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+            }
+
+            #scr-exam .foot-bar > div {
+                display: flex;
+                flex: 1 1 100%;
+                gap: 6px;
+                min-width: 0;
+            }
+
+            #scr-exam .foot-bar .btn {
+                flex: 1 1 0;
+                min-width: 0;
+                padding: 8px 4px;
+                font-size: 11px;
+                line-height: 1.2;
+                white-space: normal;
+            }
+
+            #scr-exam .foot-bar .mobile-submit {
+                display: inline-flex;
+            }
+
+            #scr-exam .side-panel {
+                position: fixed;
+                top: 136px;
+                right: 8px;
+                bottom: auto;
+                width: calc(100vw - 16px);
+                min-width: 0;
+                max-width: 352px;
+                height: 70dvh;
+                max-height: calc(100dvh - 144px);
+                margin-right: 0;
+                overflow: hidden;
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+                transform: translateX(calc(100% + 16px));
+                z-index: 20;
+            }
+
+            #scr-exam .side-panel.collapsed {
+                margin-right: 0;
+                transform: translateX(0);
+            }
+
+            #scr-exam .side-panel .submit-area {
+                display: none;
+            }
+
+            #scr-exam .side-panel:not(.collapsed) {
+                visibility: hidden;
+                pointer-events: none;
+            }
+
+            #scr-exam .side-panel.collapsed {
+                visibility: visible;
+                pointer-events: auto;
+            }
+
+            #scr-exam .side-panel.collapsed .pal-scroll {
+                min-height: 0;
+            }
+
+            #scr-exam .pal-grid {
+                grid-template-columns: repeat(6, minmax(0, 1fr));
+                gap: 6px;
+            }
+
+            #scr-exam .q-btn {
+                min-height: 40px;
+                height: 40px;
+            }
+        }

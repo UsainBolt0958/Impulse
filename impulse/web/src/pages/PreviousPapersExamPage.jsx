@@ -9,6 +9,7 @@ import { ArrowLeft, BookOpen } from 'lucide-react';
 import {
   establishExamSession,
   loadPublicTestCatalog,
+  recordDailyFeatureUse,
 } from '@/lib/portalServer';
 
 function titleCase(value = '') {
@@ -32,6 +33,18 @@ function PreviousPapersExamPage() {
     setLaunchError('');
     try {
       await establishExamSession(paper.seriesId);
+      window.location.assign(examUrl);
+    } catch (error) {
+      console.error('Could not authorize the previous-paper session.', error);
+      setLaunchError(error.message || 'This paper is not available to your account.');
+    }
+  };
+
+  const launchStaticPaper = async (event, examUrl) => {
+    event.preventDefault();
+    setLaunchError('');
+    try {
+      await recordDailyFeatureUse('previous_paper');
       window.location.assign(examUrl);
     } catch (error) {
       console.error('Could not authorize the previous-paper session.', error);
@@ -84,7 +97,7 @@ function PreviousPapersExamPage() {
     };
   }, [examKey]);
 
-  const usesYearPages = ['jee-mains', 'jee-advanced', 'neet', 'mht-cet', 'comedk'].includes(examKey);
+  const usesYearPages = ['jee-mains', 'neet', 'mht-cet', 'comedk'].includes(examKey);
   const visiblePapers = paperId
     ? importedPapers.filter((paper) => paper.id === paperId)
     : year
@@ -138,6 +151,19 @@ function PreviousPapersExamPage() {
     }
   }, [paperId, importedPapers]);
 
+  const yearCards = !paperId && !year && examKey === 'jee-advanced'
+    ? [
+        { year: 2025, href: '/previous-papers/jee-advanced/2025/exam/index.html' },
+        { year: 2024, href: '/previous-papers/jee-advanced/2024/index.html' },
+        { year: 2023, href: '/previous-papers/jee-advanced/2023/exam/index.html' },
+        { year: 2022, href: '/previous-papers/jee-advanced/2022/exam/index.html' },
+        { year: 2021, href: '/previous-papers/jee-advanced/2021/exam/index.html' }
+      ].map((item) => ({
+        ...item,
+        label: `${examTitle} ${item.year}`,
+        papers: ['Paper 1', 'Paper 2'],
+      }))
+    : [];
   const startPaper = (paper) => {
     const returnTo = `/previous-papers/${examKey}/${encodeURIComponent(paper.id)}`;
     return `/jee2025/exam/index.html?testId=${encodeURIComponent(paper.id)}&seriesId=${encodeURIComponent(paper.seriesId)}&paper=1&forceNewAttempt=true&returnTo=${encodeURIComponent(returnTo)}`;
@@ -320,6 +346,47 @@ function PreviousPapersExamPage() {
                 <p role="alert" className="py-4 text-sm text-destructive">{importLoadError}</p>
               ) : null}
               {launchError ? <p role="alert" className="py-4 text-sm text-destructive">{launchError}</p> : null}
+              {yearCards.map((item) => {
+                const cardBody = (
+                  <Card
+                    className="w-full border-border overflow-hidden transition-all duration-200 hover:border-primary hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+                  >
+                    <CardHeader className="pb-2">
+                      <CardTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+                        <ColoredIcon icon={BookOpen} name={examKey} size={7} />
+                        <span>{item.label}</span>
+                      </CardTitle>
+                    </CardHeader>
+
+                    <CardContent className="pt-0 pb-5">
+                      <div className="flex flex-wrap gap-3 text-sm font-semibold text-foreground">
+                        {item.papers.map((paper) => (
+                          <span key={paper} className="rounded-full border border-border bg-secondary/60 px-3 py-1.5">
+                            {paper}
+                          </span>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+
+                return item.href && item.href !== '#'
+                  ? (
+                    <a
+                      key={item.year}
+                      href={item.href}
+                      className="block no-underline"
+                      target="_self"
+                      rel="noreferrer"
+                      onClick={(event) => launchStaticPaper(event, item.href)}
+                    >
+                      {cardBody}
+                    </a>
+                  )
+                  : (
+                    <div key={item.year}>{cardBody}</div>
+                  );
+              })}
             </div>
           </div>
         </main>
